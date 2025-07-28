@@ -1,6 +1,6 @@
-# JD-Aware AI Interview Coach Backend
+# InterviewIQ Backend
 
-A FastAPI backend for AI-powered interview coaching based on job descriptions. This standalone backend provides endpoints for parsing job descriptions and analyzing candidate answers.
+AI-powered interview coaching backend with intelligent question generation and answer analysis.
 
 ## Features
 

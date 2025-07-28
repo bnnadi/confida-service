@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="JD-Aware AI Interview Coach",
-    description="A FastAPI backend for AI-powered interview coaching with hybrid AI services",
+    title="InterviewIQ API",
+    description="AI-powered interview coaching with intelligent feedback and analysis",
     version="1.0.0"
 )
 
@@ -38,10 +38,10 @@ except Exception as e:
 @app.get("/")
 async def root():
     return {
-        "message": "JD-Aware AI Interview Coach API",
+        "message": "InterviewIQ API",
         "version": "1.0.0",
         "docs": "/docs",
-        "features": "Hybrid AI Services (Ollama + OpenAI + Anthropic)"
+        "features": "AI-powered interview coaching with hybrid AI services"
     }
 
 @app.get("/health")
