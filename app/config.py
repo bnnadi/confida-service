@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
-from typing import Dict, List
+from typing import Dict, List, Any
+from functools import lru_cache
 
 load_dotenv()
 
@@ -22,39 +23,58 @@ class Settings:
     TEMPERATURE: float = 0.7
     
     @property
+    def configured_services(self) -> Dict[str, bool]:
+        """Get all service configuration status at once."""
+        return {
+            "ollama": bool(self.OLLAMA_BASE_URL),
+            "openai": bool(self.OPENAI_API_KEY),
+            "anthropic": bool(self.ANTHROPIC_API_KEY)
+        }
+    
+    @property
     def is_ollama_configured(self) -> bool:
-        return bool(self.OLLAMA_BASE_URL)
+        return self.configured_services["ollama"]
     
     @property
     def is_openai_configured(self) -> bool:
-        return bool(self.OPENAI_API_KEY)
+        return self.configured_services["openai"]
     
     @property
     def is_anthropic_configured(self) -> bool:
-        return bool(self.ANTHROPIC_API_KEY)
+        return self.configured_services["anthropic"]
     
-    @property
-    def available_services(self) -> Dict[str, bool]:
-        return {
-            "ollama": self.is_ollama_configured,
-            "openai": self.is_openai_configured,
-            "anthropic": self.is_anthropic_configured
-        }
     
     @property
     def service_priority(self) -> List[str]:
         """Get service priority based on configuration."""
-        priority = []
+        configured = [service for service, is_configured in self.configured_services.items() if is_configured]
+        return configured if configured else ["ollama"]
+    
+    @lru_cache(maxsize=1)
+    def get_ollama_config(self) -> Dict[str, Any]:
+        """Get cached Ollama configuration."""
+        return {
+            "base_url": self.OLLAMA_BASE_URL,
+            "model": self.OLLAMA_MODEL,
+            "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.7")),
+            "top_p": float(os.getenv("OLLAMA_TOP_P", "0.9")),
+            "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "2000")),
+            "timeout": int(os.getenv("OLLAMA_TIMEOUT", "60"))
+        }
+    
+    def validate_configuration(self) -> List[str]:
+        """Validate configuration and return list of issues."""
+        issues = []
         
-        if self.is_ollama_configured:
-            priority.append("ollama")
+        if not any(self.configured_services.values()):
+            issues.append("No AI services configured")
         
-        if self.is_openai_configured:
-            priority.append("openai")
+        if self.is_openai_configured and not self.OPENAI_API_KEY.startswith('sk-'):
+            issues.append("Invalid OpenAI API key format")
         
-        if self.is_anthropic_configured:
-            priority.append("anthropic")
+        if self.is_anthropic_configured and not self.ANTHROPIC_API_KEY.startswith('sk-ant-'):
+            issues.append("Invalid Anthropic API key format")
         
-        return priority if priority else ["ollama"]
+        return issues
 
 settings = Settings() 

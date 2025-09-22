@@ -1,12 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
-from app.services.hybrid_ai_service import HybridAIService
+from app.dependencies import get_ai_service
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
-
-# Initialize hybrid AI service
-ai_service = HybridAIService()
 
 @router.post("/parse-jd", response_model=ParseJDResponse)
 async def parse_job_description(
@@ -17,6 +14,10 @@ async def parse_job_description(
     Parse job description and generate relevant interview questions using AI.
     Supports multiple AI services with automatic fallback.
     """
+    ai_service = get_ai_service()
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         return ai_service.generate_interview_questions(
             request.role, 
@@ -35,6 +36,10 @@ async def analyze_answer(
     Analyze a candidate's answer against the job description using AI.
     Supports multiple AI services with automatic fallback.
     """
+    ai_service = get_ai_service()
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         return ai_service.analyze_answer(
             request.jobDescription, 
@@ -50,6 +55,10 @@ async def get_available_services():
     """
     Get status of available AI services.
     """
+    ai_service = get_ai_service()
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         return {
             "available_services": ai_service.get_available_services(),
@@ -63,6 +72,10 @@ async def list_models():
     """
     List available Ollama models.
     """
+    ai_service = get_ai_service()
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         models = ai_service.ollama_service.list_available_models()
         return {"models": models}
@@ -74,6 +87,10 @@ async def pull_model(model_name: str):
     """
     Pull a model to Ollama.
     """
+    ai_service = get_ai_service()
+    if not ai_service:
+        raise HTTPException(status_code=503, detail="AI service not available")
+    
     try:
         success = ai_service.ollama_service.pull_model(model_name)
         if success:

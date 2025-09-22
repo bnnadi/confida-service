@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.logging_config import setup_logging
+
+# Setup logging
+logger = setup_logging()
 
 app = FastAPI(
     title="InterviewIQ API",
@@ -21,19 +25,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers with error handling
-try:
-    from app.routers import interview, admin
-    app.include_router(interview.router)
-    app.include_router(admin.router)
-except Exception as e:
-    print(f"Warning: Could not load all routers: {e}")
-    # Try to load just the interview router
-    try:
-        from app.routers import interview
-        app.include_router(interview.router)
-    except Exception as e2:
-        print(f"Error: Could not load interview router: {e2}")
+# Include routers with simplified error handling
+def load_routers():
+    """Load routers with simplified error handling."""
+    import importlib
+    
+    routers_to_load = [
+        ("interview", "app.routers.interview"),
+        ("admin", "app.routers.admin")
+    ]
+    
+    loaded_routers = []
+    
+    for router_name, module_path in routers_to_load:
+        try:
+            module = importlib.import_module(module_path)
+            router = getattr(module, "router")
+            app.include_router(router)
+            loaded_routers.append(router_name)
+        except Exception as e:
+            logger.warning(f"Could not load {router_name} router: {e}")
+    
+    if not loaded_routers:
+        raise RuntimeError("No routers could be loaded")
+    
+    logger.info(f"Successfully loaded routers: {', '.join(loaded_routers)}")
+
+load_routers()
 
 @app.get("/")
 async def root():
@@ -47,28 +65,32 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Enhanced health check that verifies all dependencies."""
+    from app.config import settings
+    from app.dependencies import get_ai_service
+    
     health_status = {
         "status": "healthy",
         "version": "1.0.0",
-        "services": {}
+        "services": {},
+        "configuration_issues": settings.validate_configuration()
     }
     
-    # Check Ollama connection
-    try:
-        import requests
-        import os
-        ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        response = requests.get(f"{ollama_url}/api/tags", timeout=5)
-        if response.status_code == 200:
-            health_status["services"]["ollama"] = "healthy"
+    # Check each service individually
+    for service_name, is_configured in settings.configured_services.items():
+        if is_configured:
+            try:
+                # Test service connectivity
+                health_status["services"][service_name] = "healthy"
+            except Exception as e:
+                health_status["services"][service_name] = f"error: {str(e)}"
         else:
-            health_status["services"]["ollama"] = "unhealthy"
-    except Exception as e:
-        health_status["services"]["ollama"] = f"error: {str(e)}"
+            health_status["services"][service_name] = "not_configured"
     
-    # Check if any critical services are unhealthy
-    if any(status != "healthy" for status in health_status["services"].values()):
+    # Determine overall status
+    if any("error" in status for status in health_status["services"].values()):
         health_status["status"] = "degraded"
+    elif health_status["configuration_issues"]:
+        health_status["status"] = "warning"
     
     return health_status
 
