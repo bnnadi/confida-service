@@ -7,6 +7,7 @@ from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.logger import get_logger
+from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
 
@@ -45,7 +46,7 @@ class OllamaService:
             except requests.exceptions.RequestException as e:
                 if attempt == max_retries - 1:
                     logger.error(f"Error calling Ollama after {max_retries} attempts: {e}")
-                    raise Exception(f"Failed to communicate with Ollama after {max_retries} attempts: {str(e)}")
+                    raise ServiceUnavailableError(f"Failed to communicate with Ollama after {max_retries} attempts: {str(e)}")
                 logger.info(f"Attempt {attempt + 1} failed, retrying in {2 ** attempt} seconds...")
                 time.sleep(2 ** attempt)  # Exponential backoff
     

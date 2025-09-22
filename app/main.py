@@ -53,6 +53,27 @@ def load_routers():
 
 load_routers()
 
+def validate_startup():
+    """Validate configuration on startup."""
+    from app.config import settings
+    from app.dependencies import get_ai_service
+    
+    issues = settings.validate_configuration()
+    if issues:
+        logger.warning(f"Configuration issues: {issues}")
+    
+    # Test critical services
+    try:
+        ai_service = get_ai_service()
+        if not ai_service:
+            logger.error("AI service initialization failed")
+        else:
+            logger.info("AI service initialized successfully")
+    except Exception as e:
+        logger.error(f"Startup validation failed: {e}")
+
+validate_startup()
+
 @app.get("/")
 async def root():
     return {

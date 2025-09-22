@@ -3,6 +3,7 @@ Centralized response parsing utilities to eliminate duplication across AI servic
 """
 
 import json
+import re
 from typing import List
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.logger import get_logger
@@ -38,29 +39,31 @@ class ResponseParsers:
     
     @staticmethod
     def parse_analysis_response(response_text: str) -> AnalyzeAnswerResponse:
-        """Parse analysis from AI response."""
+        """Parse analysis from AI response with simplified logic."""
         try:
-            # Try to extract JSON from the response
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            
-            if json_start != -1 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                analysis = json.loads(json_str)
-                
-                return AnalyzeAnswerResponse(
-                    score=Score(
-                        clarity=analysis.get("score", {}).get("clarity", 5),
-                        confidence=analysis.get("score", {}).get("confidence", 5)
-                    ),
-                    missingKeywords=analysis.get("missingKeywords", []),
-                    improvements=analysis.get("improvements", []),
-                    idealAnswer=analysis.get("idealAnswer", "")
-                )
-        except Exception as e:
+            # Extract JSON more robustly using regex
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                analysis = json.loads(json_match.group())
+                return ResponseParsers._build_analysis_response(analysis)
+        except (json.JSONDecodeError, AttributeError) as e:
             logger.error(f"Error parsing analysis response: {e}")
         
         return ResponseParsers._get_fallback_analysis()
+    
+    @staticmethod
+    def _build_analysis_response(analysis: dict) -> AnalyzeAnswerResponse:
+        """Build analysis response from parsed JSON."""
+        score_data = analysis.get("score", {})
+        return AnalyzeAnswerResponse(
+            score=Score(
+                clarity=score_data.get("clarity", 5),
+                confidence=score_data.get("confidence", 5)
+            ),
+            missingKeywords=analysis.get("missingKeywords", []),
+            improvements=analysis.get("improvements", []),
+            idealAnswer=analysis.get("idealAnswer", "")
+        )
     
     @staticmethod
     def _get_fallback_analysis() -> AnalyzeAnswerResponse:

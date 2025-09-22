@@ -9,6 +9,7 @@ from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
 from app.utils.logger import get_logger
+from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
 
@@ -60,13 +61,8 @@ class HybridAIService:
         
         for service_type in services_to_try:
             try:
-                if service_type == AIServiceType.OLLAMA:
-                    return self.ollama_service.generate_interview_questions(role, job_description)
-                elif service_type == AIServiceType.OPENAI:
-                    return self._generate_questions_openai(role, job_description)
-                elif service_type == AIServiceType.ANTHROPIC:
-                    return self._generate_questions_anthropic(role, job_description)
-            except Exception as e:
+                return self._call_ai_service(service_type, "generate_interview_questions", role, job_description)
+            except ServiceUnavailableError as e:
                 logger.warning(f"Error with {service_type.value}: {e}")
                 continue
         
@@ -81,13 +77,8 @@ class HybridAIService:
         
         for service_type in services_to_try:
             try:
-                if service_type == AIServiceType.OLLAMA:
-                    return self.ollama_service.analyze_answer(job_description, question, answer)
-                elif service_type == AIServiceType.OPENAI:
-                    return self._analyze_answer_openai(job_description, question, answer)
-                elif service_type == AIServiceType.ANTHROPIC:
-                    return self._analyze_answer_anthropic(job_description, question, answer)
-            except Exception as e:
+                return self._call_ai_service(service_type, "analyze_answer", job_description, question, answer)
+            except ServiceUnavailableError as e:
                 logger.warning(f"Error with {service_type.value}: {e}")
                 continue
         
@@ -104,10 +95,29 @@ class HybridAIService:
         
         return self.service_priority
     
+    def _call_ai_service(self, service_type: AIServiceType, method: str, *args, **kwargs):
+        """Generic method to call AI services with consistent error handling."""
+        try:
+            if service_type == AIServiceType.OPENAI:
+                if not self.openai_client:
+                    raise ServiceUnavailableError("OpenAI client not initialized")
+                return getattr(self, f"_{method}_openai")(*args, **kwargs)
+            elif service_type == AIServiceType.ANTHROPIC:
+                if not self.anthropic_client:
+                    raise ServiceUnavailableError("Anthropic client not initialized")
+                return getattr(self, f"_{method}_anthropic")(*args, **kwargs)
+            elif service_type == AIServiceType.OLLAMA:
+                return getattr(self.ollama_service, method)(*args, **kwargs)
+        except ServiceUnavailableError:
+            raise
+        except Exception as e:
+            logger.warning(f"Error with {service_type.value} for {method}: {e}")
+            raise ServiceUnavailableError(f"{service_type.value} service error: {e}")
+    
     def _generate_questions_openai(self, role: str, job_description: str) -> ParseJDResponse:
         """Generate questions using OpenAI."""
         if not self.openai_client:
-            raise Exception("OpenAI client not initialized")
+            raise ServiceUnavailableError("OpenAI client not initialized")
         
         user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
         
@@ -129,7 +139,7 @@ class HybridAIService:
     def _generate_questions_anthropic(self, role: str, job_description: str) -> ParseJDResponse:
         """Generate questions using Anthropic Claude."""
         if not self.anthropic_client:
-            raise Exception("Anthropic client not initialized")
+            raise ServiceUnavailableError("Anthropic client not initialized")
         
         user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
         
@@ -148,7 +158,7 @@ class HybridAIService:
     def _analyze_answer_openai(self, job_description: str, question: str, answer: str) -> AnalyzeAnswerResponse:
         """Analyze answer using OpenAI."""
         if not self.openai_client:
-            raise Exception("OpenAI client not initialized")
+            raise ServiceUnavailableError("OpenAI client not initialized")
         
         user_prompt = PromptTemplates.get_analysis_prompt(job_description, question, answer)
         
@@ -168,7 +178,7 @@ class HybridAIService:
     def _analyze_answer_anthropic(self, job_description: str, question: str, answer: str) -> AnalyzeAnswerResponse:
         """Analyze answer using Anthropic Claude."""
         if not self.anthropic_client:
-            raise Exception("Anthropic client not initialized")
+            raise ServiceUnavailableError("Anthropic client not initialized")
         
         user_prompt = PromptTemplates.get_analysis_prompt(job_description, question, answer)
         
