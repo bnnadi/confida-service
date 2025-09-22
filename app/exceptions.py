@@ -2,9 +2,13 @@
 Custom exception hierarchy for InterviewIQ application.
 """
 
+from typing import Dict, Any
+
 class InterviewIQException(Exception):
     """Base exception for InterviewIQ application."""
-    pass
+    def __init__(self, message: str, context: Dict[str, Any] = None):
+        super().__init__(message)
+        self.context = context or {}
 
 class AIServiceError(InterviewIQException):
     """Base exception for AI service errors."""

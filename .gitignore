@@ -23,6 +23,7 @@ venv.bak/
 *.swp
 *.swo
 *~
+.cursor/
 
 # OS files
 .DS_Store
@@ -50,3 +51,4 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+tickets/

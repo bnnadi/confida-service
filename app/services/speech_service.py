@@ -2,6 +2,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import io
 from app.exceptions import AIServiceError
+from app.utils.error_context import ErrorContext
 
 class SpeechToTextService:
     def __init__(self):
@@ -14,16 +15,31 @@ class SpeechToTextService:
             raise AIServiceError(f"Failed to initialize speech recognition: {e}")
     
     def transcribe_audio(self, audio_data: bytes, language: str = "en-US") -> str:
-        """Transcribe audio with simplified error handling."""
+        """Transcribe audio with enhanced error handling."""
         try:
             audio = self._prepare_audio(audio_data)
             return self._recognize_audio(audio, language)
         except sr.UnknownValueError:
-            raise AIServiceError("Could not understand audio")
+            error = ErrorContext.create_service_error(
+                "speech_recognition", 
+                "transcribe_audio", 
+                Exception("Could not understand audio")
+            )
+            raise error
         except sr.RequestError as e:
-            raise AIServiceError(f"Speech recognition service error: {e}")
+            error = ErrorContext.create_service_error(
+                "speech_recognition", 
+                "transcribe_audio", 
+                e
+            )
+            raise error
         except Exception as e:
-            raise AIServiceError(f"Transcription failed: {str(e)}")
+            error = ErrorContext.create_service_error(
+                "speech_recognition", 
+                "transcribe_audio", 
+                e
+            )
+            raise error
     
     def _prepare_audio(self, audio_data: bytes) -> io.BytesIO:
         """Prepare audio data for recognition."""

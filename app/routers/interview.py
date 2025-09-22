@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
-from app.dependencies import get_ai_service
+from app.utils.endpoint_helpers import handle_service_errors
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
 @router.post("/parse-jd", response_model=ParseJDResponse)
+@handle_service_errors("parsing job description")
 async def parse_job_description(
+    ai_service,
     request: ParseJDRequest,
     service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic")
 ):
@@ -14,21 +16,16 @@ async def parse_job_description(
     Parse job description and generate relevant interview questions using AI.
     Supports multiple AI services with automatic fallback.
     """
-    ai_service = get_ai_service()
-    if not ai_service:
-        raise HTTPException(status_code=503, detail="AI service not available")
-    
-    try:
-        return ai_service.generate_interview_questions(
-            request.role, 
-            request.jobDescription, 
-            preferred_service=service
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing job description: {str(e)}")
+    return ai_service.generate_interview_questions(
+        request.role, 
+        request.jobDescription, 
+        preferred_service=service
+    )
 
 @router.post("/analyze-answer", response_model=AnalyzeAnswerResponse)
+@handle_service_errors("analyzing answer")
 async def analyze_answer(
+    ai_service,
     request: AnalyzeAnswerRequest,
     service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic")
 ):
@@ -36,66 +33,41 @@ async def analyze_answer(
     Analyze a candidate's answer against the job description using AI.
     Supports multiple AI services with automatic fallback.
     """
-    ai_service = get_ai_service()
-    if not ai_service:
-        raise HTTPException(status_code=503, detail="AI service not available")
-    
-    try:
-        return ai_service.analyze_answer(
-            request.jobDescription, 
-            request.question, 
-            request.answer,
-            preferred_service=service
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error analyzing answer: {str(e)}")
+    return ai_service.analyze_answer(
+        request.jobDescription, 
+        request.question, 
+        request.answer,
+        preferred_service=service
+    )
 
 @router.get("/services")
-async def get_available_services():
+@handle_service_errors("getting service status")
+async def get_available_services(ai_service):
     """
     Get status of available AI services.
     """
-    ai_service = get_ai_service()
-    if not ai_service:
-        raise HTTPException(status_code=503, detail="AI service not available")
-    
-    try:
-        return {
-            "available_services": ai_service.get_available_services(),
-            "service_priority": ai_service.get_service_priority()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting service status: {str(e)}")
+    return {
+        "available_services": ai_service.get_available_services(),
+        "service_priority": ai_service.get_service_priority()
+    }
 
 @router.get("/models")
-async def list_models():
+@handle_service_errors("listing models")
+async def list_models(ai_service):
     """
     List available Ollama models.
     """
-    ai_service = get_ai_service()
-    if not ai_service:
-        raise HTTPException(status_code=503, detail="AI service not available")
-    
-    try:
-        models = ai_service.ollama_service.list_available_models()
-        return {"models": models}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing models: {str(e)}")
+    models = ai_service.ollama_service.list_available_models()
+    return {"models": models}
 
 @router.post("/models/{model_name}/pull")
-async def pull_model(model_name: str):
+@handle_service_errors("pulling model")
+async def pull_model(ai_service, model_name: str):
     """
     Pull a model to Ollama.
     """
-    ai_service = get_ai_service()
-    if not ai_service:
-        raise HTTPException(status_code=503, detail="AI service not available")
-    
-    try:
-        success = ai_service.ollama_service.pull_model(model_name)
-        if success:
-            return {"message": f"Model {model_name} pulled successfully"}
-        else:
-            raise HTTPException(status_code=500, detail=f"Failed to pull model {model_name}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error pulling model: {str(e)}") 
+    success = ai_service.ollama_service.pull_model(model_name)
+    if success:
+        return {"message": f"Model {model_name} pulled successfully"}
+    else:
+        raise HTTPException(status_code=500, detail=f"Failed to pull model {model_name}") 

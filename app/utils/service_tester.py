@@ -31,7 +31,7 @@ class ServiceTester:
         services = ["ollama", "openai", "anthropic"]
         
         for service in services:
-            if getattr(self.settings, f"is_{service}_configured", False):
+            if self.settings.is_service_configured(service):
                 results[service] = self.test_service(service)
         
         return results

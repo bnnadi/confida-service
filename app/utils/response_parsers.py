@@ -39,16 +39,26 @@ class ResponseParsers:
     
     @staticmethod
     def parse_analysis_response(response_text: str) -> AnalyzeAnswerResponse:
-        """Parse analysis from AI response with simplified logic."""
-        try:
-            # Extract JSON more robustly using regex
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                analysis = json.loads(json_match.group())
-                return ResponseParsers._build_analysis_response(analysis)
-        except (json.JSONDecodeError, AttributeError) as e:
-            logger.error(f"Error parsing analysis response: {e}")
+        """Parse analysis from AI response with improved error handling."""
+        # Try multiple JSON extraction methods
+        json_patterns = [
+            r'\{.*\}',  # Original pattern
+            r'```json\s*(\{.*?\})\s*```',  # Markdown code blocks
+            r'```\s*(\{.*?\})\s*```',  # Generic code blocks
+        ]
         
+        for pattern in json_patterns:
+            try:
+                json_match = re.search(pattern, response_text, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(1) if json_match.groups() else json_match.group()
+                    analysis = json.loads(json_str)
+                    return ResponseParsers._build_analysis_response(analysis)
+            except (json.JSONDecodeError, AttributeError) as e:
+                logger.debug(f"Failed to parse with pattern {pattern}: {e}")
+                continue
+        
+        logger.warning("Could not parse JSON from AI response, using fallback")
         return ResponseParsers._get_fallback_analysis()
     
     @staticmethod

@@ -8,6 +8,7 @@ from app.services.ollama_service import OllamaService
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
+from app.utils.fallback_responses import FallbackResponses
 from app.utils.logger import get_logger
 from app.exceptions import ServiceUnavailableError
 
@@ -67,7 +68,7 @@ class HybridAIService:
                 continue
         
         # If all services fail, return fallback
-        return self._get_fallback_questions(role)
+        return FallbackResponses.get_fallback_questions(role)
     
     def analyze_answer(self, job_description: str, question: str, answer: str,
                       preferred_service: Optional[str] = None) -> AnalyzeAnswerResponse:
@@ -83,17 +84,24 @@ class HybridAIService:
                 continue
         
         # If all services fail, return fallback
-        return self._get_fallback_analysis()
+        return FallbackResponses.get_fallback_analysis()
     
     def _get_services_to_try(self, preferred_service: Optional[str] = None) -> List[AIServiceType]:
         """Get list of services to try in order."""
-        if preferred_service:
-            # Try preferred service first
-            for service_type in AIServiceType:
-                if service_type.value == preferred_service.lower():
-                    return [service_type] + [s for s in self.service_priority if s != service_type]
+        if not preferred_service:
+            return self.service_priority
         
-        return self.service_priority
+        # Find preferred service
+        preferred = next(
+            (s for s in AIServiceType if s.value == preferred_service.lower()), 
+            None
+        )
+        
+        if not preferred:
+            return self.service_priority
+        
+        # Return preferred first, then others
+        return [preferred] + [s for s in self.service_priority if s != preferred]
     
     def _call_ai_service(self, service_type: AIServiceType, method: str, *args, **kwargs):
         """Generic method to call AI services with consistent error handling."""
@@ -192,35 +200,6 @@ class HybridAIService:
         analysis_text = response.content[0].text.strip()
         return ResponseParsers.parse_analysis_response(analysis_text)
     
-    
-    def _get_fallback_questions(self, role: str) -> ParseJDResponse:
-        """Fallback questions if all services fail."""
-        return ParseJDResponse(questions=[
-            f"Tell me about your experience with {role}",
-            "Describe a challenging project you've worked on",
-            "How do you handle tight deadlines?",
-            "What's your approach to problem-solving?",
-            "How do you stay updated with industry trends?",
-            "Tell me about a time you had to learn a new technology quickly",
-            "How do you handle conflicting priorities?",
-            "What's your experience with code review?",
-            "How do you ensure code quality?",
-            "Describe a situation where you had to mentor junior developers"
-        ])
-    
-    def _get_fallback_analysis(self) -> AnalyzeAnswerResponse:
-        """Fallback analysis if all services fail."""
-        return AnalyzeAnswerResponse(
-            score=Score(clarity=5, confidence=5),
-            missingKeywords=["specific examples", "metrics", "technical details"],
-            improvements=[
-                "Provide more specific examples",
-                "Include quantifiable results",
-                "Add more technical details",
-                "Demonstrate problem-solving approach"
-            ],
-            idealAnswer="Please provide a more detailed answer with specific examples, measurable outcomes, and technical depth."
-        )
     
     def get_available_services(self) -> Dict[str, bool]:
         """Get status of available AI services."""
