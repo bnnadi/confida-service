@@ -31,11 +31,12 @@ app.add_middleware(
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, admin
+    from app.routers import interview, admin, speech
     
     routers = [
         ("interview", interview.router),
-        ("admin", admin.router)
+        ("admin", admin.router),
+        ("speech", speech.router)
     ]
     
     loaded_routers = []
