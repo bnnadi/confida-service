@@ -6,6 +6,15 @@ from functools import lru_cache
 load_dotenv()
 
 class Settings:
+    # Database Settings - PostgreSQL as default for development
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev")
+    
+    # JWT Settings
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+    
     # Ollama Settings
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama2")
@@ -94,5 +103,9 @@ class Settings:
             issues.append("OLLAMA_BASE_URL must be a valid URL")
         
         return issues
+
+@lru_cache()
+def get_settings():
+    return Settings()
 
 settings = Settings() 
