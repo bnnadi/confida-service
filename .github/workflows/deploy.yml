@@ -38,11 +38,49 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Wait for database to be ready
+      run: |
+        until pg_isready -h localhost -p 5432 -U interviewiq; do
+          echo "Waiting for database to be ready..."
+          sleep 2
+        done
+        echo "Database is ready!"
+
     - name: Run database migrations
       env:
         DATABASE_URL: postgresql://interviewiq:password@localhost:5432/interviewiq_test
       run: |
-        alembic upgrade head
+        # Debug: Show environment and database status
+        echo "DATABASE_URL: $DATABASE_URL"
+        echo "Current directory: $(pwd)"
+        echo "Alembic files:"
+        ls -la alembic/versions/
+        
+        # Ensure database exists and user has permissions
+        echo "Creating database if it doesn't exist..."
+        PGPASSWORD=password psql -h localhost -U interviewiq -d postgres -c "CREATE DATABASE interviewiq_test;" || echo "Database might already exist"
+        
+        # Test database connection
+        echo "Testing database connection..."
+        PGPASSWORD=password psql -h localhost -U interviewiq -d interviewiq_test -c "SELECT 1;" || {
+          echo "Database connection failed, retrying..."
+          sleep 5
+          PGPASSWORD=password psql -h localhost -U interviewiq -d interviewiq_test -c "SELECT 1;" || {
+            echo "Database connection failed after retry"
+            exit 1
+          }
+        }
+        
+        # Run migrations
+        echo "Running alembic upgrade head..."
+        alembic upgrade head || {
+          echo "Migration failed, showing alembic status..."
+          alembic current
+          alembic history
+          exit 1
+        }
+        
+        echo "Migrations completed successfully!"
     
     - name: Run tests
       env:
