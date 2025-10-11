@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
 from app.utils.endpoint_helpers import handle_service_errors
+from app.database import get_db
+from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
@@ -10,35 +13,79 @@ router = APIRouter(prefix="/api/v1", tags=["interview"])
 async def parse_job_description(
     ai_service,
     request: ParseJDRequest,
-    service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic")
+    service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic"),
+    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    db: Session = Depends(get_db)
 ):
     """
     Parse job description and generate relevant interview questions using AI.
     Supports multiple AI services with automatic fallback.
+    Creates a new interview session and stores the questions in the database.
     """
-    return ai_service.generate_interview_questions(
+    # Generate questions using AI
+    response = ai_service.generate_interview_questions(
         request.role, 
         request.jobDescription, 
         preferred_service=service
     )
+    
+    # Create session and store questions in database
+    session_service = SessionService(db)
+    session = session_service.create_session(
+        user_id=user_id,
+        role=request.role,
+        job_description=request.jobDescription
+    )
+    
+    # Add questions to the session
+    session_service.add_questions_to_session(session.id, response.questions)
+    
+    return response
 
 @router.post("/analyze-answer", response_model=AnalyzeAnswerResponse)
 @handle_service_errors("analyzing answer")
 async def analyze_answer(
     ai_service,
     request: AnalyzeAnswerRequest,
-    service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic")
+    service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic"),
+    question_id: int = Query(..., description="Question ID to store the answer"),
+    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    db: Session = Depends(get_db)
 ):
     """
     Analyze a candidate's answer against the job description using AI.
     Supports multiple AI services with automatic fallback.
+    Stores the answer and analysis in the database.
     """
-    return ai_service.analyze_answer(
+    # Analyze answer using AI
+    response = ai_service.analyze_answer(
         request.jobDescription, 
-        request.question, 
         request.answer,
         preferred_service=service
     )
+    
+    # Store answer and analysis in database
+    session_service = SessionService(db)
+    
+    # Verify question exists and belongs to user
+    from app.models.interview import Question, InterviewSession
+    question = db.query(Question).join(InterviewSession).filter(
+        Question.id == question_id,
+        InterviewSession.user_id == user_id
+    ).first()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    # Store answer with analysis
+    session_service.add_answer(
+        question_id=question_id,
+        answer_text=request.answer,
+        analysis_result=response.dict(),
+        score={"clarity": response.score.clarity, "confidence": response.score.confidence}
+    )
+    
+    return response
 
 @router.get("/services")
 @handle_service_errors("getting service status")

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -32,6 +33,9 @@ class User(Base):
         elif self.last_name:
             return self.last_name
         return None
+    
+    # Relationships
+    interview_sessions = relationship("InterviewSession", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', is_active={self.is_active})>"
