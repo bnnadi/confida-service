@@ -4,6 +4,7 @@ from app.logging_config import setup_logging
 from app.middleware.logging_middleware import log_requests
 from app.middleware.rate_limiter import RateLimiter
 from app.middleware.redis_rate_limiter import RedisRateLimiter
+from app.middleware.file_upload_middleware import create_file_upload_middleware_stack
 from app.exceptions import RateLimitExceededError
 from app.config import settings
 
@@ -55,16 +56,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add file upload middleware
+app = create_file_upload_middleware_stack(app)
+
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, admin, sessions, auth
+    from app.routers import interview, admin, sessions, auth, files, speech
 
     routers = [
         ("auth", auth.router),
         ("interview", interview.router),
         ("admin", admin.router),
-        ("sessions", sessions.router)
+        ("sessions", sessions.router),
+        ("files", files.router),
+        ("speech", speech.router)
     ]
     
     loaded_routers = []

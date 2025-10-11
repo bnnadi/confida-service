@@ -26,6 +26,21 @@ class Settings:
     ACCOUNT_VERIFICATION_REQUIRED: bool = os.getenv("ACCOUNT_VERIFICATION_REQUIRED", "false").lower() == "true"
     MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOCKOUT_DURATION_MINUTES: int = int(os.getenv("LOCKOUT_DURATION_MINUTES", "15"))
+    
+    # File Upload Settings
+    FILE_UPLOAD_DIR: str = os.getenv("FILE_UPLOAD_DIR", "uploads")
+    FILE_EXPIRATION_HOURS: int = int(os.getenv("FILE_EXPIRATION_HOURS", "24"))
+    FILE_CLEANUP_INTERVAL_HOURS: int = int(os.getenv("FILE_CLEANUP_INTERVAL_HOURS", "6"))
+    FILE_MAX_SIZE_AUDIO: int = int(os.getenv("FILE_MAX_SIZE_AUDIO", "52428800"))  # 50MB
+    FILE_MAX_SIZE_DOCUMENT: int = int(os.getenv("FILE_MAX_SIZE_DOCUMENT", "10485760"))  # 10MB
+    FILE_MAX_SIZE_IMAGE: int = int(os.getenv("FILE_MAX_SIZE_IMAGE", "5242880"))  # 5MB
+    FILE_ALLOWED_AUDIO_TYPES: List[str] = os.getenv("FILE_ALLOWED_AUDIO_TYPES", "audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/flac").split(",")
+    FILE_ALLOWED_DOCUMENT_TYPES: List[str] = os.getenv("FILE_ALLOWED_DOCUMENT_TYPES", "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document").split(",")
+    FILE_ALLOWED_IMAGE_TYPES: List[str] = os.getenv("FILE_ALLOWED_IMAGE_TYPES", "image/jpeg,image/png,image/gif,image/webp").split(",")
+    FILE_VIRUS_SCANNING_ENABLED: bool = os.getenv("FILE_VIRUS_SCANNING_ENABLED", "false").lower() == "true"
+    FILE_CLOUD_STORAGE_ENABLED: bool = os.getenv("FILE_CLOUD_STORAGE_ENABLED", "false").lower() == "true"
+    FILE_CLOUD_STORAGE_BUCKET: str = os.getenv("FILE_CLOUD_STORAGE_BUCKET", "")
+    FILE_CLOUD_STORAGE_REGION: str = os.getenv("FILE_CLOUD_STORAGE_REGION", "us-east-1")
 
     
     # Ollama Settings

@@ -134,6 +134,18 @@ class AddAnswerRequest(BaseModel):
             raise ValueError('Answer text cannot be empty')
         return v.strip()
 
+# Speech-to-text models
+class TranscribeResponse(BaseModel):
+    transcription: str = Field(..., description="Transcribed text from audio")
+    language: str = Field(..., description="Language code used for transcription")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score of transcription")
+    file_id: Optional[str] = Field(None, description="ID of saved audio file if applicable")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the transcription")
+
+class SupportedFormatsResponse(BaseModel):
+    formats: List[Dict[str, str]] = Field(..., description="List of supported audio formats")
+    supported_languages: List[str] = Field(..., description="List of supported language codes")
+
 # Optional: Enhanced models for future features (legacy)
 class InterviewSession(BaseModel):
     session_id: str

@@ -7,6 +7,7 @@ from .interview import InterviewSession, Question, Answer
 # Import Pydantic schemas
 from .schemas import *
 from .auth import *
+from .file_upload import *
 
 __all__ = [
     # SQLAlchemy models
