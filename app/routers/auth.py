@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
 from app.services.auth_service import AuthService
+from app.middleware.auth_middleware import get_current_user_required, get_current_user
 from app.models.auth import (
     UserRegistrationRequest,
     UserLoginRequest,
@@ -138,7 +139,7 @@ async def refresh_token(
 @router.get("/me", response_model=UserResponse)
 @handle_service_errors("getting user profile")
 async def get_current_user(
-    current_user: dict = Depends(get_current_user_dependency)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Get current authenticated user information.
@@ -152,7 +153,7 @@ async def get_current_user(
 @handle_service_errors("updating user profile")
 async def update_user_profile(
     request: UserProfileUpdateRequest,
-    current_user: dict = Depends(get_current_user_dependency),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -176,7 +177,7 @@ async def update_user_profile(
 @handle_service_errors("changing password")
 async def change_password(
     request: PasswordChangeRequest,
-    current_user: dict = Depends(get_current_user_dependency),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -199,7 +200,7 @@ async def change_password(
 
 @router.get("/status", response_model=AuthStatusResponse)
 async def get_auth_status(
-    current_user: Optional[dict] = Depends(get_current_user_dependency)
+    current_user: Optional[dict] = Depends(get_current_user)
 ):
     """
     Get authentication status.
@@ -219,7 +220,7 @@ async def get_auth_status(
 @router.get("/stats")
 @handle_service_errors("getting user stats")
 async def get_user_stats(
-    current_user: dict = Depends(get_current_user_dependency),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -242,7 +243,7 @@ async def get_user_stats(
 async def get_user_sessions(
     limit: int = Query(10, ge=1, le=100, description="Number of sessions to return"),
     offset: int = Query(0, ge=0, description="Number of sessions to skip"),
-    current_user: dict = Depends(get_current_user_dependency),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -265,26 +266,10 @@ async def get_user_sessions(
     }
 
 
-# Dependency for getting current user
-async def get_current_user_dependency(
-    authorization: Optional[str] = None,
-    db: Session = Depends(get_db)
-) -> Optional[dict]:
-    """
-    Dependency to get current authenticated user.
-    
-    This will be enhanced with proper JWT token extraction from headers.
-    For now, it's a placeholder that returns None.
-    """
-    # TODO: Implement proper JWT token extraction from Authorization header
-    # This is a placeholder implementation
-    return None
-
-
 # Logout endpoint (token blacklisting would be implemented here)
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout_user(
-    current_user: dict = Depends(get_current_user_dependency)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Logout user.
