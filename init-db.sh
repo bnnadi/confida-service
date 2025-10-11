@@ -37,9 +37,18 @@ print_status "Database URL: $DATABASE_URL"
 print_status "Waiting for database to be ready..."
 sleep 5
 
-# Run migrations
-print_status "Running database migrations..."
-if command -v alembic &> /dev/null; then
+# Run database setup
+print_status "Setting up database..."
+if [ -f "setup_database.py" ]; then
+    python setup_database.py
+    if [ $? -eq 0 ]; then
+        print_success "Database setup completed!"
+    else
+        print_error "Database setup failed!"
+        exit 1
+    fi
+elif command -v alembic &> /dev/null; then
+    print_status "Running Alembic migrations..."
     alembic upgrade head
     if [ $? -eq 0 ]; then
         print_success "Database migrations completed!"
@@ -48,19 +57,8 @@ if command -v alembic &> /dev/null; then
         exit 1
     fi
 else
-    print_warning "Alembic not found, trying setup script..."
-    if [ -f "setup_database.py" ]; then
-        python setup_database.py
-        if [ $? -eq 0 ]; then
-            print_success "Database setup completed!"
-        else
-            print_error "Database setup failed!"
-            exit 1
-        fi
-    else
-        print_error "No database setup method found!"
-        exit 1
-    fi
+    print_warning "No database setup method found, skipping..."
+    print_status "Database will be set up when the application starts"
 fi
 
 print_success "Database initialization completed!"

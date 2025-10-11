@@ -11,5 +11,9 @@ httpx==0.25.2
 # Speech processing dependencies
 speechrecognition==3.10.0
 pydub==0.25.1
+# Database dependencies
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
 # Additional utilities
 redis==5.0.1
