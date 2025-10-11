@@ -151,32 +151,28 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Enhanced health check that verifies all dependencies."""
-    from app.config import settings
+    """Comprehensive health check that verifies all dependencies with actual connectivity tests."""
+    from app.services.health_service import HealthService
     
-    health_status = {
-        "status": "healthy",
-        "version": "1.0.0",
-        "services": {},
-        "configuration_issues": settings.validate_configuration()
-    }
-    
-    # Check each service individually
-    for service_name, is_configured in settings.configured_services.items():
-        health_status["services"][service_name] = check_service_health(service_name, is_configured)
-    
-    # Determine overall status
-    if any("error" in status for status in health_status["services"].values()):
-        health_status["status"] = "degraded"
-    elif health_status["configuration_issues"]:
-        health_status["status"] = "warning"
-    
-    return health_status
+    health_service = HealthService()
+    return await health_service.get_comprehensive_health()
 
 @app.get("/ready")
 async def readiness_check():
     """Readiness check for Kubernetes-style deployments."""
-    return {"ready": True}
+    from app.services.health_service import HealthService
+    
+    health_service = HealthService()
+    db_health = await health_service.check_database_health()
+    
+    # Service is ready if database is healthy
+    is_ready = db_health.get("status") == "healthy"
+    
+    return {
+        "ready": is_ready,
+        "database": db_health.get("status", "unknown"),
+        "timestamp": db_health.get("details", {}).get("timestamp")
+    }
 
 if __name__ == "__main__":
     import uvicorn
