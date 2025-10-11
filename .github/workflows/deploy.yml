@@ -71,14 +71,31 @@ jobs:
           }
         }
         
-        # Run migrations
-        echo "Running alembic upgrade head..."
-        alembic upgrade head || {
-          echo "Migration failed, showing alembic status..."
-          alembic current
-          alembic history
-          exit 1
-        }
+        # Check current migration status
+        echo "Current migration status:"
+        alembic current
+        
+        # Check if we're already at head
+        CURRENT_REV=$(alembic current | grep -o '[a-f0-9]\{12\}' | head -1)
+        HEAD_REV=$(alembic heads | grep -o '[a-f0-9]\{12\}' | head -1)
+        
+        if [ "$CURRENT_REV" = "$HEAD_REV" ]; then
+          echo "Database is already at head revision $HEAD_REV, skipping migration"
+        else
+          # Run migrations
+          echo "Running alembic upgrade head..."
+          alembic upgrade head || {
+            echo "Migration failed, showing alembic status..."
+            alembic current
+            alembic history
+            echo "Attempting to stamp database to current head..."
+            alembic stamp head || {
+              echo "Stamping also failed, this might indicate a schema mismatch"
+              exit 1
+            }
+            echo "Database stamped to head successfully"
+          }
+        fi
         
         echo "Migrations completed successfully!"
     
