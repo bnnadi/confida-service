@@ -104,7 +104,8 @@ jobs:
         DATABASE_URL: postgresql://interviewiq:password@localhost:5432/interviewiq_test
         SECRET_KEY: test-secret-key
       run: |
-        python -m pytest tests/ -v
+        echo "Running tests with database: $DATABASE_URL"
+        python -m pytest tests/ -v --tb=short
 
   build:
     needs: test
