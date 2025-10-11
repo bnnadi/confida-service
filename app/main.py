@@ -17,30 +17,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Initialize rate limiter based on configuration
-def get_rate_limiter():
-    """Get rate limiter instance based on configuration."""
-    if not settings.RATE_LIMIT_ENABLED:
-        return None
-    
-    if settings.RATE_LIMIT_BACKEND == "redis":
-        return RedisRateLimiter(
-            redis_url=settings.RATE_LIMIT_REDIS_URL,
-            max_requests=settings.RATE_LIMIT_DEFAULT_REQUESTS,
-            window_seconds=settings.RATE_LIMIT_DEFAULT_WINDOW
-        )
-    else:
-        return RateLimiter(
-            max_requests=settings.RATE_LIMIT_DEFAULT_REQUESTS,
-            window_seconds=settings.RATE_LIMIT_DEFAULT_WINDOW
-        )
-
-# Global rate limiter instance
-rate_limiter = get_rate_limiter()
-logger.info("Rate limiter initialized: %s", type(rate_limiter) if rate_limiter else "None")
-
-# Store rate limiters per endpoint to maintain state
-endpoint_limiters = {}
+# Rate limiting is now handled by the enhanced middleware
 
 # CORS middleware configuration for React frontend
 app.add_middleware(
@@ -94,54 +71,11 @@ load_routers()
 async def logging_middleware(request: Request, call_next):
     return await log_requests(request, call_next)
 
-@app.middleware("http")
-async def rate_limiting_middleware(request: Request, call_next):
-    """Rate limiting middleware with per-endpoint configuration."""
-    if not rate_limiter:
-        return await call_next(request)
-    
-    try:
-        # Get client identifier (IP address or user ID if available)
-        client_id = request.client.host if request.client else "unknown"
-        
-        # Get rate limit configuration for this endpoint
-        endpoint = request.url.path
-        rate_limit_config = settings.get_rate_limit_for_endpoint(endpoint)
-        
-        # Rate limiting check for client on endpoint
-        
-        # Get or create endpoint-specific rate limiter
-        endpoint_key = f"{endpoint}_{rate_limit_config['requests']}_{rate_limit_config['window']}"
-        
-        if endpoint_key not in endpoint_limiters:
-            if isinstance(rate_limiter, RateLimiter):
-                # Create a new rate limiter instance for this endpoint
-                endpoint_limiters[endpoint_key] = RateLimiter(
-                    max_requests=rate_limit_config["requests"],
-                    window_seconds=rate_limit_config["window"]
-                )
-            else:
-                # For Redis rate limiter, create a new instance
-                endpoint_limiters[endpoint_key] = RedisRateLimiter(
-                    redis_url=settings.RATE_LIMIT_REDIS_URL,
-                    max_requests=rate_limit_config["requests"],
-                    window_seconds=rate_limit_config["window"]
-                )
-        
-        endpoint_limiter = endpoint_limiters[endpoint_key]
-        endpoint_limiter.check_rate_limit(client_id)
-            
-    except RateLimitExceededError:
-        logger.warning("Rate limit exceeded for client %s on endpoint %s", client_id, endpoint)
-        raise HTTPException(
-            status_code=429, 
-            detail=f"Rate limit exceeded. Try again in {rate_limit_config['window']} seconds."
-        )
-    except Exception as e:
-        logger.error("Rate limiting error: %s", e)
-        # Don't block requests on rate limiting errors
-    
-    return await call_next(request)
+# Enhanced rate limiting middleware
+from app.middleware.rate_limiting_middleware import RateLimitingMiddleware
+
+# Add enhanced rate limiting middleware
+app.add_middleware(RateLimitingMiddleware)
 
 from app.startup import validate_startup, check_service_health
 
