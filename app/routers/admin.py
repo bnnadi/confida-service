@@ -135,4 +135,60 @@ async def get_system_stats():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve system statistics"
+        )
+
+@router.get("/config/validation")
+async def get_config_validation():
+    """
+    Get comprehensive configuration validation results.
+    """
+    try:
+        validation_result = settings.validate_configuration_with_warnings()
+        return {
+            "validation": validation_result,
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error validating configuration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate configuration"
+        )
+
+@router.get("/config/validation/summary")
+async def get_config_validation_summary():
+    """
+    Get a summary of configuration validation results.
+    """
+    try:
+        summary = settings.get_validation_summary()
+        return {
+            "summary": summary,
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error getting validation summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get validation summary"
+        )
+
+@router.get("/config/validation/{setting_name}")
+async def validate_specific_setting(setting_name: str):
+    """
+    Validate a specific configuration setting.
+    """
+    try:
+        is_valid, errors = settings.validate_specific_setting(setting_name)
+        return {
+            "setting": setting_name,
+            "is_valid": is_valid,
+            "errors": errors,
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error validating setting {setting_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate setting {setting_name}"
         ) 

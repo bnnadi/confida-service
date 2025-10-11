@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from functools import lru_cache
 
 load_dotenv()
@@ -143,44 +143,41 @@ class Settings:
     
     def validate_configuration(self) -> List[str]:
         """Validate configuration and return list of issues."""
-        issues = []
+        from app.utils.config_validator import ConfigValidator
         
-        if not any(self.configured_services.values()):
-            issues.append("No AI services configured")
+        validator = ConfigValidator()
+        errors, warnings = validator.validate_all()
         
-        # Validate API keys
-        if self.is_openai_configured and not self.OPENAI_API_KEY.startswith('sk-'):
-            issues.append("Invalid OpenAI API key format")
+        # Return only errors for backward compatibility
+        return errors
+    
+    def validate_configuration_with_warnings(self) -> Dict[str, Any]:
+        """Validate configuration and return both errors and warnings."""
+        from app.utils.config_validator import ConfigValidator
         
-        if self.is_anthropic_configured and not self.ANTHROPIC_API_KEY.startswith('sk-ant-'):
-            issues.append("Invalid Anthropic API key format")
+        validator = ConfigValidator()
+        errors, warnings = validator.validate_all()
         
-        # Validate numeric values
-        if self.MAX_TOKENS <= 0:
-            issues.append("MAX_TOKENS must be positive")
+        return {
+            "errors": errors,
+            "warnings": warnings,
+            "is_valid": len(errors) == 0,
+            "total_issues": len(errors) + len(warnings)
+        }
+    
+    def validate_specific_setting(self, setting_name: str) -> Tuple[bool, List[str]]:
+        """Validate a specific configuration setting."""
+        from app.utils.config_validator import ConfigValidator
         
-        if not 0 <= self.TEMPERATURE <= 2:
-            issues.append("TEMPERATURE must be between 0 and 2")
+        validator = ConfigValidator()
+        return validator.validate_specific_setting(setting_name)
+    
+    def get_validation_summary(self) -> Dict[str, Any]:
+        """Get a comprehensive validation summary."""
+        from app.utils.config_validator import ConfigValidator
         
-        # Validate URLs
-        if self.OLLAMA_BASE_URL and not self.OLLAMA_BASE_URL.startswith(('http://', 'https://')):
-            issues.append("OLLAMA_BASE_URL must be a valid URL")
-        
-        # Validate rate limiting configuration
-        if self.RATE_LIMIT_ENABLED:
-            if self.RATE_LIMIT_BACKEND not in ["memory", "redis"]:
-                issues.append("RATE_LIMIT_BACKEND must be 'memory' or 'redis'")
-            
-            if self.RATE_LIMIT_BACKEND == "redis" and not self.RATE_LIMIT_REDIS_URL.startswith(('redis://', 'rediss://')):
-                issues.append("RATE_LIMIT_REDIS_URL must be a valid Redis URL")
-            
-            if self.RATE_LIMIT_DEFAULT_REQUESTS <= 0:
-                issues.append("RATE_LIMIT_DEFAULT_REQUESTS must be positive")
-            
-            if self.RATE_LIMIT_DEFAULT_WINDOW <= 0:
-                issues.append("RATE_LIMIT_DEFAULT_WINDOW must be positive")
-        
-        return issues
+        validator = ConfigValidator()
+        return validator.get_validation_summary()
 
 @lru_cache()
 def get_settings():
