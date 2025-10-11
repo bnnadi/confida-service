@@ -66,6 +66,73 @@ class Settings:
     RATE_LIMIT_DEFAULT_REQUESTS: int = int(os.getenv("RATE_LIMIT_DEFAULT_REQUESTS", "100"))
     RATE_LIMIT_DEFAULT_WINDOW: int = int(os.getenv("RATE_LIMIT_DEFAULT_WINDOW", "3600"))  # seconds
     
+    # Security Headers Settings
+    SECURITY_HEADERS_ENABLED: bool = os.getenv("SECURITY_HEADERS_ENABLED", "true").lower() == "true"
+    
+    # Development/Debug Routes Settings
+    ENABLE_DEBUG_ROUTES: bool = os.getenv("ENABLE_DEBUG_ROUTES", "false").lower() == "true"
+    ENABLE_SECURITY_ROUTES: bool = os.getenv("ENABLE_SECURITY_ROUTES", "false").lower() == "true"
+    ENABLE_ADMIN_ROUTES: bool = os.getenv("ENABLE_ADMIN_ROUTES", "true").lower() == "true"
+    
+    # CORS Configuration for HTTPS
+    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3000,https://127.0.0.1:3000,https://interviewiq.com").split(",")
+    CORS_METHODS: List[str] = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")
+    CORS_HEADERS: List[str] = os.getenv("CORS_HEADERS", "Content-Type,Authorization,API-Version,X-Requested-With").split(",")
+    CORS_MAX_AGE: int = int(os.getenv("CORS_MAX_AGE", "86400"))  # 24 hours
+    
+    # Content Security Policy
+    CSP_POLICY: str = os.getenv("CSP_POLICY", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'")
+    
+    # HTTPS Security Settings
+    HSTS_MAX_AGE: int = int(os.getenv("HSTS_MAX_AGE", "31536000"))  # 1 year
+    HSTS_INCLUDE_SUBDOMAINS: bool = os.getenv("HSTS_INCLUDE_SUBDOMAINS", "true").lower() == "true"
+    HSTS_PRELOAD: bool = os.getenv("HSTS_PRELOAD", "true").lower() == "true"
+    
+    @property
+    def security_headers(self) -> Dict[str, str]:
+        """Get security headers configuration."""
+        return {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=(), usb=()",
+            "Strict-Transport-Security": self._get_hsts_header(),
+            "Content-Security-Policy": self.CSP_POLICY,
+            "X-Permitted-Cross-Domain-Policies": "none",
+            "Cross-Origin-Embedder-Policy": "require-corp",
+            "Cross-Origin-Opener-Policy": "same-origin",
+            "Cross-Origin-Resource-Policy": "same-origin"
+        }
+    
+    def _get_hsts_header(self) -> str:
+        """Generate HSTS header value."""
+        hsts = f"max-age={self.HSTS_MAX_AGE}"
+        if self.HSTS_INCLUDE_SUBDOMAINS:
+            hsts += "; includeSubDomains"
+        if self.HSTS_PRELOAD:
+            hsts += "; preload"
+        return hsts
+    
+    @property
+    def cors_config(self) -> Dict[str, Any]:
+        """Get CORS configuration."""
+        return {
+            "allow_origins": self.CORS_ORIGINS,
+            "allow_credentials": True,
+            "allow_methods": self.CORS_METHODS,
+            "allow_headers": self.CORS_HEADERS,
+            "expose_headers": [
+                "X-RateLimit-Limit", 
+                "X-RateLimit-Remaining", 
+                "X-RateLimit-Window",
+                "X-RateLimit-Reset",
+                "API-Version",
+                "X-Request-ID"
+            ],
+            "max_age": self.CORS_MAX_AGE
+        }
+    
     @property
     def rate_limit_per_endpoint(self) -> Dict[str, Dict[str, int]]:
         """Get rate limiting configuration per endpoint."""
