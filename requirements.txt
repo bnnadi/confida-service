@@ -11,6 +11,8 @@ httpx==0.25.2
 # Speech processing dependencies
 speechrecognition==3.10.0
 pydub==0.25.1
+# File processing dependencies
+python-magic==0.4.27
 # Additional utilities
 redis==5.0.1
 # Database utilities
