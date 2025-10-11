@@ -1,0 +1,52 @@
+version: '3.8'
+
+name: interviewiq-service
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: interviewiq-database
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-interviewiq_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-interviewiq}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - interviewiq-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-interviewiq} -d ${POSTGRES_DB:-interviewiq_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: interviewiq-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-interviewiq}:${POSTGRES_PASSWORD:-password}@database:5432/${POSTGRES_DB:-interviewiq_dev}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - .:/app
+    networks:
+      - interviewiq-service-network
+    depends_on:
+      database:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+volumes:
+  postgres_data:
+
+networks:
+  interviewiq-service-network:
+    driver: bridge

@@ -1,10 +1,20 @@
 import os
 from dotenv import load_dotenv
-from typing import Dict, List
+from typing import Dict, List, Any
+from functools import lru_cache
 
 load_dotenv()
 
 class Settings:
+    # Database Settings - PostgreSQL as default for development
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev")
+    
+    # JWT Settings
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+    
     # Ollama Settings
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama2")
@@ -22,39 +32,80 @@ class Settings:
     TEMPERATURE: float = 0.7
     
     @property
+    def configured_services(self) -> Dict[str, bool]:
+        """Get all service configuration status at once."""
+        return {
+            "ollama": bool(self.OLLAMA_BASE_URL),
+            "openai": bool(self.OPENAI_API_KEY),
+            "anthropic": bool(self.ANTHROPIC_API_KEY)
+        }
+    
+    def is_service_configured(self, service: str) -> bool:
+        """Check if a specific service is configured."""
+        return self.configured_services.get(service, False)
+    
+    # Backward compatibility properties
+    @property
     def is_ollama_configured(self) -> bool:
-        return bool(self.OLLAMA_BASE_URL)
+        return self.is_service_configured("ollama")
     
     @property
     def is_openai_configured(self) -> bool:
-        return bool(self.OPENAI_API_KEY)
+        return self.is_service_configured("openai")
     
     @property
     def is_anthropic_configured(self) -> bool:
-        return bool(self.ANTHROPIC_API_KEY)
+        return self.is_service_configured("anthropic")
     
-    @property
-    def available_services(self) -> Dict[str, bool]:
-        return {
-            "ollama": self.is_ollama_configured,
-            "openai": self.is_openai_configured,
-            "anthropic": self.is_anthropic_configured
-        }
     
     @property
     def service_priority(self) -> List[str]:
         """Get service priority based on configuration."""
-        priority = []
+        configured = [service for service, is_configured in self.configured_services.items() if is_configured]
+        return configured if configured else ["ollama"]
+    
+    def get_ollama_config(self) -> Dict[str, Any]:
+        """Get Ollama configuration."""
+        if not hasattr(self, '_ollama_config_cache'):
+            self._ollama_config_cache = {
+                "base_url": self.OLLAMA_BASE_URL,
+                "model": self.OLLAMA_MODEL,
+                "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.7")),
+                "top_p": float(os.getenv("OLLAMA_TOP_P", "0.9")),
+                "max_tokens": int(os.getenv("OLLAMA_MAX_TOKENS", "2000")),
+                "timeout": int(os.getenv("OLLAMA_TIMEOUT", "60"))
+            }
+        return self._ollama_config_cache
+    
+    def validate_configuration(self) -> List[str]:
+        """Validate configuration and return list of issues."""
+        issues = []
         
-        if self.is_ollama_configured:
-            priority.append("ollama")
+        if not any(self.configured_services.values()):
+            issues.append("No AI services configured")
         
-        if self.is_openai_configured:
-            priority.append("openai")
+        # Validate API keys
+        if self.is_openai_configured and not self.OPENAI_API_KEY.startswith('sk-'):
+            issues.append("Invalid OpenAI API key format")
         
-        if self.is_anthropic_configured:
-            priority.append("anthropic")
+        if self.is_anthropic_configured and not self.ANTHROPIC_API_KEY.startswith('sk-ant-'):
+            issues.append("Invalid Anthropic API key format")
         
-        return priority if priority else ["ollama"]
+        # Validate numeric values
+        if self.MAX_TOKENS <= 0:
+            issues.append("MAX_TOKENS must be positive")
+        
+        if not 0 <= self.TEMPERATURE <= 2:
+            issues.append("TEMPERATURE must be between 0 and 2")
+        
+        # Validate URLs
+        if self.OLLAMA_BASE_URL and not self.OLLAMA_BASE_URL.startswith(('http://', 'https://')):
+            issues.append("OLLAMA_BASE_URL must be a valid URL")
+        
+        return issues
+
+@lru_cache()
+def get_settings():
+    return Settings()
 
 settings = Settings() 
