@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our models
 from app.database import Base
+# Import all models to ensure they are registered with SQLAlchemy
 from app.models.user import User
 from app.models.interview import InterviewSession, Question, Answer
 

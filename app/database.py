@@ -40,10 +40,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create base class for models
 Base = declarative_base()
 
-# Import all models to ensure they are registered with SQLAlchemy
-from app.models.user import User
-from app.models.interview import InterviewSession, Question, Answer
-
 # Dependency to get database session
 def get_db():
     db = SessionLocal()
