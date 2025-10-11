@@ -85,12 +85,53 @@ class Settings:
             "/api/v1/supported-formats": {
                 "requests": int(os.getenv("RATE_LIMIT_SUPPORTED_FORMATS_REQUESTS", "200")),
                 "window": int(os.getenv("RATE_LIMIT_SUPPORTED_FORMATS_WINDOW", "3600"))
+            },
+            "/api/v1/files/upload": {
+                "requests": int(os.getenv("RATE_LIMIT_FILE_UPLOAD_REQUESTS", "10")),
+                "window": int(os.getenv("RATE_LIMIT_FILE_UPLOAD_WINDOW", "3600"))
+            },
+            "/api/v1/auth/login": {
+                "requests": int(os.getenv("RATE_LIMIT_AUTH_LOGIN_REQUESTS", "5")),
+                "window": int(os.getenv("RATE_LIMIT_AUTH_LOGIN_WINDOW", "300"))  # 5 minutes
+            },
+            "/api/v1/auth/register": {
+                "requests": int(os.getenv("RATE_LIMIT_AUTH_REGISTER_REQUESTS", "3")),
+                "window": int(os.getenv("RATE_LIMIT_AUTH_REGISTER_WINDOW", "3600"))
+            },
+            "/api/v1/admin": {
+                "requests": int(os.getenv("RATE_LIMIT_ADMIN_REQUESTS", "20")),
+                "window": int(os.getenv("RATE_LIMIT_ADMIN_WINDOW", "3600"))
             }
         }
     
     def get_rate_limit_for_endpoint(self, endpoint: str) -> Dict[str, int]:
         """Get rate limiting configuration for a specific endpoint."""
         return self.rate_limit_per_endpoint.get(endpoint, {
+            "requests": self.RATE_LIMIT_DEFAULT_REQUESTS,
+            "window": self.RATE_LIMIT_DEFAULT_WINDOW
+        })
+
+    @property
+    def rate_limit_per_user_type(self) -> Dict[str, Dict[str, int]]:
+        """Define rate limits for different user types."""
+        return {
+            "free": {
+                "requests": int(os.getenv("RATE_LIMIT_FREE_REQUESTS", "10")),
+                "window": int(os.getenv("RATE_LIMIT_FREE_WINDOW", "3600"))
+            },
+            "premium": {
+                "requests": int(os.getenv("RATE_LIMIT_PREMIUM_REQUESTS", "100")),
+                "window": int(os.getenv("RATE_LIMIT_PREMIUM_WINDOW", "3600"))
+            },
+            "enterprise": {
+                "requests": int(os.getenv("RATE_LIMIT_ENTERPRISE_REQUESTS", "1000")),
+                "window": int(os.getenv("RATE_LIMIT_ENTERPRISE_WINDOW", "3600"))
+            }
+        }
+
+    def get_rate_limit_for_user_type(self, user_type: str) -> Dict[str, int]:
+        """Get rate limiting configuration for a specific user type."""
+        return self.rate_limit_per_user_type.get(user_type, {
             "requests": self.RATE_LIMIT_DEFAULT_REQUESTS,
             "window": self.RATE_LIMIT_DEFAULT_WINDOW
         })

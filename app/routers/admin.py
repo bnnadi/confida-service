@@ -191,4 +191,121 @@ async def validate_specific_setting(setting_name: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to validate setting {setting_name}"
+        )
+
+@router.get("/rate-limits")
+async def get_rate_limits():
+    """
+    Get current rate limit configuration.
+    """
+    try:
+        return {
+            "enabled": settings.RATE_LIMIT_ENABLED,
+            "backend": settings.RATE_LIMIT_BACKEND,
+            "default_limits": {
+                "requests": settings.RATE_LIMIT_DEFAULT_REQUESTS,
+                "window": settings.RATE_LIMIT_DEFAULT_WINDOW
+            },
+            "endpoint_limits": settings.rate_limit_per_endpoint,
+            "user_type_limits": settings.rate_limit_per_user_type,
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error getting rate limits: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve rate limit configuration"
+        )
+
+@router.get("/rate-limits/status/{client_id}")
+async def get_rate_limit_status(client_id: str, user_type: str = "free"):
+    """
+    Get rate limit status for a specific client.
+    """
+    try:
+        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
+        
+        rate_limiter = EnhancedRateLimiter()
+        status = rate_limiter.get_rate_limit_status(client_id, user_type)
+        
+        return {
+            "client_id": client_id,
+            "user_type": user_type,
+            "status": status,
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error getting rate limit status for client {client_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get rate limit status for client {client_id}"
+        )
+
+@router.post("/rate-limits/reset/{client_id}")
+async def reset_rate_limits(client_id: str, user_type: str = "free"):
+    """
+    Reset rate limits for a specific client.
+    """
+    try:
+        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
+        
+        rate_limiter = EnhancedRateLimiter()
+        success = rate_limiter.reset_rate_limit(client_id, user_type)
+        
+        if success:
+            return {
+                "message": f"Rate limits reset successfully for client {client_id}",
+                "client_id": client_id,
+                "user_type": user_type,
+                "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to reset rate limits for client {client_id}"
+            )
+    except Exception as e:
+        logger.error(f"Error resetting rate limits for client {client_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset rate limits for client {client_id}"
+        )
+
+@router.get("/rate-limits/test")
+async def test_rate_limits():
+    """
+    Test rate limiting configuration.
+    """
+    try:
+        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
+        from fastapi import Request
+        
+        # Create a mock request for testing
+        class MockRequest:
+            def __init__(self):
+                self.url = type('obj', (object,), {'path': '/api/v1/test'})()
+                self.client = type('obj', (object,), {'host': '127.0.0.1'})()
+                self.state = type('obj', (object,), {'user_type': 'free'})()
+        
+        rate_limiter = EnhancedRateLimiter()
+        mock_request = MockRequest()
+        
+        # Test rate limit check
+        result = rate_limiter.check_rate_limit(mock_request, "test_client", "free")
+        
+        return {
+            "test_result": result,
+            "configuration": {
+                "enabled": settings.RATE_LIMIT_ENABLED,
+                "backend": settings.RATE_LIMIT_BACKEND,
+                "endpoint_limits": settings.rate_limit_per_endpoint,
+                "user_type_limits": settings.rate_limit_per_user_type
+            },
+            "timestamp": "2024-01-15T10:30:00Z"  # Would be current timestamp
+        }
+    except Exception as e:
+        logger.error(f"Error testing rate limits: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to test rate limit configuration"
         ) 
