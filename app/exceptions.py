@@ -29,3 +29,19 @@ class RateLimitExceededError(InterviewIQException):
 class ConfigurationError(InterviewIQException):
     """Raised when there are configuration issues."""
     pass
+
+class AdminError(InterviewIQException):
+    """Base exception for admin-related errors."""
+    pass
+
+class ServiceNotInitializedError(AdminError):
+    """Raised when a service is not initialized."""
+    pass
+
+class ConfigurationRetrievalError(AdminError):
+    """Raised when configuration cannot be retrieved."""
+    pass
+
+class StatisticsRetrievalError(AdminError):
+    """Raised when statistics cannot be retrieved."""
+    pass
