@@ -19,36 +19,61 @@ app = FastAPI(
 
 # Rate limiting is now handled by the enhanced middleware
 
-# CORS middleware configuration for React frontend
+# Enhanced CORS middleware configuration for HTTPS
+from app.config import get_settings
+settings = get_settings()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://127.0.0.1:3000",
-        "http://frontend:80",
-        "http://frontend:3000"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.cors_config["allow_credentials"],
+    allow_methods=settings.cors_config["allow_methods"],
+    allow_headers=settings.cors_config["allow_headers"],
+    expose_headers=settings.cors_config["expose_headers"],
+    max_age=settings.cors_config["max_age"]
 )
 
 # Add file upload middleware
 app = create_file_upload_middleware_stack(app)
 
+# Add security headers middleware
+from app.middleware.security_middleware import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, admin, sessions, auth, files, speech
-
+    from app.routers import interview, sessions, auth, files, speech
+    
+    # Core routers (always enabled)
     routers = [
         ("auth", auth.router),
         ("interview", interview.router),
-        ("admin", admin.router),
         ("sessions", sessions.router),
         ("files", files.router),
         ("speech", speech.router)
     ]
+    
+    # Conditional routers based on environment variables
+    if settings.ENABLE_ADMIN_ROUTES:
+        from app.routers import admin
+        routers.append(("admin", admin.router))
+        logger.info("✅ Admin routes enabled")
+    else:
+        logger.info("⚠️ Admin routes disabled (ENABLE_ADMIN_ROUTES=false)")
+    
+    if settings.ENABLE_SECURITY_ROUTES:
+        from app.routers import security
+        routers.append(("security", security.router))
+        logger.info("✅ Security routes enabled")
+    else:
+        logger.info("⚠️ Security routes disabled (ENABLE_SECURITY_ROUTES=false)")
+    
+    if settings.ENABLE_DEBUG_ROUTES:
+        # Add any debug-specific routers here in the future
+        logger.info("✅ Debug routes enabled")
+    else:
+        logger.info("⚠️ Debug routes disabled (ENABLE_DEBUG_ROUTES=false)")
     
     loaded_routers = []
     for router_name, router in routers:
@@ -78,8 +103,10 @@ from app.middleware.rate_limiting_middleware import RateLimitingMiddleware
 app.add_middleware(RateLimitingMiddleware)
 
 from app.startup import validate_startup, check_service_health
+from app.utils.env_config import log_environment_status
 
 validate_startup()
+log_environment_status()
 
 @app.get("/")
 async def root():
