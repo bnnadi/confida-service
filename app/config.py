@@ -31,6 +31,42 @@ class Settings:
     MAX_TOKENS: int = 2000
     TEMPERATURE: float = 0.7
     
+    # Rate Limiting Settings
+    RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_BACKEND: str = os.getenv("RATE_LIMIT_BACKEND", "memory")  # "memory" or "redis"
+    RATE_LIMIT_REDIS_URL: str = os.getenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379")
+    RATE_LIMIT_DEFAULT_REQUESTS: int = int(os.getenv("RATE_LIMIT_DEFAULT_REQUESTS", "100"))
+    RATE_LIMIT_DEFAULT_WINDOW: int = int(os.getenv("RATE_LIMIT_DEFAULT_WINDOW", "3600"))  # seconds
+    
+    @property
+    def rate_limit_per_endpoint(self) -> Dict[str, Dict[str, int]]:
+        """Get rate limiting configuration per endpoint."""
+        return {
+            "/api/v1/parse-jd": {
+                "requests": int(os.getenv("RATE_LIMIT_PARSE_JD_REQUESTS", "50")),
+                "window": int(os.getenv("RATE_LIMIT_PARSE_JD_WINDOW", "3600"))
+            },
+            "/api/v1/analyze-answer": {
+                "requests": int(os.getenv("RATE_LIMIT_ANALYZE_ANSWER_REQUESTS", "30")),
+                "window": int(os.getenv("RATE_LIMIT_ANALYZE_ANSWER_WINDOW", "3600"))
+            },
+            "/api/v1/transcribe": {
+                "requests": int(os.getenv("RATE_LIMIT_TRANSCRIBE_REQUESTS", "10")),
+                "window": int(os.getenv("RATE_LIMIT_TRANSCRIBE_WINDOW", "3600"))
+            },
+            "/api/v1/supported-formats": {
+                "requests": int(os.getenv("RATE_LIMIT_SUPPORTED_FORMATS_REQUESTS", "200")),
+                "window": int(os.getenv("RATE_LIMIT_SUPPORTED_FORMATS_WINDOW", "3600"))
+            }
+        }
+    
+    def get_rate_limit_for_endpoint(self, endpoint: str) -> Dict[str, int]:
+        """Get rate limiting configuration for a specific endpoint."""
+        return self.rate_limit_per_endpoint.get(endpoint, {
+            "requests": self.RATE_LIMIT_DEFAULT_REQUESTS,
+            "window": self.RATE_LIMIT_DEFAULT_WINDOW
+        })
+    
     @property
     def configured_services(self) -> Dict[str, bool]:
         """Get all service configuration status at once."""
@@ -101,6 +137,20 @@ class Settings:
         # Validate URLs
         if self.OLLAMA_BASE_URL and not self.OLLAMA_BASE_URL.startswith(('http://', 'https://')):
             issues.append("OLLAMA_BASE_URL must be a valid URL")
+        
+        # Validate rate limiting configuration
+        if self.RATE_LIMIT_ENABLED:
+            if self.RATE_LIMIT_BACKEND not in ["memory", "redis"]:
+                issues.append("RATE_LIMIT_BACKEND must be 'memory' or 'redis'")
+            
+            if self.RATE_LIMIT_BACKEND == "redis" and not self.RATE_LIMIT_REDIS_URL.startswith(('redis://', 'rediss://')):
+                issues.append("RATE_LIMIT_REDIS_URL must be a valid Redis URL")
+            
+            if self.RATE_LIMIT_DEFAULT_REQUESTS <= 0:
+                issues.append("RATE_LIMIT_DEFAULT_REQUESTS must be positive")
+            
+            if self.RATE_LIMIT_DEFAULT_WINDOW <= 0:
+                issues.append("RATE_LIMIT_DEFAULT_WINDOW must be positive")
         
         return issues
 
