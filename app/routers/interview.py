@@ -5,6 +5,7 @@ from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerReq
 from app.utils.endpoint_helpers import handle_service_errors
 from app.database import get_db
 from app.services.session_service import SessionService
+from app.middleware.auth_middleware import get_current_user_required
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
@@ -14,7 +15,7 @@ async def parse_job_description(
     ai_service,
     request: ParseJDRequest,
     service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic"),
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -32,7 +33,7 @@ async def parse_job_description(
     # Create session and store questions in database
     session_service = SessionService(db)
     session = session_service.create_session(
-        user_id=user_id,
+        user_id=current_user["id"],
         role=request.role,
         job_description=request.jobDescription
     )
@@ -49,7 +50,7 @@ async def analyze_answer(
     request: AnalyzeAnswerRequest,
     service: Optional[str] = Query(None, description="Preferred AI service: ollama, openai, or anthropic"),
     question_id: int = Query(..., description="Question ID to store the answer"),
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """
@@ -71,7 +72,7 @@ async def analyze_answer(
     from app.models.interview import Question, InterviewSession
     question = db.query(Question).join(InterviewSession).filter(
         Question.id == question_id,
-        InterviewSession.user_id == user_id
+        InterviewSession.user_id == current_user["id"]
     ).first()
     
     if not question:

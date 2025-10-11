@@ -13,6 +13,7 @@ from app.models.schemas import (
     AnswerResponse
 )
 from app.utils.endpoint_helpers import handle_service_errors
+from app.middleware.auth_middleware import get_current_user_required
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
@@ -20,13 +21,13 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 @handle_service_errors("creating interview session")
 async def create_session(
     request: CreateSessionRequest,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Create a new interview session."""
     session_service = SessionService(db)
     session = session_service.create_session(
-        user_id=user_id,
+        user_id=current_user["id"],
         role=request.role,
         job_description=request.job_description
     )
@@ -35,26 +36,26 @@ async def create_session(
 @router.get("/", response_model=List[InterviewSessionResponse])
 @handle_service_errors("getting user sessions")
 async def get_user_sessions(
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     limit: int = Query(10, description="Number of sessions to return"),
     offset: int = Query(0, description="Number of sessions to skip"),
     db: Session = Depends(get_db)
 ):
     """Get all interview sessions for a user."""
     session_service = SessionService(db)
-    sessions = session_service.get_user_sessions(user_id, limit, offset)
+    sessions = session_service.get_user_sessions(current_user["id"], limit, offset)
     return sessions
 
 @router.get("/{session_id}", response_model=CompleteSessionResponse)
 @handle_service_errors("getting session details")
 async def get_session(
     session_id: int,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Get a complete session with questions and answers."""
     session_service = SessionService(db)
-    session_data = session_service.get_session_with_questions_and_answers(session_id, user_id)
+    session_data = session_service.get_session_with_questions_and_answers(session_id, current_user["id"])
     
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -66,14 +67,14 @@ async def get_session(
 async def add_questions_to_session(
     session_id: int,
     request: AddQuestionsRequest,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Add questions to an interview session."""
     session_service = SessionService(db)
     
     # Verify session belongs to user
-    session = session_service.get_session(session_id, user_id)
+    session = session_service.get_session(session_id, current_user["id"])
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -84,14 +85,14 @@ async def add_questions_to_session(
 @handle_service_errors("getting session questions")
 async def get_session_questions(
     session_id: int,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Get all questions for a session."""
     session_service = SessionService(db)
     
     # Verify session belongs to user
-    session = session_service.get_session(session_id, user_id)
+    session = session_service.get_session(session_id, current_user["id"])
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
@@ -103,7 +104,7 @@ async def get_session_questions(
 async def add_answer_to_question(
     question_id: int,
     request: AddAnswerRequest,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Add an answer to a question."""
@@ -112,7 +113,7 @@ async def add_answer_to_question(
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
         Question.id == question_id,
-        InterviewSession.user_id == user_id
+        InterviewSession.user_id == current_user["id"]
     ).first()
     
     if not question:
@@ -130,7 +131,7 @@ async def add_answer_to_question(
 @handle_service_errors("getting question answers")
 async def get_question_answers(
     question_id: int,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Get all answers for a question."""
@@ -139,7 +140,7 @@ async def get_question_answers(
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
         Question.id == question_id,
-        InterviewSession.user_id == user_id
+        InterviewSession.user_id == current_user["id"]
     ).first()
     
     if not question:
@@ -153,12 +154,12 @@ async def get_question_answers(
 async def update_session_status(
     session_id: int,
     status: str = Query(..., description="New status (active, completed, abandoned)"),
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Update session status."""
     session_service = SessionService(db)
-    session = session_service.update_session_status(session_id, status, user_id)
+    session = session_service.update_session_status(session_id, status, current_user["id"])
     
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -169,12 +170,12 @@ async def update_session_status(
 @handle_service_errors("deleting session")
 async def delete_session(
     session_id: int,
-    user_id: int = Query(..., description="User ID (temporary - will be from auth)"),
+    current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
     """Delete a session and all its data."""
     session_service = SessionService(db)
-    success = session_service.delete_session(session_id, user_id)
+    success = session_service.delete_session(session_id, current_user["id"])
     
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
