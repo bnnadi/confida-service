@@ -8,6 +8,11 @@ load_dotenv()
 class Settings:
     # Database Settings - PostgreSQL as default for development
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev")
+    DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
+    DATABASE_POOL_SIZE: int = int(os.getenv("DATABASE_POOL_SIZE", "10"))
+    DATABASE_MAX_OVERFLOW: int = int(os.getenv("DATABASE_MAX_OVERFLOW", "20"))
+    DATABASE_POOL_TIMEOUT: int = int(os.getenv("DATABASE_POOL_TIMEOUT", "30"))
+    DATABASE_POOL_RECYCLE: int = int(os.getenv("DATABASE_POOL_RECYCLE", "3600"))
     
     # JWT Settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")

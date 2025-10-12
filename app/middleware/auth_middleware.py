@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
 from app.services.auth_service import AuthService
-from app.models.auth import TokenPayload, TokenType
+from app.models.schemas import TokenPayload, TokenType
 import logging
 
 logger = logging.getLogger(__name__)

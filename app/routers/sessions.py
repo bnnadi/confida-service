@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.services.session_service import SessionService
-from app.models.interview import InterviewSession, Question
+from app.database.models import InterviewSession, Question
 from app.models.schemas import (
     CreateSessionRequest, 
     InterviewSessionResponse, 

@@ -8,8 +8,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from app.models.user import User
-from app.models.auth import TokenPayload, TokenType, UserRole
+from app.database.models import User
+from app.models.schemas import TokenPayload, TokenType, UserRole
 from app.config import get_settings
 import logging
 
@@ -210,7 +210,7 @@ class AuthService:
     
     def get_user_sessions(self, user_id: int, limit: int = 10, offset: int = 0):
         """Get user's interview sessions."""
-        from app.models.interview import InterviewSession
+        from app.database.models import InterviewSession
         
         return self.db.query(InterviewSession)\
             .filter(InterviewSession.user_id == user_id)\
@@ -221,7 +221,7 @@ class AuthService:
     
     def get_user_stats(self, user_id: int) -> Dict[str, Any]:
         """Get user statistics."""
-        from app.models.interview import InterviewSession, Question, Answer
+        from app.database.models import InterviewSession, Question, Answer
         from sqlalchemy import func
         
         # Get session count

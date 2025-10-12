@@ -6,7 +6,7 @@ from app.services.file_service import FileService
 from app.utils.endpoint_helpers import handle_service_errors
 from app.middleware.auth_middleware import get_current_user_required
 from app.database import get_db
-from app.models.file_upload import FileType
+from app.models.schemas import FileType
 from app.utils.file_validator import FileValidator
 import logging
 

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database import SessionLocal
+from app.database.connection import SessionLocal
 from app.config import settings
 import redis
 import httpx

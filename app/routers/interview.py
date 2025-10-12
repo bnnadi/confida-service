@@ -77,7 +77,7 @@ async def analyze_answer(
     session_service = SessionService(db)
     
     # Verify question exists and belongs to user
-    from app.models.interview import Question, InterviewSession
+    from app.database.models import Question, InterviewSession
     question = db.query(Question).join(InterviewSession).filter(
         Question.id == validated_question_id,
         InterviewSession.user_id == current_user["id"]

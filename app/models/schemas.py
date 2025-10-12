@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
+from enum import Enum
 
 # Request Models
 class ParseJDRequest(BaseModel):
@@ -153,4 +154,144 @@ class InterviewSession(BaseModel):
     job_description: str
     questions: List[str]
     answers: List[dict]
-    created_at: str 
+    created_at: str
+
+# Authentication Models
+class TokenType(str, Enum):
+    ACCESS = "access"
+    REFRESH = "refresh"
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+    PREMIUM = "premium"
+    ENTERPRISE = "enterprise"
+
+class TokenPayload(BaseModel):
+    sub: str  # user ID
+    email: str
+    role: UserRole
+    token_type: TokenType
+    exp: int
+    iat: int
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="User password")
+
+class UserRegisterRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="User password")
+    name: str = Field(..., min_length=1, max_length=255, description="User full name")
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    is_active: bool
+    created_at: str
+    last_login: Optional[str] = None
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, description="New password")
+
+class PasswordResetRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., description="Reset token")
+    new_password: str = Field(..., min_length=8, description="New password")
+
+# Additional auth models
+class UserRegistrationRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="User password")
+    name: str = Field(..., min_length=1, max_length=255, description="User full name")
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Refresh token")
+
+class UserProfileUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="User full name")
+    bio: Optional[str] = Field(None, max_length=1000, description="User bio")
+    experience_level: Optional[str] = Field(None, description="Experience level")
+    preferred_industries: Optional[List[str]] = Field(None, description="Preferred industries")
+    skills: Optional[List[str]] = Field(None, description="User skills")
+
+class AuthStatusResponse(BaseModel):
+    is_authenticated: bool
+    user: Optional[UserResponse] = None
+    token_expires_in: Optional[int] = None
+
+class AuthErrorResponse(BaseModel):
+    error: str
+    detail: str
+    error_code: Optional[str] = None
+
+# File Upload Models
+class FileType(str, Enum):
+    AUDIO = "audio"
+    DOCUMENT = "document"
+    IMAGE = "image"
+
+class FileStatus(str, Enum):
+    UPLOADING = "uploading"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+class FileUploadRequest(BaseModel):
+    filename: str = Field(..., description="Original filename")
+    file_type: FileType = Field(..., description="Type of file being uploaded")
+    file_size: int = Field(..., gt=0, description="Size of file in bytes")
+
+class FileUploadResponse(BaseModel):
+    file_id: str
+    filename: str
+    file_type: FileType
+    file_size: int
+    status: FileStatus
+    upload_url: Optional[str] = None
+    expires_at: str
+
+class FileInfoResponse(BaseModel):
+    file_id: str
+    filename: str
+    file_type: FileType
+    file_size: int
+    status: FileStatus
+    created_at: str
+    expires_at: str
+    download_url: Optional[str] = None
+
+class FileListResponse(BaseModel):
+    files: List[FileInfoResponse]
+    total: int
+    page: int
+    per_page: int
+
+class FileDeleteResponse(BaseModel):
+    file_id: str
+    success: bool
+    message: str
+
+class FileValidationError(Exception):
+    """Custom exception for file validation errors."""
+    def __init__(self, message: str, error_code: str = "VALIDATION_ERROR"):
+        self.message = message
+        self.error_code = error_code
+        super().__init__(self.message)
+
+class FileValidationErrorResponse(BaseModel):
+    """Response model for file validation errors."""
+    message: str
+    error_code: str
+    field: Optional[str] = None 

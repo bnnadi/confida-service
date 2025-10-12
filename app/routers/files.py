@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.database import get_db
 from app.services.file_service import FileService
-from app.models.file_upload import (
+from app.models.schemas import (
     FileType, FileUploadRequest, FileUploadResponse, FileInfoResponse, 
-    FileListResponse, FileDeleteResponse, FileValidationError
+    FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.utils.endpoint_helpers import handle_service_errors
 from app.middleware.auth_middleware import get_current_user_required
@@ -173,7 +173,7 @@ async def delete_file(
         deleted_at=file_info["created_at"]  # Using created_at as deleted_at for simplicity
     )
 
-@router.post("/validate", response_model=List[FileValidationError])
+@router.post("/validate", response_model=List[FileValidationErrorResponse])
 @handle_service_errors("validating file")
 async def validate_file(
     file: UploadFile = File(..., description="File to validate"),

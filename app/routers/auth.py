@@ -7,7 +7,7 @@ from typing import Optional
 from app.database import get_db
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user_required, get_current_user
-from app.models.auth import (
+from app.models.schemas import (
     UserRegistrationRequest,
     UserLoginRequest,
     TokenResponse,
