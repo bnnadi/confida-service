@@ -127,6 +127,72 @@ docker-compose -f docker-compose.dev.yml up -d
 DATABASE_URL=postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev
 ```
 
+## 🌱 **Demo Data & Seed Scripts**
+
+### Seed Data for Local Development
+
+The project includes a comprehensive seed data script that populates your development database with:
+
+- **Demo Users**: Pre-configured test accounts with different roles
+- **Sample Interview Sessions**: Complete interview scenarios for different job roles
+- **Questions & Answers**: Realistic interview questions and sample responses
+- **Performance Data**: User performance tracking and analytics
+- **Agent Configurations**: AI agent setup for evaluation and analysis
+
+#### Demo Users Created
+
+| Email | Password | Role | Description |
+|-------|----------|------|-------------|
+| `demo@interviewiq.com` | `demo123456` | User | Main demo account |
+| `john.doe@example.com` | `password123` | User | Sample user 1 |
+| `jane.smith@example.com` | `password123` | User | Sample user 2 |
+| `admin@interviewiq.com` | `admin123456` | Admin | Admin account |
+
+#### Running Seed Data
+
+```bash
+# Run the seed data script
+python seed_data.py
+
+# Or use the convenience script
+python run_seed.py
+```
+
+#### What Gets Created
+
+- **4 Demo Users** with hashed passwords
+- **4 Interview Sessions** for different job roles (Software Engineer, Data Scientist, Product Manager, DevOps Engineer)
+- **20+ Interview Questions** with varying difficulty levels
+- **Sample Answers** with AI analysis results and scoring
+- **Performance Tracking Data** for analytics
+- **Analytics Events** for user interaction tracking
+- **Agent Configurations** for AI evaluation systems
+
+#### Sample Interview Sessions
+
+1. **Senior Software Engineer** - Technical questions about architecture, code quality, and cloud platforms
+2. **Data Scientist** - ML model building, data preprocessing, and statistical analysis
+3. **Product Manager** - Product strategy, user feedback, and cross-functional collaboration
+4. **DevOps Engineer** - Infrastructure, security, monitoring, and deployment strategies
+
+#### Resetting Demo Data
+
+To reset the demo data:
+
+```bash
+# Drop and recreate database
+dropdb interviewiq_dev
+createdb interviewiq_dev
+psql -d interviewiq_dev -c "CREATE USER interviewiq_dev WITH PASSWORD 'dev_password';"
+psql -d interviewiq_dev -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_dev TO interviewiq_dev;"
+
+# Run migrations
+alembic upgrade head
+
+# Seed with demo data
+python seed_data.py
+```
+
 ## 🧪 **Testing Strategy**
 
 ### Unit Tests with SQLite
@@ -229,7 +295,10 @@ cp env.example .env
 alembic revision --autogenerate -m "Initial migration"
 alembic upgrade head
 
-# 6. Start development server
+# 6. Seed database with demo data (optional)
+python seed_data.py
+
+# 7. Start development server
 uvicorn app.main:app --reload
 ```
 
