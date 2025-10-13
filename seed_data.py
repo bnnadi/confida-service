@@ -115,7 +115,7 @@ SAMPLE_QUESTIONS = {
         "How do you handle database migrations and zero-downtime deployments?",
         "Describe a time when you had to troubleshoot a production incident."
     ]
-]
+}
 
 SAMPLE_ANSWERS = [
     "I recently worked on optimizing a database query that was taking 30 seconds to execute. I analyzed the query execution plan, identified missing indexes, and restructured the query to use proper joins. The optimization reduced the query time to under 2 seconds.",
@@ -481,8 +481,8 @@ def main():
             
         logger.info("🎉 Database seeding completed successfully!")
         logger.info("\n📋 Demo Users Created:")
-        for user in users:
-            logger.info(f"  - {user.email} (password: {DEMO_USERS[users.index(user)]['password']})")
+        for i, user_data in enumerate(DEMO_USERS):
+            logger.info(f"  - {user_data['email']} (password: {user_data['password']})")
         
         logger.info("\n🚀 You can now start the application and test with these demo accounts!")
         
