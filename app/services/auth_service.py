@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.database.models import User
@@ -15,9 +15,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -34,13 +31,22 @@ class AuthService:
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+        except Exception as e:
+            logger.error(f"Password verification error: {e}")
+            return False
     
     def get_password_hash(self, password: str) -> str:
         """Hash a password."""
-        return pwd_context.hash(password)
+        # Bcrypt has a 72-byte limit, so truncate if necessary
+        if len(password.encode('utf-8')) > 72:
+            password = password[:72]
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
     
-    def create_access_token(self, user_id: int, email: str, role: str = UserRole.USER) -> str:
+    def create_access_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:
         """Create a JWT access token."""
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         payload = {
@@ -53,7 +59,7 @@ class AuthService:
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
-    def create_refresh_token(self, user_id: int, email: str, role: str = UserRole.USER) -> str:
+    def create_refresh_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:
         """Create a JWT refresh token."""
         expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         payload = {
@@ -94,9 +100,15 @@ class AuthService:
         """Get user by email address."""
         return self.db.query(User).filter(User.email == email).first()
     
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
-        return self.db.query(User).filter(User.id == user_id).first()
+        from uuid import UUID
+        try:
+            # Convert string to UUID for database query
+            uuid_id = UUID(user_id)
+            return self.db.query(User).filter(User.id == uuid_id).first()
+        except ValueError:
+            return None
     
     def create_user(self, email: str, password: str, first_name: Optional[str] = None, 
                    last_name: Optional[str] = None) -> User:
@@ -110,14 +122,16 @@ class AuthService:
             )
         
         # Create new user
+        # Truncate password to 72 bytes for bcrypt compatibility
+        if len(password.encode('utf-8')) > 72:
+            password = password[:72]
         hashed_password = self.get_password_hash(password)
+        full_name = f"{first_name or ''} {last_name or ''}".strip()
         user = User(
             email=email,
-            hashed_password=hashed_password,
-            first_name=first_name,
-            last_name=last_name,
-            is_active=True,
-            is_verified=False  # Email verification can be added later
+            password_hash=hashed_password,
+            name=full_name,
+            is_active=True
         )
         
         self.db.add(user)
@@ -133,7 +147,11 @@ class AuthService:
         if not user:
             return None
         
-        if not self.verify_password(password, user.hashed_password):
+        # Truncate password to 72 bytes for bcrypt compatibility
+        if len(password.encode('utf-8')) > 72:
+            password = password[:72]
+        
+        if not self.verify_password(password, user.password_hash):
             return None
         
         if not user.is_active:
@@ -148,7 +166,7 @@ class AuthService:
         
         return user
     
-    def change_password(self, user_id: int, current_password: str, new_password: str) -> bool:
+    def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
         """Change user password."""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -157,19 +175,25 @@ class AuthService:
                 detail="User not found"
             )
         
-        if not self.verify_password(current_password, user.hashed_password):
+        # Truncate passwords to 72 bytes for bcrypt compatibility
+        if len(current_password.encode('utf-8')) > 72:
+            current_password = current_password[:72]
+        if len(new_password.encode('utf-8')) > 72:
+            new_password = new_password[:72]
+            
+        if not self.verify_password(current_password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Current password is incorrect"
             )
         
-        user.hashed_password = self.get_password_hash(new_password)
+        user.password_hash = self.get_password_hash(new_password)
         self.db.commit()
         
         logger.info(f"Password changed for user: {user.email}")
         return True
     
-    def update_user_profile(self, user_id: int, **kwargs) -> User:
+    def update_user_profile(self, user_id: str, **kwargs) -> User:
         """Update user profile information."""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -184,7 +208,16 @@ class AuthService:
         
         for field, value in kwargs.items():
             if field in allowed_fields and hasattr(user, field):
-                setattr(user, field, value)
+                if field in ['first_name', 'last_name']:
+                    # Update the name field by combining first and last name
+                    current_name = user.name or ''
+                    name_parts = current_name.split(' ', 1)
+                    if field == 'first_name':
+                        user.name = f"{value} {name_parts[1] if len(name_parts) > 1 else ''}".strip()
+                    else:  # last_name
+                        user.name = f"{name_parts[0] if len(name_parts) > 0 else ''} {value}".strip()
+                else:
+                    setattr(user, field, value)
         
         user.updated_at = datetime.utcnow()
         self.db.commit()
@@ -193,7 +226,7 @@ class AuthService:
         logger.info(f"Profile updated for user: {user.email}")
         return user
     
-    def deactivate_user(self, user_id: int) -> bool:
+    def deactivate_user(self, user_id: str) -> bool:
         """Deactivate a user account."""
         user = self.get_user_by_id(user_id)
         if not user:
@@ -208,50 +241,66 @@ class AuthService:
         logger.info(f"User deactivated: {user.email}")
         return True
     
-    def get_user_sessions(self, user_id: int, limit: int = 10, offset: int = 0):
+    def get_user_sessions(self, user_id: str, limit: int = 10, offset: int = 0):
         """Get user's interview sessions."""
         from app.database.models import InterviewSession
+        from uuid import UUID
         
-        return self.db.query(InterviewSession)\
-            .filter(InterviewSession.user_id == user_id)\
-            .order_by(InterviewSession.created_at.desc())\
-            .offset(offset)\
-            .limit(limit)\
-            .all()
+        try:
+            uuid_id = UUID(user_id)
+            return self.db.query(InterviewSession)\
+                .filter(InterviewSession.user_id == uuid_id)\
+                .order_by(InterviewSession.created_at.desc())\
+                .offset(offset)\
+                .limit(limit)\
+                .all()
+        except ValueError:
+            return []
     
-    def get_user_stats(self, user_id: int) -> Dict[str, Any]:
+    def get_user_stats(self, user_id: str) -> Dict[str, Any]:
         """Get user statistics."""
         from app.database.models import InterviewSession, Question, Answer
         from sqlalchemy import func
+        from uuid import UUID
         
-        # Get session count
-        session_count = self.db.query(InterviewSession)\
-            .filter(InterviewSession.user_id == user_id)\
-            .count()
-        
-        # Get question count
-        question_count = self.db.query(Question)\
-            .join(InterviewSession)\
-            .filter(InterviewSession.user_id == user_id)\
-            .count()
-        
-        # Get answer count
-        answer_count = self.db.query(Answer)\
-            .join(Question)\
-            .join(InterviewSession)\
-            .filter(InterviewSession.user_id == user_id)\
-            .count()
-        
-        # Get average score (if available)
-        avg_score = self.db.query(func.avg(Answer.score['overall'].astext.cast(func.Float)))\
-            .join(Question)\
-            .join(InterviewSession)\
-            .filter(InterviewSession.user_id == user_id)\
-            .scalar()
-        
-        return {
-            "session_count": session_count,
-            "question_count": question_count,
-            "answer_count": answer_count,
-            "average_score": float(avg_score) if avg_score else None
-        }
+        try:
+            uuid_id = UUID(user_id)
+            
+            # Get session count
+            session_count = self.db.query(InterviewSession)\
+                .filter(InterviewSession.user_id == uuid_id)\
+                .count()
+            
+            # Get question count
+            question_count = self.db.query(Question)\
+                .join(InterviewSession)\
+                .filter(InterviewSession.user_id == uuid_id)\
+                .count()
+            
+            # Get answer count
+            answer_count = self.db.query(Answer)\
+                .join(Question)\
+                .join(InterviewSession)\
+                .filter(InterviewSession.user_id == uuid_id)\
+                .count()
+            
+            # Get average score (if available)
+            avg_score = self.db.query(func.avg(Answer.score['overall'].astext.cast(func.Float)))\
+                .join(Question)\
+                .join(InterviewSession)\
+                .filter(InterviewSession.user_id == uuid_id)\
+                .scalar()
+            
+            return {
+                "session_count": session_count,
+                "question_count": question_count,
+                "answer_count": answer_count,
+                "average_score": float(avg_score) if avg_score else None
+            }
+        except ValueError:
+            return {
+                "session_count": 0,
+                "question_count": 0,
+                "answer_count": 0,
+                "average_score": None
+            }

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.session_service import SessionService
 from app.database.models import InterviewSession, Question
 from app.models.schemas import (
@@ -12,13 +12,11 @@ from app.models.schemas import (
     AddAnswerRequest,
     AnswerResponse
 )
-from app.utils.endpoint_helpers import handle_service_errors
 from app.middleware.auth_middleware import get_current_user_required
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 @router.post("/", response_model=InterviewSessionResponse)
-@handle_service_errors("creating interview session")
 async def create_session(
     request: CreateSessionRequest,
     current_user: dict = Depends(get_current_user_required),
@@ -34,7 +32,6 @@ async def create_session(
     return session
 
 @router.get("/", response_model=List[InterviewSessionResponse])
-@handle_service_errors("getting user sessions")
 async def get_user_sessions(
     current_user: dict = Depends(get_current_user_required),
     limit: int = Query(10, description="Number of sessions to return"),
@@ -47,7 +44,6 @@ async def get_user_sessions(
     return sessions
 
 @router.get("/{session_id}", response_model=CompleteSessionResponse)
-@handle_service_errors("getting session details")
 async def get_session(
     session_id: int,
     current_user: dict = Depends(get_current_user_required),
@@ -63,7 +59,6 @@ async def get_session(
     return session_data
 
 @router.post("/{session_id}/questions", response_model=List[dict])
-@handle_service_errors("adding questions to session")
 async def add_questions_to_session(
     session_id: int,
     request: AddQuestionsRequest,
@@ -82,7 +77,6 @@ async def add_questions_to_session(
     return [{"id": q.id, "question_text": q.question_text, "question_order": q.question_order} for q in questions]
 
 @router.get("/{session_id}/questions", response_model=List[dict])
-@handle_service_errors("getting session questions")
 async def get_session_questions(
     session_id: int,
     current_user: dict = Depends(get_current_user_required),
@@ -100,7 +94,6 @@ async def get_session_questions(
     return [{"id": q.id, "question_text": q.question_text, "question_order": q.question_order} for q in questions]
 
 @router.post("/questions/{question_id}/answers", response_model=AnswerResponse)
-@handle_service_errors("adding answer to question")
 async def add_answer_to_question(
     question_id: int,
     request: AddAnswerRequest,
@@ -128,7 +121,6 @@ async def add_answer_to_question(
     return answer
 
 @router.get("/questions/{question_id}/answers", response_model=List[AnswerResponse])
-@handle_service_errors("getting question answers")
 async def get_question_answers(
     question_id: int,
     current_user: dict = Depends(get_current_user_required),
@@ -150,7 +142,6 @@ async def get_question_answers(
     return answers
 
 @router.patch("/{session_id}/status")
-@handle_service_errors("updating session status")
 async def update_session_status(
     session_id: int,
     status: str = Query(..., description="New status (active, completed, abandoned)"),
@@ -167,7 +158,6 @@ async def update_session_status(
     return {"message": "Session status updated successfully", "status": session.status}
 
 @router.delete("/{session_id}")
-@handle_service_errors("deleting session")
 async def delete_session(
     session_id: int,
     current_user: dict = Depends(get_current_user_required),

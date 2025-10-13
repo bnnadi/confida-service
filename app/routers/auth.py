@@ -4,7 +4,7 @@ Authentication router for user registration, login, and management.
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user_required, get_current_user
 from app.models.schemas import (
@@ -18,7 +18,6 @@ from app.models.schemas import (
     AuthStatusResponse,
     AuthErrorResponse
 )
-from app.utils.endpoint_helpers import handle_service_errors
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,6 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-@handle_service_errors("registering user")
 async def register_user(
     request: UserRegistrationRequest,
     db: Session = Depends(get_db)
@@ -43,16 +41,24 @@ async def register_user(
     user = auth_service.create_user(
         email=request.email,
         password=request.password,
-        first_name=request.first_name,
-        last_name=request.last_name
+        first_name=request.name.split(' ', 1)[0] if request.name else '',
+        last_name=request.name.split(' ', 1)[1] if ' ' in request.name else ''
     )
     
     logger.info(f"User registered successfully: {user.email}")
-    return user
+    
+    # Convert User model to UserResponse
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        is_active=user.is_active,
+        created_at=user.created_at.isoformat() if user.created_at else "",
+        last_login=user.last_login.isoformat() if user.last_login else None
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
-@handle_service_errors("logging in user")
 async def login_user(
     request: UserLoginRequest,
     db: Session = Depends(get_db)
@@ -74,12 +80,12 @@ async def login_user(
     
     # Create tokens
     access_token = auth_service.create_access_token(
-        user_id=user.id,
+        user_id=str(user.id),  # Convert UUID to string
         email=user.email,
         role="user"  # Default role, can be enhanced later
     )
     refresh_token = auth_service.create_refresh_token(
-        user_id=user.id,
+        user_id=str(user.id),  # Convert UUID to string
         email=user.email,
         role="user"
     )
@@ -93,7 +99,6 @@ async def login_user(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-@handle_service_errors("refreshing token")
 async def refresh_token(
     request: TokenRefreshRequest,
     db: Session = Depends(get_db)
@@ -123,7 +128,7 @@ async def refresh_token(
     
     # Create new access token
     access_token = auth_service.create_access_token(
-        user_id=user.id,
+        user_id=str(user.id),  # Convert UUID to string
         email=user.email,
         role=token_payload.role
     )
@@ -137,7 +142,6 @@ async def refresh_token(
 
 
 @router.get("/me", response_model=UserResponse)
-@handle_service_errors("getting user profile")
 async def get_current_user(
     current_user: dict = Depends(get_current_user_required)
 ):
@@ -150,7 +154,6 @@ async def get_current_user(
 
 
 @router.put("/me", response_model=UserResponse)
-@handle_service_errors("updating user profile")
 async def update_user_profile(
     request: UserProfileUpdateRequest,
     current_user: dict = Depends(get_current_user_required),
@@ -174,7 +177,6 @@ async def update_user_profile(
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)
-@handle_service_errors("changing password")
 async def change_password(
     request: PasswordChangeRequest,
     current_user: dict = Depends(get_current_user_required),
@@ -218,7 +220,6 @@ async def get_auth_status(
 
 
 @router.get("/stats")
-@handle_service_errors("getting user stats")
 async def get_user_stats(
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
@@ -239,7 +240,6 @@ async def get_user_stats(
 
 
 @router.get("/sessions")
-@handle_service_errors("getting user sessions")
 async def get_user_sessions(
     limit: int = Query(10, ge=1, le=100, description="Number of sessions to return"),
     offset: int = Query(0, ge=0, description="Number of sessions to skip"),

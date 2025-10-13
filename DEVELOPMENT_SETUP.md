@@ -204,7 +204,7 @@ For fast unit tests, you can still use SQLite:
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.database import Base
+from app.database.connection import Base
 from app.models.user import User
 
 @pytest.fixture
@@ -225,7 +225,7 @@ For integration tests, use the same PostgreSQL setup as development:
 ```python
 # tests/integration/conftest.py
 import pytest
-from app.database import get_db
+from app.database.connection import get_db
 from app.models.user import User
 
 @pytest.fixture

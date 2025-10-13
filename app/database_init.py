@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from app.database import Base, engine
+from app.database.connection import Base, engine
 from app.database.models import User
 from app.config import get_settings
 

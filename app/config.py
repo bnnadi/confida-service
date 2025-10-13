@@ -80,7 +80,7 @@ class Settings:
     ENABLE_ADMIN_ROUTES: bool = os.getenv("ENABLE_ADMIN_ROUTES", "true").lower() == "true"
     
     # CORS Configuration for HTTPS
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3000,https://127.0.0.1:3000,https://interviewiq.com").split(",")
+    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3001,https://127.0.0.1:3001,https://interviewiq.com").split(",")
     CORS_METHODS: List[str] = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")
     CORS_HEADERS: List[str] = os.getenv("CORS_HEADERS", "Content-Type,Authorization,API-Version,X-Requested-With").split(",")
     CORS_MAX_AGE: int = int(os.getenv("CORS_MAX_AGE", "86400"))  # 24 hours

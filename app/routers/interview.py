@@ -4,7 +4,7 @@ from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
 from app.utils.endpoint_helpers import handle_service_errors
 from app.utils.validators import InputValidator, create_service_query_param
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.session_service import SessionService
 from app.middleware.auth_middleware import get_current_user_required
 

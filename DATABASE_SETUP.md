@@ -132,7 +132,7 @@ alembic history
 Run the database tests to verify everything is working:
 
 ```bash
-python -c "from app.database import engine; print('✅ Database connection successful!' if engine else '❌ Connection failed')"
+python -c "from app.database.connection import engine; print('✅ Database connection successful!' if engine else '❌ Connection failed')"
 ```
 
 ## Troubleshooting

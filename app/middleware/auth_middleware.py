@@ -5,7 +5,7 @@ from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.auth_service import AuthService
 from app.models.schemas import TokenPayload, TokenType
 import logging
@@ -52,14 +52,18 @@ class AuthMiddleware:
                 return None
             
             # Return user information
+            name_parts = (user.name or '').split(' ', 1)
+            first_name = name_parts[0] if name_parts else ''
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
+            
             return {
                 "id": user.id,
                 "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "full_name": user.full_name,
+                "first_name": first_name,
+                "last_name": last_name,
+                "full_name": user.name,
                 "is_active": user.is_active,
-                "is_verified": user.is_verified,
+                "is_verified": True,  # Default to True since field doesn't exist
                 "role": "user",  # Default role, can be enhanced
                 "created_at": user.created_at,
                 "last_login": user.last_login
@@ -199,7 +203,7 @@ def get_user_id_from_token(credentials: Optional[HTTPAuthorizationCredentials] =
     
     try:
         from app.services.auth_service import AuthService
-        from app.database import SessionLocal
+        from app.database.connection import SessionLocal
         
         db = SessionLocal()
         auth_service = AuthService(db)

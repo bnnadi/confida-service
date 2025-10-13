@@ -3,9 +3,8 @@ from typing import Optional, List
 from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
 from app.services.speech_service import SpeechToTextService
 from app.services.file_service import FileService
-from app.utils.endpoint_helpers import handle_service_errors
 from app.middleware.auth_middleware import get_current_user_required
-from app.database import get_db
+from app.database.connection import get_db
 from app.models.schemas import FileType
 from app.utils.file_validator import FileValidator
 import logging
@@ -22,7 +21,6 @@ def get_file_service(db = Depends(get_db)) -> FileService:
     return FileService(db)
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-@handle_service_errors("transcribing audio")
 async def transcribe_audio_endpoint(
     audio_file: UploadFile = File(..., description="Audio file to transcribe (MP3, WAV, M4A, OGG, FLAC)"),
     language: str = Query("en-US", description="Language code for transcription (e.g., en-US, es-ES)"),
@@ -85,7 +83,6 @@ async def transcribe_audio_endpoint(
         )
 
 @router.post("/transcribe/{file_id}", response_model=TranscribeResponse)
-@handle_service_errors("transcribing saved audio file")
 async def transcribe_saved_audio(
     file_id: str,
     language: str = Query("en-US", description="Language code for transcription"),
@@ -186,7 +183,6 @@ async def get_supported_formats():
     )
 
 @router.get("/audio-files", response_model=List[dict])
-@handle_service_errors("listing audio files")
 async def list_audio_files(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of files per page"),
