@@ -10,7 +10,10 @@ from app.models.schemas import (
     CompleteSessionResponse,
     AddQuestionsRequest,
     AddAnswerRequest,
-    AnswerResponse
+    AnswerResponse,
+    SessionPreviewResponse,
+    ScenarioListResponse,
+    QuestionPreview
 )
 from app.middleware.auth_middleware import get_current_user_required
 
@@ -22,13 +25,25 @@ async def create_session(
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
-    """Create a new interview session."""
+    """Create a new interview session (supports both practice and interview modes)."""
     session_service = SessionService(db)
-    session = session_service.create_session(
-        user_id=current_user["id"],
-        role=request.role,
-        job_description=request.job_description
-    )
+    
+    if request.mode == "practice":
+        session = session_service.create_practice_session(
+            user_id=current_user["id"],
+            role=request.role,
+            scenario_id=request.scenario_id
+        )
+    elif request.mode == "interview":
+        session = session_service.create_interview_session(
+            user_id=current_user["id"],
+            role=request.role,
+            job_title=request.job_title,
+            job_description=request.job_description
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode. Must be 'practice' or 'interview'")
+    
     return session
 
 @router.get("/", response_model=List[InterviewSessionResponse])
@@ -171,3 +186,60 @@ async def delete_session(
         raise HTTPException(status_code=404, detail="Session not found")
     
     return {"message": "Session deleted successfully"}
+
+@router.get("/preview", response_model=SessionPreviewResponse)
+async def preview_session(
+    mode: str = Query(..., description="Session mode: 'practice' or 'interview'"),
+    role: str = Query(..., description="Job role"),
+    scenario_id: Optional[str] = Query(None, description="Scenario ID for practice mode"),
+    job_title: Optional[str] = Query(None, description="Job title for interview mode"),
+    job_description: Optional[str] = Query(None, description="Job description for interview mode"),
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """Preview a session without creating it."""
+    session_service = SessionService(db)
+    
+    if mode == "practice":
+        if not scenario_id:
+            raise HTTPException(status_code=400, detail="scenario_id is required for practice mode")
+        preview_data = session_service.preview_practice_session(role, scenario_id)
+    elif mode == "interview":
+        if not job_title or not job_description:
+            raise HTTPException(status_code=400, detail="job_title and job_description are required for interview mode")
+        preview_data = session_service.preview_interview_session(role, job_title, job_description)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode. Must be 'practice' or 'interview'")
+    
+    # Convert questions to QuestionPreview objects
+    questions = [
+        QuestionPreview(
+            id=q["id"],
+            text=q["text"],
+            type=q["type"],
+            difficulty_level=q["difficulty_level"],
+            category=q["category"]
+        ) for q in preview_data["questions"]
+    ]
+    
+    return SessionPreviewResponse(
+        mode=preview_data["mode"],
+        role=preview_data["role"],
+        questions=questions,
+        total_questions=preview_data["total_questions"],
+        estimated_duration=preview_data["estimated_duration"]
+    )
+
+@router.get("/scenarios", response_model=ScenarioListResponse)
+async def get_scenarios(
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """Get available practice scenarios."""
+    session_service = SessionService(db)
+    scenarios = session_service.get_available_scenarios()
+    
+    return ScenarioListResponse(
+        scenarios=scenarios,
+        total=len(scenarios)
+    )
