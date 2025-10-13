@@ -39,8 +39,9 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             # Process request
             response = await call_next(request)
             
-            # Add rate limit headers
-            self._add_rate_limit_headers(response, rate_limit_result)
+            # Add rate limit headers only if rate limiting is enabled
+            if rate_limit_result.get("reason") != "rate_limiting_disabled":
+                self._add_rate_limit_headers(response, rate_limit_result)
             
             return response
             

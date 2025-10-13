@@ -7,7 +7,7 @@ This script will create the database and run initial migrations.
 import os
 import sys
 from sqlalchemy import create_engine, text
-from app.database import Base, engine
+from app.database.connection import Base, engine
 from app.config import get_settings
 
 def create_database():

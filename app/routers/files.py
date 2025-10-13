@@ -2,13 +2,12 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.file_service import FileService
-from app.models.file_upload import (
+from app.models.schemas import (
     FileType, FileUploadRequest, FileUploadResponse, FileInfoResponse, 
-    FileListResponse, FileDeleteResponse, FileValidationError
+    FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
-from app.utils.endpoint_helpers import handle_service_errors
 from app.middleware.auth_middleware import get_current_user_required
 from app.utils.file_validator import FileValidator
 import logging
@@ -22,7 +21,6 @@ def get_file_service(db: Session = Depends(get_db)) -> FileService:
     return FileService(db)
 
 @router.post("/upload", response_model=FileUploadResponse)
-@handle_service_errors("uploading file")
 async def upload_file(
     file: UploadFile = File(..., description="File to upload"),
     file_type: FileType = Query(..., description="Type of file being uploaded"),
@@ -74,7 +72,6 @@ async def upload_file(
         )
 
 @router.get("/{file_id}", response_model=FileInfoResponse)
-@handle_service_errors("getting file information")
 async def get_file_info(
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
@@ -104,7 +101,6 @@ async def get_file_info(
     )
 
 @router.get("/{file_id}/download")
-@handle_service_errors("downloading file")
 async def download_file(
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
@@ -129,7 +125,6 @@ async def download_file(
     )
 
 @router.get("/", response_model=FileListResponse)
-@handle_service_errors("listing files")
 async def list_files(
     file_type: Optional[FileType] = Query(None, description="Filter by file type"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -141,7 +136,6 @@ async def list_files(
     return file_service.list_files(file_type=file_type, page=page, page_size=page_size)
 
 @router.delete("/{file_id}", response_model=FileDeleteResponse)
-@handle_service_errors("deleting file")
 async def delete_file(
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
@@ -173,8 +167,7 @@ async def delete_file(
         deleted_at=file_info["created_at"]  # Using created_at as deleted_at for simplicity
     )
 
-@router.post("/validate", response_model=List[FileValidationError])
-@handle_service_errors("validating file")
+@router.post("/validate", response_model=List[FileValidationErrorResponse])
 async def validate_file(
     file: UploadFile = File(..., description="File to validate"),
     file_type: FileType = Query(..., description="Type of file being validated"),
@@ -197,7 +190,6 @@ async def validate_file(
         )]
 
 @router.get("/stats/storage")
-@handle_service_errors("getting storage statistics")
 async def get_storage_stats(
     current_user: dict = Depends(get_current_user_required),
     file_service: FileService = Depends(get_file_service)
@@ -210,7 +202,6 @@ async def get_storage_stats(
     }
 
 @router.post("/cleanup")
-@handle_service_errors("cleaning up expired files")
 async def cleanup_expired_files(
     current_user: dict = Depends(get_current_user_required),
     file_service: FileService = Depends(get_file_service)
@@ -227,7 +218,6 @@ async def cleanup_expired_files(
 
 # Audio-specific endpoints
 @router.post("/audio/upload", response_model=FileUploadResponse)
-@handle_service_errors("uploading audio file")
 async def upload_audio_file(
     file: UploadFile = File(..., description="Audio file to upload"),
     description: Optional[str] = Query(None, description="Optional description of the audio file"),
@@ -244,7 +234,6 @@ async def upload_audio_file(
     )
 
 @router.get("/audio/", response_model=FileListResponse)
-@handle_service_errors("listing audio files")
 async def list_audio_files(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of files per page"),
@@ -262,7 +251,6 @@ async def list_audio_files(
 
 # Document-specific endpoints
 @router.post("/documents/upload", response_model=FileUploadResponse)
-@handle_service_errors("uploading document")
 async def upload_document(
     file: UploadFile = File(..., description="Document to upload"),
     description: Optional[str] = Query(None, description="Optional description of the document"),
@@ -279,7 +267,6 @@ async def upload_document(
     )
 
 @router.get("/documents/", response_model=FileListResponse)
-@handle_service_errors("listing documents")
 async def list_documents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of files per page"),
@@ -297,7 +284,6 @@ async def list_documents(
 
 # Image-specific endpoints
 @router.post("/images/upload", response_model=FileUploadResponse)
-@handle_service_errors("uploading image")
 async def upload_image(
     file: UploadFile = File(..., description="Image to upload"),
     description: Optional[str] = Query(None, description="Optional description of the image"),
@@ -314,7 +300,6 @@ async def upload_image(
     )
 
 @router.get("/images/", response_model=FileListResponse)
-@handle_service_errors("listing images")
 async def list_images(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of files per page"),

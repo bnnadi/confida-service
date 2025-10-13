@@ -1,8 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional, Dict, Any
-from app.models.interview import InterviewSession, Question, Answer
-from app.models.user import User
+from app.database.models import InterviewSession, Question, Answer, User
 from app.exceptions import AIServiceError
 from app.utils.error_context import ErrorContext
 

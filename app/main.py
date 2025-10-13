@@ -104,6 +104,15 @@ app.add_middleware(RateLimitingMiddleware)
 
 from app.startup import validate_startup, check_service_health
 from app.utils.env_config import log_environment_status
+from app.database.connection import init_db, check_db_connection
+
+# Initialize database
+init_db()
+
+# Check database connection
+if not check_db_connection():
+    logger.error("❌ Database connection failed")
+    raise RuntimeError("Database connection failed")
 
 validate_startup()
 log_environment_status()

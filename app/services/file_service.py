@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any, BinaryIO
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from app.models.file_upload import FileType, FileStatus, FileUploadResponse, FileInfoResponse, FileListResponse, FileDeleteResponse
+from app.models.schemas import FileType, FileStatus, FileUploadResponse, FileInfoResponse, FileListResponse, FileDeleteResponse
 from app.utils.file_validator import FileValidator
 from app.config import get_settings
 import logging

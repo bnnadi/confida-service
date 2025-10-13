@@ -2,7 +2,7 @@ import os
 import mimetypes
 from typing import List, Tuple, Optional, Dict, Any
 from fastapi import HTTPException, UploadFile
-from app.models.file_upload import FileType, FileValidationError
+from app.models.schemas import FileType, FileValidationError
 import logging
 
 try:

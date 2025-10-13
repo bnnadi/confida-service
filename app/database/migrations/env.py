@@ -1,20 +1,20 @@
 from logging.config import fileConfig
 import os
 import sys
+from pathlib import Path
 
-from sqlalchemy import engine_from_config, create_engine
+from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
 
 # Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
-# Import our models
-from app.database import Base
-# Import all models to ensure they are registered with SQLAlchemy
-from app.models.user import User
-from app.models.interview import InterviewSession, Question, Answer
+# Import our models and configuration
+from app.database.connection import Base
+from app.config import get_settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,6 +28,10 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 target_metadata = Base.metadata
+
+# Get database URL from settings
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -47,8 +51,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    # Use DATABASE_URL environment variable if available, otherwise fall back to config
-    url = os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -67,16 +70,11 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Use DATABASE_URL environment variable if available
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        connectable = create_engine(database_url, poolclass=pool.NullPool)
-    else:
-        connectable = engine_from_config(
-            config.get_section(config.config_ini_section, {}),
-            prefix="sqlalchemy.",
-            poolclass=pool.NullPool,
-        )
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
 
     with connectable.connect() as connection:
         context.configure(

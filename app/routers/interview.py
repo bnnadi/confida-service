@@ -4,7 +4,7 @@ from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
 from app.utils.endpoint_helpers import handle_service_errors
 from app.utils.validators import InputValidator, create_service_query_param
-from app.database import get_db
+from app.database.connection import get_db
 from app.services.session_service import SessionService
 from app.middleware.auth_middleware import get_current_user_required
 
@@ -77,7 +77,7 @@ async def analyze_answer(
     session_service = SessionService(db)
     
     # Verify question exists and belongs to user
-    from app.models.interview import Question, InterviewSession
+    from app.database.models import Question, InterviewSession
     question = db.query(Question).join(InterviewSession).filter(
         Question.id == validated_question_id,
         InterviewSession.user_id == current_user["id"]
