@@ -1,0 +1,45 @@
+# Railway ignore file
+# Exclude files not needed in production
+
+# Development files
+.env
+.env.local
+.env.development
+.env.prod
+docker-compose*.yml
+Dockerfile*
+scripts/
+docs/
+tests/
+
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
