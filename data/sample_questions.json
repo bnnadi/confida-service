@@ -1,0 +1,312 @@
+{
+  "technical_questions": {
+    "python": [
+      {
+        "question": "Explain the difference between list comprehensions and generator expressions in Python. When would you use each?",
+        "difficulty": "medium",
+        "skills": ["python", "programming", "optimization", "memory_management"],
+        "tags": ["python", "performance", "data_structures"]
+      },
+      {
+        "question": "How would you implement a decorator in Python? Provide a practical example and explain the use cases.",
+        "difficulty": "hard",
+        "skills": ["python", "decorators", "advanced_programming", "design_patterns"],
+        "tags": ["python", "decorators", "metaprogramming"]
+      },
+      {
+        "question": "What is Python's GIL (Global Interpreter Lock) and how does it affect multithreading? What are the alternatives?",
+        "difficulty": "hard",
+        "skills": ["python", "concurrency", "performance", "multithreading"],
+        "tags": ["python", "concurrency", "performance"]
+      },
+      {
+        "question": "Explain the difference between __str__ and __repr__ methods in Python classes.",
+        "difficulty": "easy",
+        "skills": ["python", "object_oriented_programming", "dunder_methods"],
+        "tags": ["python", "oop", "debugging"]
+      },
+      {
+        "question": "How do you handle exceptions in Python? What's the difference between try/except and try/except/else/finally?",
+        "difficulty": "medium",
+        "skills": ["python", "exception_handling", "error_management"],
+        "tags": ["python", "error_handling", "best_practices"]
+      }
+    ],
+    "javascript": [
+      {
+        "question": "Explain the difference between var, let, and const in JavaScript. Provide examples of each.",
+        "difficulty": "easy",
+        "skills": ["javascript", "programming", "scope", "variable_declaration"],
+        "tags": ["javascript", "scope", "es6"]
+      },
+      {
+        "question": "How does JavaScript's event loop work? Explain with examples of synchronous and asynchronous code.",
+        "difficulty": "hard",
+        "skills": ["javascript", "asynchronous", "event_loop", "concurrency"],
+        "tags": ["javascript", "async", "event_loop"]
+      },
+      {
+        "question": "What are closures in JavaScript and how are they useful? Provide a practical example.",
+        "difficulty": "medium",
+        "skills": ["javascript", "closures", "programming", "scope"],
+        "tags": ["javascript", "closures", "functional_programming"]
+      },
+      {
+        "question": "Explain the difference between == and === in JavaScript. Why is this important?",
+        "difficulty": "easy",
+        "skills": ["javascript", "programming", "type_coercion", "comparison"],
+        "tags": ["javascript", "comparison", "type_safety"]
+      },
+      {
+        "question": "How do you handle asynchronous operations in JavaScript? Compare callbacks, promises, and async/await.",
+        "difficulty": "medium",
+        "skills": ["javascript", "asynchronous", "promises", "async_await"],
+        "tags": ["javascript", "async", "promises"]
+      }
+    ],
+    "java": [
+      {
+        "question": "Explain the difference between abstract classes and interfaces in Java. When would you use each?",
+        "difficulty": "medium",
+        "skills": ["java", "object_oriented_programming", "interfaces", "abstract_classes"],
+        "tags": ["java", "oop", "design_patterns"]
+      },
+      {
+        "question": "What is the difference between checked and unchecked exceptions in Java? Provide examples.",
+        "difficulty": "medium",
+        "skills": ["java", "exception_handling", "error_management"],
+        "tags": ["java", "exceptions", "error_handling"]
+      },
+      {
+        "question": "Explain Java's garbage collection mechanism. How does it work and what are the different types?",
+        "difficulty": "hard",
+        "skills": ["java", "memory_management", "garbage_collection", "performance"],
+        "tags": ["java", "memory", "performance"]
+      },
+      {
+        "question": "What are generics in Java and how do they improve type safety? Provide examples.",
+        "difficulty": "medium",
+        "skills": ["java", "generics", "type_safety", "programming"],
+        "tags": ["java", "generics", "type_safety"]
+      }
+    ],
+    "database": [
+      {
+        "question": "Explain the difference between SQL JOIN types (INNER, LEFT, RIGHT, FULL OUTER). Provide examples.",
+        "difficulty": "medium",
+        "skills": ["sql", "database", "joins", "query_optimization"],
+        "tags": ["sql", "joins", "database"]
+      },
+      {
+        "question": "How would you optimize a slow SQL query? What tools and techniques would you use?",
+        "difficulty": "hard",
+        "skills": ["sql", "database", "optimization", "performance", "indexing"],
+        "tags": ["sql", "optimization", "performance"]
+      },
+      {
+        "question": "Explain database normalization and when you might denormalize. What are the trade-offs?",
+        "difficulty": "medium",
+        "skills": ["database", "normalization", "design", "data_modeling"],
+        "tags": ["database", "normalization", "design"]
+      },
+      {
+        "question": "What are database indexes and how do they improve query performance? When should you create them?",
+        "difficulty": "medium",
+        "skills": ["database", "indexing", "performance", "optimization"],
+        "tags": ["database", "indexing", "performance"]
+      }
+    ],
+    "algorithms": [
+      {
+        "question": "Implement a function to find the longest common subsequence between two strings. What's the time complexity?",
+        "difficulty": "hard",
+        "skills": ["algorithms", "dynamic_programming", "programming", "optimization"],
+        "tags": ["algorithms", "dynamic_programming", "strings"]
+      },
+      {
+        "question": "Explain the time complexity of different sorting algorithms and when to use each.",
+        "difficulty": "medium",
+        "skills": ["algorithms", "sorting", "complexity", "performance"],
+        "tags": ["algorithms", "sorting", "complexity"]
+      },
+      {
+        "question": "How would you detect a cycle in a linked list? Provide both iterative and recursive solutions.",
+        "difficulty": "medium",
+        "skills": ["algorithms", "data_structures", "programming", "linked_lists"],
+        "tags": ["algorithms", "linked_lists", "cycle_detection"]
+      },
+      {
+        "question": "Implement a binary search algorithm. What are the requirements and time complexity?",
+        "difficulty": "easy",
+        "skills": ["algorithms", "binary_search", "programming", "search"],
+        "tags": ["algorithms", "binary_search", "search"]
+      }
+    ]
+  },
+  "behavioral_questions": [
+    {
+      "question": "Tell me about a time when you had to work with a difficult team member. How did you handle the situation?",
+      "difficulty": "medium",
+      "category": "behavioral",
+      "subcategory": "conflict_resolution",
+      "skills": ["communication", "teamwork", "conflict_resolution", "leadership"],
+      "tags": ["behavioral", "teamwork", "conflict"]
+    },
+    {
+      "question": "Describe a situation where you had to learn a new technology quickly. How did you approach it?",
+      "difficulty": "easy",
+      "category": "behavioral",
+      "subcategory": "learning_agility",
+      "skills": ["learning", "adaptability", "problem_solving", "self_improvement"],
+      "tags": ["behavioral", "learning", "adaptability"]
+    },
+    {
+      "question": "Give me an example of a time when you failed at something. What did you learn from it?",
+      "difficulty": "medium",
+      "category": "behavioral",
+      "subcategory": "resilience",
+      "skills": ["resilience", "learning", "self_awareness", "growth_mindset"],
+      "tags": ["behavioral", "resilience", "learning"]
+    },
+    {
+      "question": "Tell me about a time when you had to make a difficult decision with limited information.",
+      "difficulty": "hard",
+      "category": "behavioral",
+      "subcategory": "decision_making",
+      "skills": ["decision_making", "critical_thinking", "leadership", "risk_assessment"],
+      "tags": ["behavioral", "decision_making", "leadership"]
+    },
+    {
+      "question": "Describe a project where you had to collaborate with multiple teams. What challenges did you face?",
+      "difficulty": "medium",
+      "category": "behavioral",
+      "subcategory": "collaboration",
+      "skills": ["collaboration", "communication", "project_management", "teamwork"],
+      "tags": ["behavioral", "collaboration", "teamwork"]
+    }
+  ],
+  "system_design_questions": [
+    {
+      "question": "Design a URL shortener service like bit.ly. What are the key components and how would you scale it?",
+      "difficulty": "hard",
+      "category": "system_design",
+      "subcategory": "web_services",
+      "skills": ["system_design", "scalability", "architecture", "databases", "caching"],
+      "tags": ["system_design", "scalability", "web_services"]
+    },
+    {
+      "question": "How would you design a chat application that supports millions of users?",
+      "difficulty": "hard",
+      "category": "system_design",
+      "subcategory": "real_time_systems",
+      "skills": ["system_design", "real_time", "scalability", "websockets", "messaging"],
+      "tags": ["system_design", "real_time", "messaging"]
+    },
+    {
+      "question": "Design a distributed caching system. What challenges would you face?",
+      "difficulty": "hard",
+      "category": "system_design",
+      "subcategory": "distributed_systems",
+      "skills": ["system_design", "caching", "distributed_systems", "consistency", "availability"],
+      "tags": ["system_design", "caching", "distributed"]
+    },
+    {
+      "question": "How would you design a recommendation system for an e-commerce platform?",
+      "difficulty": "hard",
+      "category": "system_design",
+      "subcategory": "recommendation_systems",
+      "skills": ["system_design", "machine_learning", "algorithms", "data_processing"],
+      "tags": ["system_design", "ml", "recommendations"]
+    }
+  ],
+  "leadership_questions": [
+    {
+      "question": "How do you motivate a team that's struggling with a difficult project?",
+      "difficulty": "medium",
+      "category": "leadership",
+      "subcategory": "team_management",
+      "skills": ["leadership", "team_management", "motivation", "communication"],
+      "tags": ["leadership", "team_management", "motivation"]
+    },
+    {
+      "question": "Describe your approach to giving constructive feedback to team members.",
+      "difficulty": "medium",
+      "category": "leadership",
+      "subcategory": "feedback",
+      "skills": ["leadership", "communication", "feedback", "people_management"],
+      "tags": ["leadership", "feedback", "communication"]
+    },
+    {
+      "question": "How do you handle conflicting priorities from different stakeholders?",
+      "difficulty": "hard",
+      "category": "leadership",
+      "subcategory": "stakeholder_management",
+      "skills": ["leadership", "stakeholder_management", "prioritization", "negotiation"],
+      "tags": ["leadership", "stakeholders", "prioritization"]
+    },
+    {
+      "question": "Tell me about a time when you had to make an unpopular decision. How did you handle it?",
+      "difficulty": "hard",
+      "category": "leadership",
+      "subcategory": "decision_making",
+      "skills": ["leadership", "decision_making", "communication", "courage"],
+      "tags": ["leadership", "decision_making", "courage"]
+    }
+  ],
+  "industry_specific_questions": {
+    "fintech": [
+      {
+        "question": "How would you ensure data security and compliance in a financial application?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "fintech",
+        "skills": ["security", "compliance", "fintech", "data_protection", "regulations"],
+        "tags": ["fintech", "security", "compliance"]
+      },
+      {
+        "question": "What are the key considerations when building high-frequency trading systems?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "fintech",
+        "skills": ["performance", "low_latency", "trading", "algorithms", "real_time"],
+        "tags": ["fintech", "trading", "performance"]
+      }
+    ],
+    "healthcare": [
+      {
+        "question": "What considerations are important when building healthcare software?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "healthcare",
+        "skills": ["healthcare", "compliance", "privacy", "regulations", "hipaa"],
+        "tags": ["healthcare", "compliance", "privacy"]
+      },
+      {
+        "question": "How would you handle data privacy and patient confidentiality in a medical application?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "healthcare",
+        "skills": ["privacy", "security", "healthcare", "data_protection", "compliance"],
+        "tags": ["healthcare", "privacy", "security"]
+      }
+    ],
+    "ecommerce": [
+      {
+        "question": "How would you handle high-traffic scenarios during peak shopping seasons?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "ecommerce",
+        "skills": ["scalability", "ecommerce", "performance", "load_balancing", "caching"],
+        "tags": ["ecommerce", "scalability", "performance"]
+      },
+      {
+        "question": "What are the key challenges in building a recommendation engine for an e-commerce platform?",
+        "difficulty": "hard",
+        "category": "industry_specific",
+        "subcategory": "ecommerce",
+        "skills": ["machine_learning", "recommendations", "algorithms", "data_processing"],
+        "tags": ["ecommerce", "ml", "recommendations"]
+      }
+    ]
+  }
+}

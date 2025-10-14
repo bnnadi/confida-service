@@ -93,16 +93,10 @@ def run_migrations_online() -> None:
     # Get configuration with enhanced error handling
     configuration = config.get_section(config.config_ini_section, {})
     
-    # Add connection pool settings for better performance
-    configuration.setdefault("sqlalchemy.pool_size", "5")
-    configuration.setdefault("sqlalchemy.max_overflow", "10")
-    configuration.setdefault("sqlalchemy.pool_timeout", "30")
-    configuration.setdefault("sqlalchemy.pool_recycle", "3600")
-    
+    # Use QueuePool for migrations (not NullPool with pool settings)
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
