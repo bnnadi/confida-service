@@ -1,10 +1,13 @@
 import os
 import json
 import requests
+import hashlib
 from typing import List, Dict, Any, Optional
 from enum import Enum
+from sqlalchemy.orm import Session
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.services.ollama_service import OllamaService
+from app.services.question_bank_service import QuestionBankService
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
@@ -20,11 +23,17 @@ class AIServiceType(Enum):
     ANTHROPIC = "anthropic"
 
 class HybridAIService:
-    def __init__(self):
+    def __init__(self, db_session: Optional[Session] = None):
         self.ollama_service = OllamaService()
         self.service_priority = self._get_service_priority()
         self.openai_client = None
         self.anthropic_client = None
+        self.db_session = db_session
+        
+        # Initialize question bank service if database session is available
+        self.question_bank_service = None
+        if self.db_session:
+            self.question_bank_service = QuestionBankService(self.db_session)
         
         # Initialize external services if configured
         self._init_external_services()
@@ -56,13 +65,45 @@ class HybridAIService:
     
     def generate_interview_questions(self, role: str, job_description: str, 
                                    preferred_service: Optional[str] = None) -> ParseJDResponse:
-        """Generate questions using the best available service."""
+        """Generate questions using question bank first, then AI services as fallback."""
         
+        # Step 1: Try to get questions from question bank first
+        if self.question_bank_service:
+            try:
+                questions = self.question_bank_service.get_questions_for_role(role, job_description, count=10)
+                if questions:
+                    question_texts = [q.question_text for q in questions]
+                    logger.info(f"Retrieved {len(question_texts)} questions from question bank for role '{role}'")
+                    return ParseJDResponse(questions=question_texts)
+                else:
+                    logger.info(f"No questions found in question bank for role '{role}', falling back to AI generation")
+            except Exception as e:
+                logger.warning(f"Error accessing question bank: {e}, falling back to AI generation")
+        
+        # Step 2: Generate questions using AI services
         services_to_try = self._get_services_to_try(preferred_service)
         
         for service_type in services_to_try:
             try:
-                return self._call_ai_service(service_type, "generate_interview_questions", role, job_description)
+                result = self._call_ai_service(service_type, "generate_interview_questions", role, job_description)
+                
+                # Step 3: Store generated questions in question bank for future use
+                if self.question_bank_service and result.questions:
+                    try:
+                        prompt_hash = self._generate_prompt_hash(role, job_description)
+                        self.question_bank_service.store_generated_questions(
+                            questions=result.questions,
+                            role=role,
+                            job_description=job_description,
+                            ai_service_used=service_type.value,
+                            prompt_hash=prompt_hash
+                        )
+                        logger.info(f"Stored {len(result.questions)} AI-generated questions in question bank")
+                    except Exception as e:
+                        logger.warning(f"Error storing questions in question bank: {e}")
+                
+                return result
+                
             except ServiceUnavailableError as e:
                 logger.warning(f"Error with {service_type.value}: {e}")
                 continue
@@ -211,4 +252,15 @@ class HybridAIService:
     
     def get_service_priority(self) -> List[str]:
         """Get current service priority order."""
-        return [service.value for service in self.service_priority] 
+        return [service.value for service in self.service_priority]
+    
+    def _generate_prompt_hash(self, role: str, job_description: str) -> str:
+        """Generate a hash for the prompt to identify similar requests."""
+        prompt_data = f"{role}:{job_description}"
+        return hashlib.sha256(prompt_data.encode()).hexdigest()
+    
+    def get_question_bank_stats(self) -> Dict[str, Any]:
+        """Get question bank statistics."""
+        if self.question_bank_service:
+            return self.question_bank_service.get_question_bank_stats()
+        return {} 
