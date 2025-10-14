@@ -199,12 +199,15 @@ def create_sample_questions(db: Session, sessions: List[InterviewSession]) -> Li
         
         for i, question_text in enumerate(role_questions):
             question = Question(
-                session_id=session.id,
                 question_text=question_text,
-                question_order=i + 1,
                 difficulty_level="medium" if i < 3 else "hard",
                 category=["Technical", "Behavioral", "Situational"][i % 3],
-                created_at=session.created_at + timedelta(minutes=i*5)
+                compatible_roles=[session.role],
+                question_metadata={
+                    "source": "seed_data",
+                    "role": session.role,
+                    "order": i + 1
+                }
             )
             
             db.add(question)
@@ -213,14 +216,24 @@ def create_sample_questions(db: Session, sessions: List[InterviewSession]) -> Li
     db.commit()
     return questions
 
-def create_sample_answers(db: Session, questions: List[Question]) -> List[Answer]:
+def create_sample_answers(db: Session, questions: List[Question], sessions: List[InterviewSession]) -> List[Answer]:
     """Create sample answers for questions in completed sessions."""
     logger.info("Creating sample answers...")
     answers = []
     
+    # Create a mapping of questions to sessions based on role
+    question_to_session = {}
+    for question in questions:
+        role = question.question_metadata.get("role")
+        for session in sessions:
+            if session.role == role and session.status == "completed":
+                question_to_session[question.id] = session
+                break
+    
     for question in questions:
         # Only create answers for questions in completed sessions
-        if question.session.status == "completed":
+        if question.id in question_to_session:
+            session = question_to_session[question.id]
             answer_text = SAMPLE_ANSWERS[len(answers) % len(SAMPLE_ANSWERS)]
             
             # Create analysis result
@@ -266,8 +279,7 @@ def create_sample_answers(db: Session, questions: List[Question]) -> List[Answer
                 answer_text=answer_text,
                 analysis_result=analysis_result,
                 score=score,
-                multi_agent_scores=multi_agent_scores,
-                created_at=question.created_at + timedelta(minutes=2)
+                multi_agent_scores=multi_agent_scores
             )
             
             db.add(answer)
@@ -464,7 +476,7 @@ def main():
             logger.info(f"✅ Created {len(questions)} questions")
             
             # Create sample answers
-            answers = create_sample_answers(db, questions)
+            answers = create_sample_answers(db, questions, sessions)
             logger.info(f"✅ Created {len(answers)} answers")
             
             # Create user performance data
