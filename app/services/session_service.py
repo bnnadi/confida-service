@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from app.database.models import InterviewSession, Question, Answer, User
 from app.exceptions import AIServiceError
 from app.utils.error_context import ErrorContext
+from app.services.question_engine import QuestionEngine
 
 
 class SessionService:
@@ -11,14 +12,17 @@ class SessionService:
     
     def __init__(self, db: Session):
         self.db = db
+        self.question_engine = QuestionEngine(db)
     
     def create_session(self, user_id: int, role: str, job_description: str) -> InterviewSession:
-        """Create a new interview session."""
+        """Create a new interview session (legacy method for backward compatibility)."""
         try:
             session = InterviewSession(
                 user_id=user_id,
+                mode="interview",
                 role=role,
                 job_description=job_description,
+                question_source="generated",
                 status="active"
             )
             self.db.add(session)
@@ -28,6 +32,92 @@ class SessionService:
         except Exception as e:
             self.db.rollback()
             raise AIServiceError(f"Failed to create interview session: {e}")
+    
+    def create_practice_session(self, user_id: int, role: str, scenario_id: str) -> InterviewSession:
+        """Create a new practice session with scenario-based questions."""
+        try:
+            # Generate questions from scenario
+            questions_data = self.question_engine.generate_questions_from_scenario(scenario_id)
+            
+            # Create session
+            session = InterviewSession(
+                user_id=user_id,
+                mode="practice",
+                role=role,
+                scenario_id=scenario_id,
+                question_source="scenario",
+                question_ids=[q["id"] for q in questions_data],
+                status="active",
+                total_questions=len(questions_data)
+            )
+            self.db.add(session)
+            self.db.commit()
+            self.db.refresh(session)
+            
+            # Add questions to session
+            self._add_questions_to_session(session.id, questions_data)
+            
+            return session
+        except Exception as e:
+            self.db.rollback()
+            raise AIServiceError(f"Failed to create practice session: {e}")
+    
+    def create_interview_session(self, user_id: int, role: str, job_title: str, job_description: str) -> InterviewSession:
+        """Create a new job-based interview session with AI-generated questions."""
+        try:
+            # Generate questions from job description
+            questions_data = self.question_engine.generate_questions_from_job(job_title, job_description)
+            
+            # Create session
+            session = InterviewSession(
+                user_id=user_id,
+                mode="interview",
+                role=role,
+                job_description=job_description,
+                question_source="generated",
+                question_ids=[q["id"] for q in questions_data],
+                job_context={
+                    "job_title": job_title,
+                    "job_description": job_description
+                },
+                status="active",
+                total_questions=len(questions_data)
+            )
+            self.db.add(session)
+            self.db.commit()
+            self.db.refresh(session)
+            
+            # Add questions to session
+            self._add_questions_to_session(session.id, questions_data)
+            
+            return session
+        except Exception as e:
+            self.db.rollback()
+            raise AIServiceError(f"Failed to create interview session: {e}")
+    
+    def _add_questions_to_session(self, session_id: int, questions_data: List[Dict[str, Any]]) -> List[Question]:
+        """Add questions to a session from question data."""
+        try:
+            question_objects = []
+            for i, question_data in enumerate(questions_data, 1):
+                question = Question(
+                    session_id=session_id,
+                    question_text=question_data["text"],
+                    question_order=i,
+                    difficulty_level=question_data.get("difficulty_level", "medium"),
+                    category=question_data.get("category", "general")
+                )
+                self.db.add(question)
+                question_objects.append(question)
+            
+            self.db.commit()
+            for question in question_objects:
+                self.db.refresh(question)
+            
+            return question_objects
+        except Exception as e:
+            self.db.rollback()
+            raise AIServiceError(f"Failed to add questions to session: {e}")
     
     def get_session(self, session_id: int, user_id: Optional[int] = None) -> Optional[InterviewSession]:
         """Get an interview session by ID."""
@@ -174,3 +264,37 @@ class SessionService:
         except Exception as e:
             self.db.rollback()
             raise AIServiceError(f"Failed to delete session: {e}")
+    
+    def preview_practice_session(self, role: str, scenario_id: str) -> Dict[str, Any]:
+        """Preview a practice session without creating it."""
+        try:
+            questions_data = self.question_engine.generate_questions_from_scenario(scenario_id)
+            
+            return {
+                "mode": "practice",
+                "role": role,
+                "questions": questions_data,
+                "total_questions": len(questions_data),
+                "estimated_duration": len(questions_data) * 3  # 3 minutes per question
+            }
+        except Exception as e:
+            raise AIServiceError(f"Failed to preview practice session: {e}")
+    
+    def preview_interview_session(self, role: str, job_title: str, job_description: str) -> Dict[str, Any]:
+        """Preview an interview session without creating it."""
+        try:
+            questions_data = self.question_engine.generate_questions_from_job(job_title, job_description)
+            
+            return {
+                "mode": "interview",
+                "role": role,
+                "questions": questions_data,
+                "total_questions": len(questions_data),
+                "estimated_duration": len(questions_data) * 3  # 3 minutes per question
+            }
+        except Exception as e:
+            raise AIServiceError(f"Failed to preview interview session: {e}")
+    
+    def get_available_scenarios(self) -> List[Dict[str, str]]:
+        """Get list of available practice scenarios."""
+        return self.question_engine.get_available_scenarios()

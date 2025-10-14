@@ -7,14 +7,14 @@ from app.utils.validators import InputValidator, create_service_query_param
 from app.database.connection import get_db
 from app.services.session_service import SessionService
 from app.middleware.auth_middleware import get_current_user_required
+from app.dependencies import get_ai_service
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
 @router.post("/parse-jd", response_model=ParseJDResponse)
-@handle_service_errors("parsing job description")
 async def parse_job_description(
-    ai_service,
     request: ParseJDRequest,
+    ai_service=Depends(get_ai_service),
     service: Optional[str] = create_service_query_param(),
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
@@ -48,10 +48,9 @@ async def parse_job_description(
     return response
 
 @router.post("/analyze-answer", response_model=AnalyzeAnswerResponse)
-@handle_service_errors("analyzing answer")
 async def analyze_answer(
-    ai_service,
     request: AnalyzeAnswerRequest,
+    ai_service=Depends(get_ai_service),
     service: Optional[str] = create_service_query_param(),
     question_id: int = Query(..., description="Question ID to store the answer"),
     current_user: dict = Depends(get_current_user_required),
@@ -97,8 +96,7 @@ async def analyze_answer(
     return response
 
 @router.get("/services")
-@handle_service_errors("getting service status")
-async def get_available_services(ai_service):
+async def get_available_services(ai_service=Depends(get_ai_service)):
     """
     Get status of available AI services.
     """
@@ -108,8 +106,7 @@ async def get_available_services(ai_service):
     }
 
 @router.get("/models")
-@handle_service_errors("listing models")
-async def list_models(ai_service):
+async def list_models(ai_service=Depends(get_ai_service)):
     """
     List available Ollama models.
     """
@@ -117,8 +114,7 @@ async def list_models(ai_service):
     return {"models": models}
 
 @router.post("/models/{model_name}/pull")
-@handle_service_errors("pulling model")
-async def pull_model(ai_service, model_name: str):
+async def pull_model(model_name: str, ai_service=Depends(get_ai_service)):
     """
     Pull a model to Ollama.
     """

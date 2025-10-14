@@ -48,26 +48,28 @@ class AuthService:
     
     def create_access_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:
         """Create a JWT access token."""
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        now = datetime.utcnow()
+        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         payload = {
             "sub": user_id,
             "email": email,
             "role": role,
-            "exp": expire,
-            "iat": datetime.utcnow(),
+            "exp": int(expire.timestamp()),
+            "iat": int(now.timestamp()),
             "token_type": TokenType.ACCESS
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
     def create_refresh_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:
         """Create a JWT refresh token."""
-        expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        now = datetime.utcnow()
+        expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         payload = {
             "sub": user_id,
             "email": email,
             "role": role,
-            "exp": expire,
-            "iat": datetime.utcnow(),
+            "exp": int(expire.timestamp()),
+            "iat": int(now.timestamp()),
             "token_type": TokenType.REFRESH
         }
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)

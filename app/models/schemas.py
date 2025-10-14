@@ -69,8 +69,11 @@ class AnswerResponse(BaseModel):
 class InterviewSessionResponse(BaseModel):
     id: int
     user_id: int
+    mode: str
     role: str
-    job_description: str
+    job_description: Optional[str] = None
+    scenario_id: Optional[str] = None
+    question_source: str
     status: str
     created_at: str
     updated_at: Optional[str] = None
@@ -87,8 +90,22 @@ class CompleteSessionResponse(BaseModel):
 
 # Request models for creating sessions
 class CreateSessionRequest(BaseModel):
+    user_id: str = Field(..., description="User ID for the session")
+    mode: str = Field(..., description="Session mode: 'practice' or 'interview'")
     role: str = Field(..., min_length=1, max_length=200, description="Job role for the interview")
-    job_description: str = Field(..., min_length=10, max_length=10000, description="Job description text")
+    
+    # For practice mode
+    scenario_id: Optional[str] = Field(None, description="Scenario ID for practice mode")
+    
+    # For interview mode
+    job_title: Optional[str] = Field(None, description="Job title for interview mode")
+    job_description: Optional[str] = Field(None, description="Job description for interview mode")
+    
+    @validator('mode')
+    def validate_mode(cls, v):
+        if v not in ['practice', 'interview']:
+            raise ValueError('Mode must be either "practice" or "interview"')
+        return v
     
     @validator('role')
     def validate_role(cls, v):
@@ -96,13 +113,20 @@ class CreateSessionRequest(BaseModel):
             raise ValueError('Role cannot be empty')
         return v.strip()
     
-    @validator('job_description')
-    def validate_job_description(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Job description cannot be empty')
-        if len(v.strip()) < 10:
-            raise ValueError('Job description must be at least 10 characters')
-        return v.strip()
+    @validator('scenario_id')
+    def validate_scenario_id(cls, v, values):
+        if values.get('mode') == 'practice' and not v:
+            raise ValueError('scenario_id is required for practice mode')
+        return v
+    
+    @validator('job_title', 'job_description')
+    def validate_job_fields(cls, v, values):
+        if values.get('mode') == 'interview':
+            if not v or not v.strip():
+                raise ValueError(f'{"job_title" if "job_title" in values else "job_description"} is required for interview mode')
+            if len(v.strip()) < 10:
+                raise ValueError(f'{"job_title" if "job_title" in values else "job_description"} must be at least 10 characters')
+        return v.strip() if v else v
 
 class AddQuestionsRequest(BaseModel):
     questions: List[str] = Field(..., min_items=1, max_items=20, description="List of interview questions")
@@ -294,4 +318,28 @@ class FileValidationErrorResponse(BaseModel):
     """Response model for file validation errors."""
     message: str
     error_code: str
-    field: Optional[str] = None 
+    field: Optional[str] = None
+
+# Question Engine Models
+class QuestionPreview(BaseModel):
+    id: str
+    text: str
+    type: str
+    difficulty_level: str
+    category: str
+
+class ScenarioInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+
+class SessionPreviewResponse(BaseModel):
+    mode: str
+    role: str
+    questions: List[QuestionPreview]
+    total_questions: int
+    estimated_duration: Optional[int] = None  # in minutes
+
+class ScenarioListResponse(BaseModel):
+    scenarios: List[ScenarioInfo]
+    total: int 

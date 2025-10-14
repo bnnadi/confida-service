@@ -35,8 +35,13 @@ class InterviewSession(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    mode = Column(String(20), default="interview", nullable=False, index=True)  # "practice" or "interview"
     role = Column(String(255), nullable=False)
-    job_description = Column(Text, nullable=False)
+    job_description = Column(Text, nullable=True)  # Can be null for practice mode
+    scenario_id = Column(String(100), nullable=True, index=True)  # For practice mode
+    question_source = Column(String(50), nullable=False, default="generated")  # "scenario" or "generated"
+    question_ids = Column(JSONB, nullable=True)  # Store question order and metadata
+    job_context = Column(JSONB, nullable=True)  # Store job-specific context for interview mode
     status = Column(String(50), default="active", nullable=False, index=True)
     total_questions = Column(Integer, default=0, nullable=False)
     completed_questions = Column(Integer, default=0, nullable=False)
