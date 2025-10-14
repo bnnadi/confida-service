@@ -14,10 +14,10 @@ router = APIRouter(prefix="/api/v1", tags=["interview"])
 @router.post("/parse-jd", response_model=ParseJDResponse)
 async def parse_job_description(
     request: ParseJDRequest,
+    db: Session = Depends(get_db),
     ai_service=Depends(get_ai_service),
     service: Optional[str] = create_service_query_param(),
-    current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Parse job description and generate relevant interview questions using AI.
@@ -50,11 +50,11 @@ async def parse_job_description(
 @router.post("/analyze-answer", response_model=AnalyzeAnswerResponse)
 async def analyze_answer(
     request: AnalyzeAnswerRequest,
+    db: Session = Depends(get_db),
     ai_service=Depends(get_ai_service),
     service: Optional[str] = create_service_query_param(),
     question_id: int = Query(..., description="Question ID to store the answer"),
-    current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Analyze a candidate's answer against the job description using AI.
@@ -96,17 +96,24 @@ async def analyze_answer(
     return response
 
 @router.get("/services")
-async def get_available_services(ai_service=Depends(get_ai_service)):
+async def get_available_services(
+    db: Session = Depends(get_db),
+    ai_service=Depends(get_ai_service)
+):
     """
     Get status of available AI services.
     """
     return {
         "available_services": ai_service.get_available_services(),
-        "service_priority": ai_service.get_service_priority()
+        "service_priority": ai_service.get_service_priority(),
+        "question_bank_stats": ai_service.get_question_bank_stats()
     }
 
 @router.get("/models")
-async def list_models(ai_service=Depends(get_ai_service)):
+async def list_models(
+    db: Session = Depends(get_db),
+    ai_service=Depends(get_ai_service)
+):
     """
     List available Ollama models.
     """
@@ -114,7 +121,11 @@ async def list_models(ai_service=Depends(get_ai_service)):
     return {"models": models}
 
 @router.post("/models/{model_name}/pull")
-async def pull_model(model_name: str, ai_service=Depends(get_ai_service)):
+async def pull_model(
+    model_name: str,
+    db: Session = Depends(get_db),
+    ai_service=Depends(get_ai_service)
+):
     """
     Pull a model to Ollama.
     """

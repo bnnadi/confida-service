@@ -51,7 +51,7 @@ class InterviewSession(Base):
     
     # Relationships
     user = relationship("User", back_populates="interview_sessions")
-    questions = relationship("Question", back_populates="session", cascade="all, delete-orphan")
+    session_questions = relationship("SessionQuestion", back_populates="session", cascade="all, delete-orphan")  # Question bank relationship
     user_performance = relationship("UserPerformance", back_populates="session", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="session", cascade="all, delete-orphan")
     
@@ -59,23 +59,50 @@ class InterviewSession(Base):
         return f"<InterviewSession(id={self.id}, user_id={self.user_id}, role={self.role}, status={self.status})>"
 
 class Question(Base):
-    """Question model for storing interview questions."""
+    """Global question bank with rich metadata for intelligent question selection."""
     __tablename__ = "questions"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     question_text = Column(Text, nullable=False)
-    question_order = Column(Integer, nullable=False)
-    difficulty_level = Column(String(20), default="medium", nullable=False)
-    category = Column(String(100), nullable=True)
+    question_metadata = Column(JSONB, nullable=False, default={})  # Renamed from 'metadata' to avoid SQLAlchemy conflict
+    difficulty_level = Column(String(20), default="medium", nullable=False, index=True)
+    category = Column(String(100), nullable=False, index=True)
+    subcategory = Column(String(100), nullable=True, index=True)
+    compatible_roles = Column(JSONB, nullable=True)  # List of compatible roles
+    required_skills = Column(JSONB, nullable=True)   # List of required skills
+    industry_tags = Column(JSONB, nullable=True)     # List of industry tags
+    usage_count = Column(Integer, default=0, nullable=False)
+    average_score = Column(Float, nullable=True)
+    success_rate = Column(Float, nullable=True)
+    ai_service_used = Column(String(50), nullable=True)
+    generation_prompt_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
-    session = relationship("InterviewSession", back_populates="questions")
+    session_questions = relationship("SessionQuestion", back_populates="question", cascade="all, delete-orphan")
     answers = relationship("Answer", back_populates="question", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Question(id={self.id}, session_id={self.session_id}, order={self.question_order})>"
+        return f"<Question(id={self.id}, category={self.category}, difficulty={self.difficulty_level})>"
+
+class SessionQuestion(Base):
+    """Junction table linking sessions to questions from the global question bank."""
+    __tablename__ = "session_questions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_order = Column(Integer, nullable=False)
+    session_specific_context = Column(JSONB, nullable=True)  # Session-specific modifications
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    session = relationship("InterviewSession", back_populates="session_questions")
+    question = relationship("Question", back_populates="session_questions")
+    
+    def __repr__(self):
+        return f"<SessionQuestion(id={self.id}, session_id={self.session_id}, question_id={self.question_id}, order={self.question_order})>"
 
 class Answer(Base):
     """Answer model for storing user answers and analysis results."""
@@ -151,12 +178,20 @@ class AgentConfiguration(Base):
 Index('idx_users_email', User.email)
 Index('idx_sessions_user_id', InterviewSession.user_id)
 Index('idx_sessions_status', InterviewSession.status)
-Index('idx_questions_session_id', Question.session_id)
 Index('idx_answers_question_id', Answer.question_id)
 Index('idx_performance_user_id', UserPerformance.user_id)
 Index('idx_analytics_user_id', AnalyticsEvent.user_id)
 Index('idx_analytics_event_type', AnalyticsEvent.event_type)
 Index('idx_analytics_created_at', AnalyticsEvent.created_at)
+
+# Question Bank indexes for performance optimization
+Index('idx_questions_category', Question.category)
+Index('idx_questions_difficulty', Question.difficulty_level)
+Index('idx_questions_subcategory', Question.subcategory)
+Index('idx_questions_usage_count', Question.usage_count)
+Index('idx_session_questions_session_id', SessionQuestion.session_id)
+Index('idx_session_questions_question_id', SessionQuestion.question_id)
+Index('idx_session_questions_order', SessionQuestion.question_order)
 
 # JSONB indexes for flexible queries (PostgreSQL only)
 # These will be created in migration scripts
