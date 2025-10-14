@@ -14,6 +14,14 @@ class Settings:
     DATABASE_POOL_TIMEOUT: int = int(os.getenv("DATABASE_POOL_TIMEOUT", "30"))
     DATABASE_POOL_RECYCLE: int = int(os.getenv("DATABASE_POOL_RECYCLE", "3600"))
     
+    # Async Database Settings
+    ASYNC_DATABASE_ENABLED: bool = os.getenv("ASYNC_DATABASE_ENABLED", "true").lower() == "true"
+    ASYNC_DATABASE_POOL_SIZE: int = int(os.getenv("ASYNC_DATABASE_POOL_SIZE", "20"))
+    ASYNC_DATABASE_MAX_OVERFLOW: int = int(os.getenv("ASYNC_DATABASE_MAX_OVERFLOW", "30"))
+    ASYNC_DATABASE_POOL_TIMEOUT: int = int(os.getenv("ASYNC_DATABASE_POOL_TIMEOUT", "30"))
+    ASYNC_DATABASE_POOL_RECYCLE: int = int(os.getenv("ASYNC_DATABASE_POOL_RECYCLE", "3600"))
+    ASYNC_DATABASE_MONITORING_ENABLED: bool = os.getenv("ASYNC_DATABASE_MONITORING_ENABLED", "true").lower() == "true"
+    
     # JWT Settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
     ALGORITHM: str = "HS256"
