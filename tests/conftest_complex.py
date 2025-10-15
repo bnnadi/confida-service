@@ -36,6 +36,48 @@ fake = Faker()
 # Test database configuration
 TEST_DATABASE_URL = "sqlite:///./test_interviewiq.db"
 
+
+class TestDataFactory:
+    """Factory for creating test data with consistent patterns."""
+    
+    @staticmethod
+    def create_mock_ai_service(service_type: str = "openai"):
+        """Create mock AI service with consistent interface."""
+        class MockAIService:
+            def __init__(self, service_type: str):
+                self.service_type = service_type
+                self.question_bank_service = None
+            
+            async def generate_interview_questions(self, role: str, job_description: str, **kwargs):
+                return TestDataFactory.get_sample_questions_response()
+            
+            async def analyze_answer(self, job_description: str, question: str, answer: str, **kwargs):
+                return TestDataFactory.get_sample_analysis_response()
+        
+        return MockAIService(service_type)
+    
+    @staticmethod
+    def get_sample_questions_response():
+        """Get consistent sample questions response."""
+        return {
+            "questions": [
+                "What is your experience with Python?",
+                "How do you handle debugging complex issues?",
+                "Describe a challenging project you worked on."
+            ],
+            "role": "Software Engineer",
+            "jobDescription": "Test job description"
+        }
+    
+    @staticmethod
+    def get_sample_analysis_response():
+        """Get consistent sample analysis response."""
+        return {
+            "analysis": "Good answer with room for improvement",
+            "score": {"clarity": 7, "confidence": 6},
+            "suggestions": ["Provide more specific examples", "Include metrics"]
+        }
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for the test session."""
@@ -89,7 +131,12 @@ def client(test_db_session):
 
 @pytest.fixture
 def mock_ai_service():
-    """Comprehensive mock AI service for testing."""
+    """Comprehensive mock AI service for testing.
+    
+    Note: This could be simplified using TestDataFactory.create_mock_ai_service()
+    for basic testing scenarios, but this comprehensive version is kept for
+    complex integration tests that need detailed mock responses.
+    """
     class MockAIService:
         def __init__(self):
             self.service_type = "openai"

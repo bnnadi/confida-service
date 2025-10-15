@@ -42,9 +42,16 @@ class SecurityValidator:
         r"\.\.%5c",
     ]
     
+    # Centralized validation patterns
+    VALIDATION_PATTERNS = {
+        "sql_injection": SQL_INJECTION_PATTERNS,
+        "xss": XSS_PATTERNS,
+        "path_traversal": PATH_TRAVERSAL_PATTERNS
+    }
+    
     @staticmethod
     def validate_request(request: Request) -> bool:
-        """Validate request for security issues using unified approach."""
+        """Validate request using centralized pattern matching."""
         validators = [
             ("query_params", request.query_params.items()),
             ("path", [("path", request.url.path)]),
@@ -52,9 +59,19 @@ class SecurityValidator:
         ]
         
         for validator_name, items in validators:
-            if not SecurityValidator._validate_items(validator_name, items, request):
+            if not SecurityValidator._validate_items_generic(validator_name, items):
                 return False
         
+        return True
+    
+    @staticmethod
+    def _validate_items_generic(validator_name: str, items: Iterable[Tuple[str, str]]) -> bool:
+        """Generic validation using centralized patterns."""
+        for key, value in items:
+            for pattern_type, patterns in SecurityValidator.VALIDATION_PATTERNS.items():
+                if SecurityValidator._contains_malicious_patterns(value, patterns):
+                    logger.warning(f"Security threat detected in {validator_name}: {pattern_type}")
+                    return False
         return True
     
     @staticmethod

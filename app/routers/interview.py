@@ -247,22 +247,8 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
     # Store answer and analysis in database
     session_service = AsyncSessionService(db)
     
-    # Verify question exists and belongs to user
-    from app.database.models import Question, InterviewSession
-    from sqlalchemy import select
-    
-    result = await db.execute(
-        select(Question)
-        .join(InterviewSession)
-        .where(
-            Question.id == question_id,
-            InterviewSession.user_id == current_user["id"]
-        )
-    )
-    question = result.scalar_one_or_none()
-    
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
+    # Verify question exists and belongs to user using generic validation
+    question = await _validate_question_access(db, question_id, current_user["id"])
     
     # Store answer with analysis
     await session_service.add_answer(
@@ -295,15 +281,8 @@ async def _handle_sync_analyze_answer(ai_service, db, request, validated_service
     # Store answer and analysis in database
     session_service = SessionService(db)
     
-    # Verify question exists and belongs to user
-    from app.database.models import Question, InterviewSession
-    question = db.query(Question).join(InterviewSession).filter(
-        Question.id == question_id,
-        InterviewSession.user_id == current_user["id"]
-    ).first()
-    
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
+    # Verify question exists and belongs to user using generic validation
+    question = await _validate_question_access(db, question_id, current_user["id"])
     
     # Store answer with analysis
     session_service.add_answer(
@@ -313,4 +292,31 @@ async def _handle_sync_analyze_answer(ai_service, db, request, validated_service
         score={"clarity": response.score.clarity, "confidence": response.score.confidence}
     )
     
-    return response 
+    return response
+
+
+async def _validate_question_access(db, question_id: int, user_id: str):
+    """Generic question validation with consistent error handling."""
+    from app.database.models import Question, InterviewSession
+    from sqlalchemy import select
+    
+    if hasattr(db, 'execute'):  # Async session
+        result = await db.execute(
+            select(Question)
+            .join(InterviewSession)
+            .where(
+                Question.id == question_id,
+                InterviewSession.user_id == user_id
+            )
+        )
+        question = result.scalar_one_or_none()
+    else:  # Sync session
+        question = db.query(Question).join(InterviewSession).filter(
+            Question.id == question_id,
+            InterviewSession.user_id == user_id
+        ).first()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    return question 

@@ -39,24 +39,21 @@ class HybridAIService:
         self._init_external_services()
     
     def _get_service_priority(self) -> List[AIServiceType]:
-        """Get service priority based on configuration."""
-        priority = []
+        """Get service priority using functional approach."""
+        service_configs = [
+            (AIServiceType.OLLAMA, "OLLAMA_BASE_URL"),
+            (AIServiceType.OPENAI, "OPENAI_API_KEY"),
+            (AIServiceType.ANTHROPIC, "ANTHROPIC_API_KEY")
+        ]
         
-        # Check which services are configured
-        if os.getenv("OLLAMA_BASE_URL"):
-            priority.append(AIServiceType.OLLAMA)
-        
-        if os.getenv("OPENAI_API_KEY"):
-            priority.append(AIServiceType.OPENAI)
-        
-        if os.getenv("ANTHROPIC_API_KEY"):
-            priority.append(AIServiceType.ANTHROPIC)
+        # Filter services based on configuration
+        available_services = [
+            service_type for service_type, env_var in service_configs
+            if os.getenv(env_var)
+        ]
         
         # Default to Ollama if nothing configured
-        if not priority:
-            priority.append(AIServiceType.OLLAMA)
-        
-        return priority
+        return available_services or [AIServiceType.OLLAMA]
     
     def _init_external_services(self):
         """Initialize external AI service clients with better error handling."""
@@ -80,11 +77,11 @@ class HybridAIService:
         return self._try_ai_services("analyze_answer", job_description, question, answer, preferred_service)
     
     def _get_services_to_try(self, preferred_service: Optional[str] = None) -> List[AIServiceType]:
-        """Get list of services to try in order."""
+        """Get services to try using functional approach."""
         if not preferred_service:
             return self.service_priority
         
-        # Find preferred service
+        # Find preferred service using functional approach
         preferred = next(
             (s for s in AIServiceType if s.value == preferred_service.lower()), 
             None
