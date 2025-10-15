@@ -150,9 +150,8 @@ class ResponseParsers:
         return all_questions
     
     @staticmethod
-    def _parse_numbered_list(text: str) -> List[str]:
-        """Parse numbered list format (1. Question, 2. Question, etc.)."""
-        pattern = r'^\s*\d+\.\s+(.+)$'
+    def _parse_list_by_pattern(text: str, pattern: str) -> List[str]:
+        """Generic list parsing with configurable regex pattern."""
         questions = []
         for line in text.split('\n'):
             match = re.match(pattern, line.strip())
@@ -161,32 +160,21 @@ class ResponseParsers:
                 if question and not question.startswith(('Here', 'These', 'The following')):
                     questions.append(question)
         return questions
+    
+    @staticmethod
+    def _parse_numbered_list(text: str) -> List[str]:
+        """Parse numbered list format (1. Question, 2. Question, etc.)."""
+        return ResponseParsers._parse_list_by_pattern(text, r'^\s*\d+\.\s+(.+)$')
     
     @staticmethod
     def _parse_bullet_list(text: str) -> List[str]:
         """Parse bullet point format (- Question, * Question, etc.)."""
-        pattern = r'^\s*[-*•]\s+(.+)$'
-        questions = []
-        for line in text.split('\n'):
-            match = re.match(pattern, line.strip())
-            if match:
-                question = match.group(1).strip()
-                if question and not question.startswith(('Here', 'These', 'The following')):
-                    questions.append(question)
-        return questions
+        return ResponseParsers._parse_list_by_pattern(text, r'^\s*[-*•]\s+(.+)$')
     
     @staticmethod
     def _parse_markdown_list(text: str) -> List[str]:
         """Parse markdown list format."""
-        pattern = r'^\s*[-*]\s+(.+)$'
-        questions = []
-        for line in text.split('\n'):
-            match = re.match(pattern, line.strip())
-            if match:
-                question = match.group(1).strip()
-                if question and not question.startswith(('Here', 'These', 'The following')):
-                    questions.append(question)
-        return questions
+        return ResponseParsers._parse_list_by_pattern(text, r'^\s*[-*]\s+(.+)$')
     
     @staticmethod
     def _parse_plain_text(text: str) -> List[str]:

@@ -49,24 +49,24 @@ class QuestionBankService:
             List of selected questions
         """
         try:
-            # Step 1: Analyze role requirements
-            role_analysis = self._analyze_role(role, job_description)
+            # Define processing pipeline
+            pipeline = [
+                lambda r, jd: self._analyze_role(r, jd),
+                lambda analysis: self._find_compatible_questions(analysis),
+                lambda questions: self._ensure_question_diversity(questions, count),
+                self._update_usage_stats
+            ]
             
-            # Step 2: Find compatible questions with scoring
-            compatible_questions = self._find_compatible_questions(role_analysis)
+            # Execute pipeline
+            result = (role, job_description)
+            for step in pipeline:
+                result = step(*result) if isinstance(result, tuple) else step(result)
             
-            # Step 3: Apply diversity algorithms
-            diverse_questions = self._ensure_question_diversity(compatible_questions, count)
-            
-            # Step 4: Update usage statistics
-            self._update_usage_stats(diverse_questions)
-            
-            logger.info(f"Selected {len(diverse_questions)} questions for role '{role}' from {len(compatible_questions)} compatible questions")
-            return diverse_questions
+            logger.info(f"Selected {len(result)} questions for role '{role}'")
+            return result
             
         except Exception as e:
             logger.error(f"Error selecting questions for role '{role}': {e}")
-            # Fallback to basic selection
             return self._get_fallback_questions(role, count)
     
     def store_generated_questions(self, questions: List[str], role: str, job_description: str, 
