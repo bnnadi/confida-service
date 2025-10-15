@@ -144,40 +144,50 @@ async def _handle_database_operation(operation_type: str, **kwargs):
     """Unified handler for database operations (async/sync)."""
     settings = get_settings()
     
+    # Use strategy pattern for operation handling
+    operation_handlers = {
+        "parse_jd": _handle_parse_jd_operation,
+        "analyze_answer": _handle_analyze_answer_operation
+    }
+    
+    handler = operation_handlers.get(operation_type)
+    if not handler:
+        raise HTTPException(status_code=400, detail=f"Unknown operation type: {operation_type}")
+    
     if settings.ASYNC_DATABASE_ENABLED:
-        return await _execute_async_operation(operation_type, **kwargs)
+        return await handler(async=True, **kwargs)
     else:
-        return await _execute_sync_operation(operation_type, **kwargs)
+        return await handler(async=False, **kwargs)
 
-
-async def _execute_async_operation(operation_type: str, **kwargs):
-    """Execute async database operation."""
-    async with get_async_db() as db:
-        ai_service = await get_async_ai_service(db)
+async def _handle_parse_jd_operation(async: bool, **kwargs):
+    """Unified parse JD handler for both async and sync."""
+    if async:
+        async with get_async_db() as db:
+            ai_service = await get_async_ai_service(db)
+            if not ai_service:
+                raise HTTPException(status_code=500, detail="AI service not available")
+            return await _handle_async_parse_jd(ai_service, db, **kwargs)
+    else:
+        db = next(get_db())
+        ai_service = get_ai_service(db)
         if not ai_service:
             raise HTTPException(status_code=500, detail="AI service not available")
-        
-        if operation_type == "parse_jd":
-            return await _handle_async_parse_jd(ai_service, db, **kwargs)
-        elif operation_type == "analyze_answer":
-            return await _handle_async_analyze_answer(ai_service, db, **kwargs)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown operation type: {operation_type}")
-
-
-async def _execute_sync_operation(operation_type: str, **kwargs):
-    """Execute sync database operation."""
-    db = next(get_db())
-    ai_service = get_ai_service(db)
-    if not ai_service:
-        raise HTTPException(status_code=500, detail="AI service not available")
-    
-    if operation_type == "parse_jd":
         return await _handle_sync_parse_jd(ai_service, db, **kwargs)
-    elif operation_type == "analyze_answer":
-        return await _handle_sync_analyze_answer(ai_service, db, **kwargs)
+
+async def _handle_analyze_answer_operation(async: bool, **kwargs):
+    """Unified analyze answer handler for both async and sync."""
+    if async:
+        async with get_async_db() as db:
+            ai_service = await get_async_ai_service(db)
+            if not ai_service:
+                raise HTTPException(status_code=500, detail="AI service not available")
+            return await _handle_async_analyze_answer(ai_service, db, **kwargs)
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown operation type: {operation_type}")
+        db = next(get_db())
+        ai_service = get_ai_service(db)
+        if not ai_service:
+            raise HTTPException(status_code=500, detail="AI service not available")
+        return await _handle_sync_analyze_answer(ai_service, db, **kwargs)
 
 
 async def _handle_async_parse_jd(ai_service, db, request, validated_service, current_user):
