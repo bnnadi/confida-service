@@ -137,16 +137,17 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
     """Handle async parse JD operation with atomic transaction management."""
     from app.utils.logger import get_logger
     from app.exceptions import AIServiceError
+    from app.services.question_service import QuestionService
     
     logger = get_logger(__name__)
     
     try:
-        # Generate questions using AI
-        response = await ai_service.generate_interview_questions(
-            request.role, 
-            request.jobDescription, 
-            count=10,
-            difficulty="medium"
+        # Use simplified question service
+        question_service = QuestionService(db)
+        questions = question_service.generate_questions(
+            role=request.role,
+            job_description=request.jobDescription,
+            count=10
         )
         
         # Create session and store questions in database atomically
@@ -155,18 +156,22 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
             user_id=current_user["id"],
             role=request.role,
             job_description=request.jobDescription,
-            questions=response["questions"]
+            questions=[q["text"] for q in questions]  # Extract text for storage
         )
         
         logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")
         
+        # Count database vs AI questions
+        db_count = sum(1 for q in questions if q["source"] == "database")
+        ai_count = sum(1 for q in questions if q["source"] != "database")
+        
         return ParseJDResponse(
-            questions=response["questions"],
+            questions=[q["text"] for q in questions],
             role=request.role,
             jobDescription=request.jobDescription,
             service_used=validated_service,
-            question_bank_count=response.get("bank_questions_count", 0),
-            ai_generated_count=response.get("ai_questions_count", 0)
+            question_bank_count=db_count,
+            ai_generated_count=ai_count
         )
         
     except Exception as e:
@@ -178,29 +183,42 @@ async def _handle_sync_parse_jd(ai_service, db, request, validated_service, curr
     """Handle sync parse JD operation with atomic transaction management."""
     from app.utils.logger import get_logger
     from app.exceptions import AIServiceError
+    from app.services.question_service import QuestionService
     
     logger = get_logger(__name__)
     
     try:
-        # Generate questions using AI
-        response = ai_service.generate_interview_questions(
-            request.role, 
-            request.jobDescription, 
-            preferred_service=validated_service
+        # Use simplified question service
+        question_service = QuestionService(db)
+        questions = question_service.generate_questions(
+            role=request.role,
+            job_description=request.jobDescription,
+            count=10
         )
         
         # Create session and store questions in database atomically
         session_service = SessionService(db)
-        session, questions = session_service.create_session_with_questions_atomic(
+        session, session_questions = session_service.create_session_with_questions_atomic(
             user_id=current_user["id"],
             role=request.role,
             job_description=request.jobDescription,
-            questions=response.questions
+            questions=[q["text"] for q in questions]  # Extract text for storage
         )
         
-        logger.info(f"Successfully created session {session.id} with {len(questions)} questions")
+        logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")
         
-        return response
+        # Count database vs AI questions
+        db_count = sum(1 for q in questions if q["source"] == "database")
+        ai_count = sum(1 for q in questions if q["source"] != "database")
+        
+        return ParseJDResponse(
+            questions=[q["text"] for q in questions],
+            role=request.role,
+            jobDescription=request.jobDescription,
+            service_used=validated_service,
+            question_bank_count=db_count,
+            ai_generated_count=ai_count
+        )
         
     except Exception as e:
         logger.error(f"Failed to create session with questions: {e}")
