@@ -37,6 +37,11 @@ app.add_middleware(
 # Add file upload middleware
 app = create_file_upload_middleware_stack(app)
 
+# Add monitoring middleware (if enabled)
+if settings.MONITORING_ENABLED:
+    from app.middleware.monitoring_middleware import MonitoringMiddleware
+    app.add_middleware(MonitoringMiddleware)
+
 # Add security headers middleware
 from app.middleware.security_middleware import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
@@ -44,7 +49,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, sessions, auth, files, speech, vector_search, cache
+    from app.routers import interview, sessions, auth, files, speech, vector_search, cache, health
     
     # Core routers (always enabled)
     routers = [
@@ -54,7 +59,8 @@ def load_routers():
         ("files", files.router),
         ("speech", speech.router),
         ("vector_search", vector_search.router),
-        ("cache", cache.router)
+        ("cache", cache.router),
+        ("health", health.router)
     ]
     
     # Conditional routers based on environment variables
@@ -126,7 +132,7 @@ log_environment_status()
 # Startup and shutdown event handlers
 @app.on_event("startup")
 async def startup_event():
-    """Initialize async database on startup."""
+    """Initialize async database and monitoring on startup."""
     if settings.ASYNC_DATABASE_ENABLED:
         try:
             await init_async_db()
@@ -134,6 +140,15 @@ async def startup_event():
         except Exception as e:
             logger.error(f"❌ Failed to initialize async database: {e}")
             raise
+    
+    # Start monitoring server if enabled
+    if settings.MONITORING_ENABLED:
+        try:
+            from app.utils.metrics import start_metrics_server
+            start_metrics_server()
+        except Exception as e:
+            logger.error(f"❌ Failed to start monitoring server: {e}")
+            # Don't raise - monitoring is not critical for startup
 
 @app.on_event("shutdown")
 async def shutdown_event():

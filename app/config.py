@@ -92,6 +92,17 @@ class Settings:
     CACHE_TTL_SERVICE_STATUS: int = int(os.getenv("CACHE_TTL_SERVICE_STATUS", "300"))  # 5 minutes
     CACHE_TTL_DEFAULT: int = int(os.getenv("CACHE_TTL_DEFAULT", "3600"))  # 1 hour
     
+    # Monitoring and Metrics Settings
+    MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "true").lower() == "true"
+    PROMETHEUS_PORT: int = int(os.getenv("PROMETHEUS_PORT", "8001"))
+    METRICS_ENDPOINT: str = os.getenv("METRICS_ENDPOINT", "/metrics")
+    HEALTH_CHECK_ENABLED: bool = os.getenv("HEALTH_CHECK_ENABLED", "true").lower() == "true"
+    
+    # Performance Monitoring Settings
+    SLOW_REQUEST_THRESHOLD: float = float(os.getenv("SLOW_REQUEST_THRESHOLD", "5.0"))  # seconds
+    ERROR_RATE_THRESHOLD: float = float(os.getenv("ERROR_RATE_THRESHOLD", "5.0"))  # percentage
+    CACHE_HIT_RATE_THRESHOLD: float = float(os.getenv("CACHE_HIT_RATE_THRESHOLD", "50.0"))  # percentage
+    
     # Security Headers Settings
     SECURITY_HEADERS_ENABLED: bool = os.getenv("SECURITY_HEADERS_ENABLED", "true").lower() == "true"
     
@@ -323,6 +334,21 @@ class Settings:
             "embeddings": self.CACHE_TTL_EMBEDDINGS,
             "service_status": self.CACHE_TTL_SERVICE_STATUS,
             "default": self.CACHE_TTL_DEFAULT
+        }
+    
+    @property
+    def monitoring_config(self) -> Dict[str, Any]:
+        """Get monitoring configuration."""
+        return {
+            "enabled": self.MONITORING_ENABLED,
+            "prometheus_port": self.PROMETHEUS_PORT,
+            "metrics_endpoint": self.METRICS_ENDPOINT,
+            "health_check_enabled": self.HEALTH_CHECK_ENABLED,
+            "performance_thresholds": {
+                "slow_request": self.SLOW_REQUEST_THRESHOLD,
+                "error_rate": self.ERROR_RATE_THRESHOLD,
+                "cache_hit_rate": self.CACHE_HIT_RATE_THRESHOLD
+            }
         }
 
 @lru_cache()

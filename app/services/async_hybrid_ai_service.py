@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.async_question_bank_service import AsyncQuestionBankService
 from app.services.ollama_service import OllamaService
 from app.utils.cache import cached
+from app.utils.metrics import metrics
+import time
 from app.utils.logger import get_logger
 from datetime import datetime
 
@@ -38,6 +40,8 @@ class AsyncHybridAIService:
         2. If not enough questions, generate additional ones using AI
         3. Store AI-generated questions in the question bank
         """
+        start_time = time.time()
+        
         try:
             # Try to get questions from the question bank first
             bank_questions = await self.question_bank_service.get_questions_for_role(
@@ -47,12 +51,23 @@ class AsyncHybridAIService:
             # If we have enough questions from the bank, return them
             if len(bank_questions) >= count:
                 logger.info(f"Retrieved {len(bank_questions)} questions from question bank")
-                return {
+                result = {
                     "questions": [q.question_text for q in bank_questions[:count]],
                     "source": "question_bank",
                     "bank_questions_count": len(bank_questions),
                     "ai_questions_count": 0
                 }
+                
+                # Record metrics for question bank
+                duration = time.time() - start_time
+                metrics.record_ai_service_request(
+                    service="question_bank",
+                    operation="async_generate_interview_questions",
+                    status="success",
+                    duration=duration
+                )
+                
+                return result
             
             # If we need more questions, generate them using AI
             remaining_count = count - len(bank_questions)
@@ -71,14 +86,33 @@ class AsyncHybridAIService:
             # Combine questions from both sources
             all_questions = [q.question_text for q in bank_questions] + ai_questions
             
-            return {
+            result = {
                 "questions": all_questions[:count],
                 "source": "hybrid",
                 "bank_questions_count": len(bank_questions),
                 "ai_questions_count": len(ai_questions)
             }
             
+            # Record metrics for hybrid approach
+            duration = time.time() - start_time
+            metrics.record_ai_service_request(
+                service="hybrid_ai",
+                operation="async_generate_interview_questions",
+                status="success",
+                duration=duration
+            )
+            
+            return result
+            
         except Exception as e:
+            # Record error metrics
+            duration = time.time() - start_time
+            metrics.record_ai_service_request(
+                service="hybrid_ai",
+                operation="async_generate_interview_questions",
+                status="error",
+                duration=duration
+            )
             logger.error(f"Error generating interview questions: {e}")
             raise
     
