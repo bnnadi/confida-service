@@ -3,19 +3,14 @@ Dependency injection utilities for InterviewIQ application.
 """
 
 from functools import lru_cache
-from typing import Optional, AsyncGenerator
+from typing import Optional
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.hybrid_ai_service import HybridAIService
-from app.services.async_hybrid_ai_service import AsyncHybridAIService
 from app.utils.logger import get_logger
 from app.database.connection import get_db
-from app.database.async_connection import get_async_db
-from app.config import get_settings
 
 logger = get_logger(__name__)
-settings = get_settings()
 
 def get_ai_service(db: Session = Depends(get_db)) -> Optional[HybridAIService]:
     """Get AI service instance with database session for question bank integration."""
@@ -25,34 +20,10 @@ def get_ai_service(db: Session = Depends(get_db)) -> Optional[HybridAIService]:
         logger.warning(f"Could not initialize HybridAIService: {e}")
         return None
 
-async def get_async_ai_service(db: AsyncSession = Depends(get_async_db)) -> Optional[AsyncHybridAIService]:
-    """Get AI service instance with async database session for question bank integration."""
-    try:
-        return AsyncHybridAIService(db_session=db)
-    except Exception as e:
-        logger.warning(f"Could not initialize AsyncHybridAIService with async session: {e}")
-        return None
-
 def get_database_session() -> Session:
     """Get synchronous database session."""
     return Depends(get_db)
 
-async def get_async_database_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get async database session."""
-    async with get_async_db() as session:
-        yield session
-
-# Choose database session based on configuration
-def get_database_dependency():
-    """Get appropriate database dependency based on configuration."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        return get_async_database_session
-    else:
-        return get_database_session
-
 def get_ai_service_dependency():
-    """Get appropriate AI service dependency based on configuration."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        return get_async_ai_service
-    else:
-        return get_ai_service
+    """Get AI service dependency."""
+    return get_ai_service

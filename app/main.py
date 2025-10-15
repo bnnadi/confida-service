@@ -107,7 +107,7 @@ app.add_middleware(RateLimitingMiddleware)
 from app.startup import validate_startup, check_service_health
 from app.utils.env_config import log_environment_status
 from app.database.connection import init_db, check_db_connection
-from app.database.async_connection import init_async_db, async_db_manager
+# Removed async database imports
 
 # Initialize database
 init_db()
@@ -125,29 +125,13 @@ log_environment_status()
 # Startup and shutdown event handlers
 @app.on_event("startup")
 async def startup_event():
-    """Initialize async database on startup."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        try:
-            await init_async_db()
-            logger.info("✅ Async database initialized successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize async database: {e}")
-            raise
+    """Initialize application on startup."""
+    logger.info("✅ Application started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup async database connections on shutdown."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        try:
-            # Stop monitoring
-            from app.services.async_database_monitor import async_db_monitor
-            await async_db_monitor.stop_monitoring()
-            
-            # Close database connections
-            await async_db_manager.close()
-            logger.info("✅ Async database connections closed")
-        except Exception as e:
-            logger.error(f"❌ Error closing async database connections: {e}")
+    logger.info("✅ Application shutdown complete")
 
 @app.get("/")
 async def root():
@@ -162,27 +146,9 @@ async def root():
 async def health_check():
     """Comprehensive health check that verifies all dependencies with actual connectivity tests."""
     from app.services.health_service import HealthService
-    from app.database.async_connection import get_db_health
     
     health_service = HealthService()
     health_data = await health_service.get_comprehensive_health()
-    
-    # Add async database health if enabled
-    if settings.ASYNC_DATABASE_ENABLED:
-        try:
-            async_db_health = await get_db_health()
-            health_data["async_database"] = async_db_health
-            
-            # Add detailed monitoring data
-            from app.services.async_database_monitor import async_db_monitor
-            monitoring_data = await async_db_monitor.get_health_summary()
-            health_data["async_database"]["monitoring"] = monitoring_data
-            
-        except Exception as e:
-            health_data["async_database"] = {
-                "status": "unhealthy",
-                "error": str(e)
-            }
     
     # Add vector database health
     try:
@@ -216,17 +182,15 @@ async def readiness_check():
 
 @app.get("/monitoring/database")
 async def database_monitoring():
-    """Get detailed database monitoring information."""
-    if not settings.ASYNC_DATABASE_ENABLED:
-        return {"error": "Async database monitoring is not enabled"}
-    
+    """Get basic database monitoring information."""
     try:
-        from app.services.async_database_monitor import async_db_monitor
+        from app.database.connection import check_db_connection
+        
+        db_status = check_db_connection()
         
         return {
-            "health_status": await async_db_monitor.get_health_status(),
-            "connection_pool_status": await async_db_monitor.get_connection_pool_status(),
-            "performance_metrics": await async_db_monitor.get_performance_metrics(),
+            "health_status": "healthy" if db_status else "unhealthy",
+            "connection_status": db_status,
             "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:

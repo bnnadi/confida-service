@@ -14,17 +14,9 @@ class Settings:
     DATABASE_POOL_TIMEOUT: int = int(os.getenv("DATABASE_POOL_TIMEOUT", "30"))
     DATABASE_POOL_RECYCLE: int = int(os.getenv("DATABASE_POOL_RECYCLE", "3600"))
     
-    # Async Database Settings
-    ASYNC_DATABASE_ENABLED: bool = os.getenv("ASYNC_DATABASE_ENABLED", "true").lower() == "true"
-    ASYNC_DATABASE_POOL_SIZE: int = int(os.getenv("ASYNC_DATABASE_POOL_SIZE", "20"))
-    ASYNC_DATABASE_MAX_OVERFLOW: int = int(os.getenv("ASYNC_DATABASE_MAX_OVERFLOW", "30"))
-    ASYNC_DATABASE_POOL_TIMEOUT: int = int(os.getenv("ASYNC_DATABASE_POOL_TIMEOUT", "30"))
-    ASYNC_DATABASE_POOL_RECYCLE: int = int(os.getenv("ASYNC_DATABASE_POOL_RECYCLE", "3600"))
-    ASYNC_DATABASE_MONITORING_ENABLED: bool = os.getenv("ASYNC_DATABASE_MONITORING_ENABLED", "true").lower() == "true"
-    
-    # Connection Pool Settings (for compatibility)
-    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "20"))
-    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "30"))
+    # Connection Pool Settings
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
     DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
     DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "3600"))
     DB_ECHO: bool = os.getenv("DB_ECHO", "false").lower() == "true"
