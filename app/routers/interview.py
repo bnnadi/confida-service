@@ -181,57 +181,77 @@ async def _execute_sync_operation(operation_type: str, **kwargs):
 
 
 async def _handle_async_parse_jd(ai_service, db, request, validated_service, current_user):
-    """Handle async parse JD operation."""
-    # Generate questions using AI
-    response = await ai_service.generate_interview_questions(
-        request.role, 
-        request.jobDescription, 
-        count=10,
-        difficulty="medium"
-    )
+    """Handle async parse JD operation with atomic transaction management."""
+    from app.utils.logger import get_logger
+    from app.exceptions import AIServiceError
     
-    # Create session and store questions in database
-    session_service = AsyncSessionService(db)
-    session = await session_service.create_session(
-        user_id=current_user["id"],
-        role=request.role,
-        job_description=request.jobDescription
-    )
+    logger = get_logger(__name__)
     
-    # Add questions to the session
-    await session_service.add_questions_to_session(session.id, response["questions"])
-    
-    return ParseJDResponse(
-        questions=response["questions"],
-        role=request.role,
-        jobDescription=request.jobDescription,
-        service_used=validated_service,
-        question_bank_count=response.get("bank_questions_count", 0),
-        ai_generated_count=response.get("ai_questions_count", 0)
-    )
+    try:
+        # Generate questions using AI
+        response = await ai_service.generate_interview_questions(
+            request.role, 
+            request.jobDescription, 
+            count=10,
+            difficulty="medium"
+        )
+        
+        # Create session and store questions in database atomically
+        session_service = AsyncSessionService(db)
+        session, session_questions = await session_service.create_session_with_questions_atomic(
+            user_id=current_user["id"],
+            role=request.role,
+            job_description=request.jobDescription,
+            questions=response["questions"]
+        )
+        
+        logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")
+        
+        return ParseJDResponse(
+            questions=response["questions"],
+            role=request.role,
+            jobDescription=request.jobDescription,
+            service_used=validated_service,
+            question_bank_count=response.get("bank_questions_count", 0),
+            ai_generated_count=response.get("ai_questions_count", 0)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to create session with questions: {e}")
+        raise AIServiceError(f"Failed to create interview session: {e}")
 
 
 async def _handle_sync_parse_jd(ai_service, db, request, validated_service, current_user):
-    """Handle sync parse JD operation."""
-    # Generate questions using AI
-    response = ai_service.generate_interview_questions(
-        request.role, 
-        request.jobDescription, 
-        preferred_service=validated_service
-    )
+    """Handle sync parse JD operation with atomic transaction management."""
+    from app.utils.logger import get_logger
+    from app.exceptions import AIServiceError
     
-    # Create session and store questions in database
-    session_service = SessionService(db)
-    session = session_service.create_session(
-        user_id=current_user["id"],
-        role=request.role,
-        job_description=request.jobDescription
-    )
+    logger = get_logger(__name__)
     
-    # Add questions to the session
-    session_service.add_questions_to_session(session.id, response.questions)
-    
-    return response
+    try:
+        # Generate questions using AI
+        response = ai_service.generate_interview_questions(
+            request.role, 
+            request.jobDescription, 
+            preferred_service=validated_service
+        )
+        
+        # Create session and store questions in database atomically
+        session_service = SessionService(db)
+        session, questions = session_service.create_session_with_questions_atomic(
+            user_id=current_user["id"],
+            role=request.role,
+            job_description=request.jobDescription,
+            questions=response.questions
+        )
+        
+        logger.info(f"Successfully created session {session.id} with {len(questions)} questions")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to create session with questions: {e}")
+        raise AIServiceError(f"Failed to create interview session: {e}")
 
 
 async def _handle_async_analyze_answer(ai_service, db, request, validated_service, current_user, question_id):
