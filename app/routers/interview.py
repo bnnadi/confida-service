@@ -98,13 +98,13 @@ async def _handle_database_operation(operation_type: str, **kwargs):
         raise HTTPException(status_code=400, detail=f"Unknown operation type: {operation_type}")
     
     if settings.ASYNC_DATABASE_ENABLED:
-        return await handler(async=True, **kwargs)
+        return await handler(is_async=True, **kwargs)
     else:
-        return await handler(async=False, **kwargs)
+        return await handler(is_async=False, **kwargs)
 
-async def _handle_parse_jd_operation(async: bool, **kwargs):
+async def _handle_parse_jd_operation(is_async: bool, **kwargs):
     """Unified parse JD handler for both async and sync."""
-    if async:
+    if is_async:
         async with get_async_db() as db:
             ai_service = await get_async_ai_service(db)
             if not ai_service:
@@ -117,9 +117,9 @@ async def _handle_parse_jd_operation(async: bool, **kwargs):
             raise HTTPException(status_code=500, detail="AI service not available")
         return await _handle_sync_parse_jd(ai_service, db, **kwargs)
 
-async def _handle_analyze_answer_operation(async: bool, **kwargs):
+async def _handle_analyze_answer_operation(is_async: bool, **kwargs):
     """Unified analyze answer handler for both async and sync."""
-    if async:
+    if is_async:
         async with get_async_db() as db:
             ai_service = await get_async_ai_service(db)
             if not ai_service:
@@ -227,19 +227,20 @@ async def _handle_sync_parse_jd(ai_service, db, request, validated_service, curr
 
 async def _handle_async_analyze_answer(ai_service, db, request, validated_service, current_user, question_id):
     """Handle async analyze answer operation."""
-    # Analyze answer using AI
-    response = await ai_service.analyze_answer(
-        request.jobDescription, 
-        request.answer,
-        role="",  # TODO: Get role from question context
-        job_description=request.jobDescription
-    )
-    
-    # Store answer and analysis in database
-    session_service = AsyncSessionService(db)
+    from app.routers.analysis_helpers import perform_analysis_with_fallback
     
     # Verify question exists and belongs to user using generic validation
     question = await _validate_question_access(db, question_id, current_user["id"])
+    
+    # Get question text and role for multi-agent analysis
+    question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
+    role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
+    
+    # Perform analysis with fallback
+    response = await perform_analysis_with_fallback(ai_service, request, question_text, role)
+    
+    # Store answer and analysis in database
+    session_service = AsyncSessionService(db)
     
     # Store answer with analysis
     await session_service.add_answer(
@@ -247,7 +248,8 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
         answer_text=request.answer,
         analysis_result=response,
         score={"clarity": response.get("score", {}).get("clarity", 0), 
-              "confidence": response.get("score", {}).get("confidence", 0)}
+              "confidence": response.get("score", {}).get("confidence", 0)},
+        multi_agent_scores=response.get("multi_agent_analysis")
     )
     
     return AnalyzeAnswerResponse(
@@ -262,28 +264,46 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
 
 async def _handle_sync_analyze_answer(ai_service, db, request, validated_service, current_user, question_id):
     """Handle sync analyze answer operation."""
-    # Analyze answer using AI
-    response = ai_service.analyze_answer(
-        request.jobDescription, 
-        request.answer,
-        preferred_service=validated_service
-    )
-    
-    # Store answer and analysis in database
-    session_service = SessionService(db)
+    from app.routers.analysis_helpers import perform_analysis_with_fallback
     
     # Verify question exists and belongs to user using generic validation
     question = await _validate_question_access(db, question_id, current_user["id"])
+    
+    # Get question text and role for multi-agent analysis
+    question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
+    role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
+    
+    # Perform analysis with fallback
+    response_dict = await perform_analysis_with_fallback(ai_service, request, question_text, role)
+    
+    # Store answer and analysis in database
+    session_service = SessionService(db)
     
     # Store answer with analysis
     session_service.add_answer(
         question_id=question_id,
         answer_text=request.answer,
-        analysis_result=response.dict(),
-        score={"clarity": response.score.clarity, "confidence": response.score.confidence}
+        analysis_result=response_dict,
+        score={"clarity": response_dict.get("score", {}).get("clarity", 0), 
+              "confidence": response_dict.get("score", {}).get("confidence", 0)},
+        multi_agent_scores=response_dict.get("multi_agent_analysis")
     )
     
-    return response
+    # Return in the expected format
+    if 'multi_agent_analysis' in response_dict:
+        # Create proper response object using Pydantic model
+        return AnalyzeAnswerResponse(
+            analysis=response_dict.get("analysis", ""),
+            score=response_dict.get("score", {}),
+            suggestions=response_dict.get("suggestions", []),
+            jobDescription=request.jobDescription,
+            answer=request.answer,
+            service_used=validated_service,
+            multi_agent_analysis=response_dict.get("multi_agent_analysis")
+        )
+    else:
+        # Return original response if it's not a dict
+        return response_dict
 
 
 async def _validate_question_access(db, question_id: int, user_id: str):
