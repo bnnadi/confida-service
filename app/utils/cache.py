@@ -58,60 +58,71 @@ class CacheManager:
         """Get value from cache."""
         try:
             if self.redis_client:
-                value = self.redis_client.get(key)
-                if value:
-                    self.cache_stats["hits"] += 1
-                    logger.debug(f"Cache hit for key: {key}")
-                    return json.loads(value)
-                else:
-                    self.cache_stats["misses"] += 1
-                    logger.debug(f"Cache miss for key: {key}")
-                    return None
+                return await self._get_from_redis(key)
             else:
-                # Memory cache fallback
-                if key in self.memory_cache:
-                    cached_item = self.memory_cache[key]
-                    # Check if expired
-                    if time.time() < cached_item["expires_at"]:
-                        self.cache_stats["hits"] += 1
-                        logger.debug(f"Memory cache hit for key: {key}")
-                        return cached_item["value"]
-                    else:
-                        # Remove expired item
-                        del self.memory_cache[key]
-                
-                self.cache_stats["misses"] += 1
-                logger.debug(f"Memory cache miss for key: {key}")
-                return None
-                
+                return self._get_from_memory(key)
         except Exception as e:
             self.cache_stats["errors"] += 1
             logger.error(f"Cache get error for key {key}: {e}")
             return None
     
+    async def _get_from_redis(self, key: str) -> Optional[Any]:
+        """Get value from Redis cache."""
+        value = self.redis_client.get(key)
+        if value:
+            self.cache_stats["hits"] += 1
+            logger.debug(f"Cache hit for key: {key}")
+            return json.loads(value)
+        else:
+            self.cache_stats["misses"] += 1
+            logger.debug(f"Cache miss for key: {key}")
+            return None
+    
+    def _get_from_memory(self, key: str) -> Optional[Any]:
+        """Get value from memory cache."""
+        if key in self.memory_cache:
+            cached_item = self.memory_cache[key]
+            # Check if expired
+            if time.time() < cached_item["expires_at"]:
+                self.cache_stats["hits"] += 1
+                logger.debug(f"Memory cache hit for key: {key}")
+                return cached_item["value"]
+            else:
+                # Remove expired item
+                del self.memory_cache[key]
+        
+        self.cache_stats["misses"] += 1
+        logger.debug(f"Memory cache miss for key: {key}")
+        return None
+    
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
         """Set value in cache."""
         try:
             if self.redis_client:
-                # Redis backend
-                serialized_value = json.dumps(value, default=str)
-                success = self.redis_client.setex(key, ttl, serialized_value)
-                if success:
-                    logger.debug(f"Cached value in Redis for key: {key} (TTL: {ttl}s)")
-                return bool(success)
+                return await self._set_in_redis(key, value, ttl)
             else:
-                # Memory cache fallback
-                self.memory_cache[key] = {
-                    "value": value,
-                    "expires_at": time.time() + ttl
-                }
-                logger.debug(f"Cached value in memory for key: {key} (TTL: {ttl}s)")
-                return True
-                
+                return self._set_in_memory(key, value, ttl)
         except Exception as e:
             self.cache_stats["errors"] += 1
             logger.error(f"Cache set error for key {key}: {e}")
             return False
+    
+    async def _set_in_redis(self, key: str, value: Any, ttl: int) -> bool:
+        """Set value in Redis cache."""
+        serialized_value = json.dumps(value, default=str)
+        success = self.redis_client.setex(key, ttl, serialized_value)
+        if success:
+            logger.debug(f"Cached value in Redis for key: {key} (TTL: {ttl}s)")
+        return bool(success)
+    
+    def _set_in_memory(self, key: str, value: Any, ttl: int) -> bool:
+        """Set value in memory cache."""
+        self.memory_cache[key] = {
+            "value": value,
+            "expires_at": time.time() + ttl
+        }
+        logger.debug(f"Cached value in memory for key: {key} (TTL: {ttl}s)")
+        return True
     
     async def delete(self, key: str) -> bool:
         """Delete value from cache."""
@@ -175,6 +186,29 @@ class CacheManager:
 # Global cache manager instance
 cache_manager = CacheManager()
 
+def _generate_cache_key(operation: str, cache_key_params: Optional[list], args: tuple, kwargs: dict) -> str:
+    """Extract cache key generation logic to avoid duplication."""
+    cache_key_kwargs = {}
+    
+    # Include specified parameters in cache key
+    if cache_key_params:
+        for param in cache_key_params:
+            if param in kwargs:
+                cache_key_kwargs[param] = kwargs[param]
+    
+    # Include first few positional args (typically role, job_description, etc.)
+    if args:
+        arg_mapping = ["role", "job_description", "question", "answer", "content"]
+        for i, arg in enumerate(args[:len(arg_mapping)]):
+            if arg is not None:
+                cache_key_kwargs[arg_mapping[i]] = arg
+    
+    return cache_manager.get_cache_key(
+        service=kwargs.get('service', 'default'),
+        operation=operation,
+        **cache_key_kwargs
+    )
+
 def cached(operation: str, ttl: int = 3600, cache_key_params: Optional[list] = None):
     """
     Cache decorator for AI service methods.
@@ -185,30 +219,11 @@ def cached(operation: str, ttl: int = 3600, cache_key_params: Optional[list] = N
         cache_key_params: List of parameter names to include in cache key
     """
     def decorator(func):
+        import asyncio
+        
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            # Generate cache key
-            cache_key_kwargs = {}
-            
-            # Include specified parameters in cache key
-            if cache_key_params:
-                for param in cache_key_params:
-                    if param in kwargs:
-                        cache_key_kwargs[param] = kwargs[param]
-            
-            # Include first few positional args (typically role, job_description, etc.)
-            if args:
-                # Map common positional args to meaningful names
-                arg_mapping = ["role", "job_description", "question", "answer", "content"]
-                for i, arg in enumerate(args[:len(arg_mapping)]):
-                    if arg is not None:
-                        cache_key_kwargs[arg_mapping[i]] = arg
-            
-            cache_key = cache_manager.get_cache_key(
-                service=kwargs.get('service', 'default'),
-                operation=operation,
-                **cache_key_kwargs
-            )
+            cache_key = _generate_cache_key(operation, cache_key_params, args, kwargs)
             
             # Try to get from cache
             cached_result = await cache_manager.get(cache_key)
@@ -217,39 +232,14 @@ def cached(operation: str, ttl: int = 3600, cache_key_params: Optional[list] = N
                 return cached_result
             
             # Execute function and cache result
-            try:
-                result = await func(*args, **kwargs)
-                await cache_manager.set(cache_key, result, ttl)
-                logger.info(f"Cache miss for {operation}, result cached (TTL: {ttl}s)")
-                return result
-            except Exception as e:
-                logger.error(f"Error in cached function {operation}: {e}")
-                raise
+            result = await func(*args, **kwargs)
+            await cache_manager.set(cache_key, result, ttl)
+            logger.info(f"Cache miss for {operation}, result cached (TTL: {ttl}s)")
+            return result
         
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
-            # For synchronous functions, we'll use asyncio to handle async cache operations
-            import asyncio
-            
-            # Generate cache key (same logic as async wrapper)
-            cache_key_kwargs = {}
-            
-            if cache_key_params:
-                for param in cache_key_params:
-                    if param in kwargs:
-                        cache_key_kwargs[param] = kwargs[param]
-            
-            if args:
-                arg_mapping = ["role", "job_description", "question", "answer", "content"]
-                for i, arg in enumerate(args[:len(arg_mapping)]):
-                    if arg is not None:
-                        cache_key_kwargs[arg_mapping[i]] = arg
-            
-            cache_key = cache_manager.get_cache_key(
-                service=kwargs.get('service', 'default'),
-                operation=operation,
-                **cache_key_kwargs
-            )
+            cache_key = _generate_cache_key(operation, cache_key_params, args, kwargs)
             
             # Try to get from cache
             try:
@@ -262,27 +252,18 @@ def cached(operation: str, ttl: int = 3600, cache_key_params: Optional[list] = N
                 logger.warning(f"Cache get error in sync wrapper: {e}")
             
             # Execute function and cache result
+            result = func(*args, **kwargs)
             try:
-                result = func(*args, **kwargs)
-                # Cache the result asynchronously
-                try:
-                    loop = asyncio.get_event_loop()
-                    loop.run_until_complete(cache_manager.set(cache_key, result, ttl))
-                    logger.info(f"Cache miss for {operation}, result cached (TTL: {ttl}s)")
-                except Exception as e:
-                    logger.warning(f"Cache set error in sync wrapper: {e}")
-                
-                return result
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(cache_manager.set(cache_key, result, ttl))
+                logger.info(f"Cache miss for {operation}, result cached (TTL: {ttl}s)")
             except Exception as e:
-                logger.error(f"Error in cached function {operation}: {e}")
-                raise
+                logger.warning(f"Cache set error in sync wrapper: {e}")
+            
+            return result
         
         # Return appropriate wrapper based on function type
-        import asyncio
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return sync_wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     
     return decorator
 
@@ -302,31 +283,19 @@ class CacheMetrics:
         """Record cache request metrics."""
         self.metrics["total_requests"] += 1
         
-        if error:
-            self.metrics["cache_errors"] += 1
-        elif hit:
-            self.metrics["cache_hits"] += 1
-        else:
-            self.metrics["cache_misses"] += 1
+        # Determine metric type
+        metric_type = "errors" if error else ("hits" if hit else "misses")
+        self.metrics[f"cache_{metric_type}"] += 1
         
         # Per-operation stats
         if operation not in self.metrics["operation_stats"]:
             self.metrics["operation_stats"][operation] = {
-                "requests": 0,
-                "hits": 0,
-                "misses": 0,
-                "errors": 0
+                "requests": 0, "hits": 0, "misses": 0, "errors": 0
             }
         
         op_stats = self.metrics["operation_stats"][operation]
         op_stats["requests"] += 1
-        
-        if error:
-            op_stats["errors"] += 1
-        elif hit:
-            op_stats["hits"] += 1
-        else:
-            op_stats["misses"] += 1
+        op_stats[metric_type] += 1
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get comprehensive cache metrics."""
