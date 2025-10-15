@@ -154,17 +154,18 @@ class HybridAIService:
     
     def _call_ai_service(self, service_type: AIServiceType, method: str, *args, **kwargs):
         """Generic method to call AI services with consistent error handling."""
+        service_config = {
+            AIServiceType.OPENAI: (self.openai_client, f"_{method}_openai"),
+            AIServiceType.ANTHROPIC: (self.anthropic_client, f"_{method}_anthropic"),
+            AIServiceType.OLLAMA: (self.ollama_service, method)
+        }
+        
+        client, method_name = service_config.get(service_type)
+        if not client:
+            raise ServiceUnavailableError(f"{service_type.value} client not initialized")
+        
         try:
-            if service_type == AIServiceType.OPENAI:
-                if not self.openai_client:
-                    raise ServiceUnavailableError("OpenAI client not initialized")
-                return getattr(self, f"_{method}_openai")(*args, **kwargs)
-            elif service_type == AIServiceType.ANTHROPIC:
-                if not self.anthropic_client:
-                    raise ServiceUnavailableError("Anthropic client not initialized")
-                return getattr(self, f"_{method}_anthropic")(*args, **kwargs)
-            elif service_type == AIServiceType.OLLAMA:
-                return getattr(self.ollama_service, method)(*args, **kwargs)
+            return getattr(client, method_name)(*args, **kwargs)
         except ServiceUnavailableError:
             raise
         except Exception as e:

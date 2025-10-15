@@ -198,22 +198,9 @@ class QuestionBankService:
             # Update usage count
             question.usage_count += 1
             
-            # Update average score
-            if question.average_score is None:
-                question.average_score = score
-            else:
-                # Calculate running average
-                question.average_score = (question.average_score * (question.usage_count - 1) + score) / question.usage_count
-            
-            # Update success rate
-            if question.success_rate is None:
-                question.success_rate = 1.0 if success else 0.0
-            else:
-                # Calculate running success rate
-                total_successes = question.success_rate * (question.usage_count - 1)
-                if success:
-                    total_successes += 1
-                question.success_rate = total_successes / question.usage_count
+            # Update performance metrics using helper methods
+            question.average_score = self._update_running_average(question.average_score, score, question.usage_count)
+            question.success_rate = self._update_success_rate(question.success_rate, success, question.usage_count)
             
             self.db.commit()
             logger.debug(f"Updated performance for question {question_id}: score={score}, success={success}")
@@ -437,31 +424,36 @@ class QuestionBankService:
     
     def _determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
         """Determine question difficulty using functional approach."""
+        # Priority-based difficulty determination
+        difficulty_determiners = [
+            self._get_seniority_difficulty,
+            self._get_keyword_difficulty,
+            lambda *args: 'medium'  # Default fallback
+        ]
+        
+        for determiner in difficulty_determiners:
+            if difficulty := determiner(question_text, role_analysis):
+                return difficulty
+        
+        return 'medium'
+
+    def _get_seniority_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
+        """Get difficulty based on seniority level."""
+        seniority_map = {'senior': 'hard', 'junior': 'easy', 'mid': 'medium'}
+        return seniority_map.get(role_analysis.get('seniority_level', 'mid'))
+
+    def _get_keyword_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
+        """Get difficulty based on keywords."""
         text_lower = question_text.lower()
-        
-        # Seniority-based difficulty mapping
-        seniority_difficulty = {
-            'senior': 'hard',
-            'junior': 'easy',
-            'mid': 'medium'
-        }
-        
-        # Check seniority first
-        seniority = role_analysis.get('seniority_level', 'mid')
-        if seniority in seniority_difficulty:
-            return seniority_difficulty[seniority]
-        
-        # Keyword-based difficulty rules
-        difficulty_rules = [
+        keyword_rules = [
             (['complex', 'advanced', 'architecture', 'design', 'optimize'], 'hard'),
             (['basic', 'simple', 'explain', 'what is'], 'easy')
         ]
         
-        for keywords, difficulty in difficulty_rules:
+        for keywords, difficulty in keyword_rules:
             if any(word in text_lower for word in keywords):
                 return difficulty
-        
-        return 'medium'
+        return None
     
     def _categorize_question(self, question_text: str) -> str:
         """Categorize question using centralized rules."""
@@ -475,6 +467,20 @@ class QuestionBankService:
                 return category
         return "technical"  # default
     
+    def _update_running_average(self, current_avg: Optional[float], new_value: float, count: int) -> float:
+        """Calculate running average with null handling."""
+        return new_value if current_avg is None else (current_avg * (count - 1) + new_value) / count
+
+    def _update_success_rate(self, current_rate: Optional[float], success: bool, count: int) -> float:
+        """Calculate running success rate with null handling."""
+        if current_rate is None:
+            return 1.0 if success else 0.0
+        
+        total_successes = current_rate * (count - 1)
+        if success:
+            total_successes += 1
+        return total_successes / count
+
     def _get_subcategory(self, question_text: str) -> Optional[str]:
         """Get question subcategory based on content."""
         text_lower = question_text.lower()

@@ -316,6 +316,88 @@ class AsyncSessionService:
             logger.error(f"Error getting answers for question {question_id}: {e}")
             return []
     
+    async def create_session_with_questions_atomic(
+        self,
+        user_id: str,
+        role: str,
+        job_description: str,
+        questions: List[str],
+        title: Optional[str] = None
+    ) -> tuple[InterviewSession, List[SessionQuestion]]:
+        """Create a session with questions in a single atomic transaction."""
+        try:
+            # Start transaction
+            session_data = {
+                "id": uuid.uuid4(),
+                "user_id": user_id,
+                "role": role,
+                "job_description": job_description,
+                "title": title or f"Interview for {role}",
+                "status": "active",
+                "total_questions": len(questions),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Create session
+            session = await self.db_ops.create(InterviewSession, **session_data)
+            session_id = session.id if hasattr(session, 'id') else session_data["id"]
+            
+            # Bulk create questions and session-question links
+            session_questions = []
+            for i, question_text in enumerate(questions):
+                # Check if question already exists in global bank
+                existing_question = await self._find_question_by_text(question_text)
+                
+                if existing_question:
+                    question_id = existing_question.id
+                    # Update usage count
+                    await self.db_session.execute(
+                        update(Question)
+                        .where(Question.id == question_id)
+                        .values(usage_count=Question.usage_count + 1)
+                    )
+                else:
+                    # Create new question in global bank
+                    question_data = {
+                        "id": uuid.uuid4(),
+                        "question_text": question_text,
+                        "question_metadata": {
+                            "created_from_session": str(session_id),
+                            "created_at": datetime.utcnow().isoformat()
+                        },
+                        "difficulty_level": "medium",
+                        "category": "general",
+                        "usage_count": 1,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
+                    new_question = await self.db_ops.create(Question, **question_data)
+                    question_id = new_question.id if hasattr(new_question, 'id') else question_data["id"]
+                
+                # Create session-question link
+                session_question_data = {
+                    "id": uuid.uuid4(),
+                    "session_id": session_id,
+                    "question_id": question_id,
+                    "question_order": i + 1,
+                    "created_at": datetime.utcnow()
+                }
+                session_question = await self.db_ops.create(SessionQuestion, **session_question_data)
+                session_questions.append(session_question)
+            
+            # Commit the entire transaction
+            await self.db_session.commit()
+            
+            logger.info(f"Successfully created session {session_id} with {len(session_questions)} questions atomically")
+            return session, session_questions
+            
+        except Exception as e:
+            # Rollback on any error
+            await self.db_session.rollback()
+            logger.error(f"Error creating session with questions atomically: {e}")
+            raise
+
     async def _find_question_by_text(self, question_text: str) -> Optional[Question]:
         """Find a question by its text."""
         try:

@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional, Dict, Any
-from app.database.models import InterviewSession, Question, Answer, User
+from datetime import datetime
+from app.database.models import InterviewSession, Question, SessionQuestion, Answer, User
 from app.exceptions import AIServiceError
 from app.utils.error_context import ErrorContext
 from app.services.question_engine import QuestionEngine
@@ -295,6 +296,90 @@ class SessionService:
         except Exception as e:
             raise AIServiceError(f"Failed to preview interview session: {e}")
     
+    def create_session_with_questions_atomic(
+        self, 
+        user_id: int, 
+        role: str, 
+        job_description: str, 
+        questions: List[str]
+    ) -> tuple[InterviewSession, List[Question]]:
+        """Create a session with questions in a single atomic transaction."""
+        from app.utils.logger import get_logger
+        from app.exceptions import AIServiceError
+        
+        logger = get_logger(__name__)
+        
+        try:
+            # Start transaction
+            session = InterviewSession(
+                user_id=user_id,
+                mode="interview",
+                role=role,
+                job_description=job_description,
+                question_source="generated",
+                status="active",
+                total_questions=len(questions)
+            )
+            self.db.add(session)
+            self.db.flush()  # Get the session ID without committing
+            
+            # Bulk create questions
+            question_objects = []
+            for i, question_text in enumerate(questions, 1):
+                # Check if question already exists in global bank
+                existing_question = self._find_question_by_text(question_text)
+                
+                if existing_question:
+                    question_id = existing_question.id
+                    # Update usage count
+                    existing_question.usage_count = (existing_question.usage_count or 0) + 1
+                else:
+                    # Create new question in global bank
+                    question = Question(
+                        question_text=question_text,
+                        question_metadata={
+                            "created_from_session": str(session.id),
+                            "created_at": datetime.utcnow().isoformat()
+                        },
+                        difficulty_level="medium",
+                        category="general",
+                        usage_count=1
+                    )
+                    self.db.add(question)
+                    self.db.flush()  # Get the question ID
+                    question_id = question.id
+                
+                # Create session-question link
+                session_question = SessionQuestion(
+                    session_id=session.id,
+                    question_id=question_id,
+                    question_order=i
+                )
+                self.db.add(session_question)
+                question_objects.append(question)
+            
+            # Commit the entire transaction
+            self.db.commit()
+            self.db.refresh(session)
+            
+            logger.info(f"Successfully created session {session.id} with {len(question_objects)} questions atomically")
+            return session, question_objects
+            
+        except Exception as e:
+            # Rollback on any error
+            self.db.rollback()
+            logger.error(f"Error creating session with questions atomically: {e}")
+            raise AIServiceError(f"Failed to create session with questions: {e}")
+    
+    def _find_question_by_text(self, question_text: str) -> Optional[Question]:
+        """Find a question by its text."""
+        try:
+            return self.db.query(Question).filter(Question.question_text == question_text).first()
+        except Exception as e:
+            logger = get_logger(__name__)
+            logger.error(f"Error finding question by text: {e}")
+            return None
+
     def get_available_scenarios(self) -> List[Dict[str, str]]:
         """Get list of available practice scenarios."""
         return self.question_engine.get_available_scenarios()

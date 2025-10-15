@@ -12,16 +12,19 @@ logger = get_logger(__name__)
 
 def handle_service_errors(operation_name: str = None, service_type: str = "ai"):
     """Unified decorator factory for handling service errors."""
+    service_getters = {
+        "ai": get_ai_service,
+        # Add other service types as needed
+    }
+    
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Get appropriate service based on type
-            if service_type == "ai":
-                service = get_ai_service()
-            else:
-                # For future extension to other service types
-                service = get_service_by_type(service_type) if hasattr(globals(), 'get_service_by_type') else None
+            service_getter = service_getters.get(service_type)
+            if not service_getter:
+                raise HTTPException(status_code=503, detail=f"Unknown service type: {service_type}")
             
+            service = service_getter()
             if not service:
                 raise HTTPException(status_code=503, detail=f"{service_type.title()} service not available")
             
