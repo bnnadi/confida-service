@@ -4,7 +4,7 @@ Centralized response parsing utilities to eliminate duplication across AI servic
 
 import json
 import re
-from typing import List
+from typing import List, Optional
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.logger import get_logger
 
@@ -39,27 +39,31 @@ class ResponseParsers:
     
     @staticmethod
     def parse_analysis_response(response_text: str) -> AnalyzeAnswerResponse:
-        """Parse analysis from AI response with improved error handling."""
-        # Try multiple JSON extraction methods
+        """Parse analysis with simplified pattern matching."""
         json_patterns = [
-            r'\{.*\}',  # Original pattern
-            r'```json\s*(\{.*?\})\s*```',  # Markdown code blocks
-            r'```\s*(\{.*?\})\s*```',  # Generic code blocks
+            r'\{.*\}',
+            r'```json\s*(\{.*?\})\s*```',
+            r'```\s*(\{.*?\})\s*```',
         ]
         
         for pattern in json_patterns:
-            try:
-                json_match = re.search(pattern, response_text, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(1) if json_match.groups() else json_match.group()
-                    analysis = json.loads(json_str)
-                    return ResponseParsers._build_analysis_response(analysis)
-            except (json.JSONDecodeError, AttributeError) as e:
-                logger.debug(f"Failed to parse with pattern {pattern}: {e}")
-                continue
+            if analysis := ResponseParsers._try_parse_with_pattern(response_text, pattern):
+                return ResponseParsers._build_analysis_response(analysis)
         
         logger.warning("Could not parse JSON from AI response, using fallback")
         return ResponseParsers._get_fallback_analysis()
+    
+    @staticmethod
+    def _try_parse_with_pattern(response_text: str, pattern: str) -> Optional[dict]:
+        """Extract pattern matching logic."""
+        try:
+            json_match = re.search(pattern, response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1) if json_match.groups() else json_match.group()
+                return json.loads(json_str)
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.debug(f"Failed to parse with pattern {pattern}: {e}")
+        return None
     
     @staticmethod
     def _build_analysis_response(analysis: dict) -> AnalyzeAnswerResponse:

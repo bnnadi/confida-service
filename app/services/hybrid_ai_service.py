@@ -67,65 +67,17 @@ class HybridAIService:
                                    preferred_service: Optional[str] = None) -> ParseJDResponse:
         """Generate questions using question bank first, then AI services as fallback."""
         
-        # Step 1: Try to get questions from question bank first
-        if self.question_bank_service:
-            try:
-                questions = self.question_bank_service.get_questions_for_role(role, job_description, count=10)
-                if questions:
-                    question_texts = [q.question_text for q in questions]
-                    logger.info(f"Retrieved {len(question_texts)} questions from question bank for role '{role}'")
-                    return ParseJDResponse(questions=question_texts)
-                else:
-                    logger.info(f"No questions found in question bank for role '{role}', falling back to AI generation")
-            except Exception as e:
-                logger.warning(f"Error accessing question bank: {e}, falling back to AI generation")
+        # Try question bank first
+        if result := self._try_question_bank(role, job_description):
+            return result
         
-        # Step 2: Generate questions using AI services
-        services_to_try = self._get_services_to_try(preferred_service)
-        
-        for service_type in services_to_try:
-            try:
-                result = self._call_ai_service(service_type, "generate_interview_questions", role, job_description)
-                
-                # Step 3: Store generated questions in question bank for future use
-                if self.question_bank_service and result.questions:
-                    try:
-                        prompt_hash = self._generate_prompt_hash(role, job_description)
-                        self.question_bank_service.store_generated_questions(
-                            questions=result.questions,
-                            role=role,
-                            job_description=job_description,
-                            ai_service_used=service_type.value,
-                            prompt_hash=prompt_hash
-                        )
-                        logger.info(f"Stored {len(result.questions)} AI-generated questions in question bank")
-                    except Exception as e:
-                        logger.warning(f"Error storing questions in question bank: {e}")
-                
-                return result
-                
-            except ServiceUnavailableError as e:
-                logger.warning(f"Error with {service_type.value}: {e}")
-                continue
-        
-        # If all services fail, return fallback
-        return FallbackResponses.get_fallback_questions(role)
+        # Try AI services with simplified fallback
+        return self._try_ai_services("generate_interview_questions", role, job_description, preferred_service)
     
     def analyze_answer(self, job_description: str, question: str, answer: str,
                       preferred_service: Optional[str] = None) -> AnalyzeAnswerResponse:
         """Analyze answer using the best available service."""
-        
-        services_to_try = self._get_services_to_try(preferred_service)
-        
-        for service_type in services_to_try:
-            try:
-                return self._call_ai_service(service_type, "analyze_answer", job_description, question, answer)
-            except ServiceUnavailableError as e:
-                logger.warning(f"Error with {service_type.value}: {e}")
-                continue
-        
-        # If all services fail, return fallback
-        return FallbackResponses.get_fallback_analysis()
+        return self._try_ai_services("analyze_answer", job_description, question, answer, preferred_service)
     
     def _get_services_to_try(self, preferred_service: Optional[str] = None) -> List[AIServiceType]:
         """Get list of services to try in order."""
@@ -143,6 +95,65 @@ class HybridAIService:
         
         # Return preferred first, then others
         return [preferred] + [s for s in self.service_priority if s != preferred]
+    
+    def _try_question_bank(self, role: str, job_description: str) -> Optional[ParseJDResponse]:
+        """Extract question bank logic into separate method."""
+        if not self.question_bank_service:
+            return None
+        
+        try:
+            questions = self.question_bank_service.get_questions_for_role(role, job_description, count=10)
+            if questions:
+                question_texts = [q.question_text for q in questions]
+                logger.info(f"Retrieved {len(question_texts)} questions from question bank for role '{role}'")
+                return ParseJDResponse(questions=question_texts)
+            else:
+                logger.info(f"No questions found in question bank for role '{role}', falling back to AI generation")
+        except Exception as e:
+            logger.warning(f"Error accessing question bank: {e}, falling back to AI generation")
+        
+        return None
+    
+    def _try_ai_services(self, method: str, *args, **kwargs) -> ParseJDResponse:
+        """Simplified AI service orchestration with early returns."""
+        preferred_service = kwargs.pop('preferred_service', None) if 'preferred_service' in kwargs else None
+        services_to_try = self._get_services_to_try(preferred_service)
+        
+        for service_type in services_to_try:
+            try:
+                result = self._call_ai_service(service_type, method, *args, **kwargs)
+                self._store_generated_questions_if_needed(result, method, *args, **kwargs)
+                return result
+            except ServiceUnavailableError as e:
+                logger.warning(f"Error with {service_type.value}: {e}")
+                continue
+        
+        # Return appropriate fallback based on method
+        if method == "generate_interview_questions":
+            return FallbackResponses.get_fallback_questions(args[0] if args else "unknown")
+        else:
+            return FallbackResponses.get_fallback_analysis()
+    
+    def _store_generated_questions_if_needed(self, result: ParseJDResponse, method: str, *args, **kwargs):
+        """Store generated questions in question bank if applicable."""
+        if (method == "generate_interview_questions" and 
+            self.question_bank_service and 
+            result.questions and 
+            len(args) >= 2):
+            
+            try:
+                role, job_description = args[0], args[1]
+                prompt_hash = self._generate_prompt_hash(role, job_description)
+                self.question_bank_service.store_generated_questions(
+                    questions=result.questions,
+                    role=role,
+                    job_description=job_description,
+                    ai_service_used="hybrid",  # We don't know which specific service succeeded
+                    prompt_hash=prompt_hash
+                )
+                logger.info(f"Stored {len(result.questions)} AI-generated questions in question bank")
+            except Exception as e:
+                logger.warning(f"Error storing questions in question bank: {e}")
     
     def _call_ai_service(self, service_type: AIServiceType, method: str, *args, **kwargs):
         """Generic method to call AI services with consistent error handling."""

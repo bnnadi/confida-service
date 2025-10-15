@@ -1,7 +1,7 @@
 from fastapi import Request, HTTPException
 from app.utils.logger import get_logger
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Iterable, Tuple
 
 logger = get_logger(__name__)
 
@@ -44,73 +44,56 @@ class SecurityValidator:
     
     @staticmethod
     def validate_request(request: Request) -> bool:
-        """Validate request for security issues."""
-        try:
-            # Check query parameters
-            SecurityValidator._validate_query_params(request)
-            
-            # Check path parameters
-            SecurityValidator._validate_path(request)
-            
-            # Check headers
-            SecurityValidator._validate_headers(request)
-            
-            return True
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Security validation error: {e}")
-            raise HTTPException(status_code=400, detail="Security validation failed")
+        """Validate request for security issues using unified approach."""
+        validators = [
+            ("query_params", request.query_params.items()),
+            ("path", [("path", request.url.path)]),
+            ("headers", request.headers.items())
+        ]
+        
+        for validator_name, items in validators:
+            if not SecurityValidator._validate_items(validator_name, items, request):
+                return False
+        
+        return True
     
     @staticmethod
-    def _validate_query_params(request: Request):
-        """Validate query parameters for malicious content."""
-        for param_name, param_value in request.query_params.items():
-            if SecurityValidator._contains_sql_injection(param_value):
-                logger.warning(f"SQL injection attempt in query param '{param_name}' from {request.client.host}")
-                raise HTTPException(status_code=400, detail="Invalid query parameter")
+    def _validate_items(validator_name: str, items: Iterable[Tuple[str, str]], request: Request) -> bool:
+        """Unified validation for any key-value pairs."""
+        for key, value in items:
+            if SecurityValidator._contains_malicious_content(value):
+                logger.warning(f"Security violation in {validator_name} '{key}' from {request.client.host}")
+                raise HTTPException(status_code=400, detail=f"Invalid {validator_name}")
             
-            if SecurityValidator._contains_xss(param_value):
-                logger.warning(f"XSS attempt in query param '{param_name}' from {request.client.host}")
-                raise HTTPException(status_code=400, detail="Invalid query parameter")
-            
-            if SecurityValidator._contains_path_traversal(param_value):
-                logger.warning(f"Path traversal attempt in query param '{param_name}' from {request.client.host}")
-                raise HTTPException(status_code=400, detail="Invalid query parameter")
+            # Special handling for path validation
+            if validator_name == "path" and key == "path":
+                if not SecurityValidator._validate_path_specific(value, request):
+                    return False
+        
+        return True
     
     @staticmethod
-    def _validate_path(request: Request):
-        """Validate URL path for malicious content."""
-        path = request.url.path
-        
-        if SecurityValidator._contains_path_traversal(path):
-            logger.warning(f"Path traversal attempt in URL path from {request.client.host}")
-            raise HTTPException(status_code=400, detail="Invalid URL path")
-        
-        # Check for suspicious file extensions
+    def _validate_path_specific(path: str, request: Request) -> bool:
+        """Validate URL path for suspicious file extensions."""
         suspicious_extensions = ['.exe', '.bat', '.cmd', '.com', '.pif', '.scr', '.vbs', '.js']
         if any(path.lower().endswith(ext) for ext in suspicious_extensions):
             logger.warning(f"Suspicious file extension in URL path from {request.client.host}")
             raise HTTPException(status_code=400, detail="Invalid file type")
-    
-    @staticmethod
-    def _validate_headers(request: Request):
-        """Validate request headers for security issues."""
-        # Check User-Agent for suspicious patterns
+        
+        # Check User-Agent for suspicious patterns (moved from headers validation)
         user_agent = request.headers.get("user-agent", "")
         if SecurityValidator._is_suspicious_user_agent(user_agent):
             logger.warning(f"Suspicious User-Agent from {request.client.host}: {user_agent}")
             # Don't block, just log
         
-        # Check for suspicious headers
-        suspicious_headers = ["x-forwarded-for", "x-real-ip", "x-originating-ip"]
-        for header in suspicious_headers:
-            if header in request.headers:
-                value = request.headers[header]
-                if SecurityValidator._contains_sql_injection(value) or SecurityValidator._contains_xss(value):
-                    logger.warning(f"Malicious content in header '{header}' from {request.client.host}")
-                    raise HTTPException(status_code=400, detail="Invalid header value")
+        return True
+    
+    @staticmethod
+    def _contains_malicious_content(text: str) -> bool:
+        """Check for any type of malicious content."""
+        return (SecurityValidator._contains_sql_injection(text) or 
+                SecurityValidator._contains_xss(text) or 
+                SecurityValidator._contains_path_traversal(text))
     
     @staticmethod
     def _contains_sql_injection(text: str) -> bool:
