@@ -41,10 +41,13 @@ class Score(BaseModel):
     confidence: int = Field(..., ge=1, le=10, description="Confidence score 1-10")
 
 class AnalyzeAnswerResponse(BaseModel):
-    score: Score
-    missingKeywords: List[str] = Field(..., description="Missing keywords from job description")
-    improvements: List[str] = Field(..., description="Suggested improvements")
-    idealAnswer: str = Field(..., description="Example of an ideal answer")
+    analysis: str = Field(..., description="Analysis of the answer")
+    score: Dict[str, Any] = Field(..., description="Score breakdown")
+    suggestions: List[str] = Field(default_factory=list, description="Suggested improvements")
+    jobDescription: str = Field(..., description="Job description used for analysis")
+    answer: str = Field(..., description="The analyzed answer")
+    service_used: str = Field(..., description="AI service used for analysis")
+    multi_agent_analysis: Optional[Dict[str, Any]] = Field(None, description="Full multi-agent analysis data")
 
 # Database response models for interview data
 class QuestionResponse(BaseModel):
