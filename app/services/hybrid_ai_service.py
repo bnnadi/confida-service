@@ -18,6 +18,7 @@ from app.services.smart_token_optimizer import SmartTokenOptimizer
 from app.services.cost_tracker import CostTracker
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
+from app.utils.ai_request_handler import AIRequestHandler
 from app.utils.service_initializer import ServiceInitializer
 from app.utils.fallback_responses import FallbackResponses
 from app.utils.cache import cached
@@ -48,6 +49,9 @@ class HybridAIService:
         self.token_optimizer = SmartTokenOptimizer()
         self.cost_tracker = CostTracker(db_session)
         
+        # Initialize unified AI request handler
+        self.ai_request_handler = AIRequestHandler()
+        
         # Assign services to instance variables for backward compatibility
         self._assign_services()
     
@@ -63,6 +67,10 @@ class HybridAIService:
         self.ai_fallback_service = self._services['ai_fallback_service']
         self.service_priority = self._services['service_priority']
         self.orchestrator = self._orchestrator
+        
+        # Set clients in the unified request handler
+        self.ai_request_handler.set_client('openai', self.openai_client)
+        self.ai_request_handler.set_client('anthropic', self.anthropic_client)
     
     @cached("question_generation", ttl=3600, cache_key_params=["role", "job_description", "preferred_service"])
     @with_metrics("generate_interview_questions")
@@ -391,22 +399,16 @@ class HybridAIService:
         """Unified question generation for all AI services."""
         service_config = {
             "openai": {
-                "client": self.openai_client,
-                "model": os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
-                "create_method": self._create_openai_request,
+                "create_method": self._create_ai_request,
                 "parse_method": self._parse_openai_response
             },
             "anthropic": {
-                "client": self.anthropic_client,
-                "model": os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
-                "create_method": self._create_anthropic_request,
+                "create_method": self._create_ai_request,
                 "parse_method": self._parse_anthropic_response
             }
         }
         
         config = service_config[service_type]
-        if not config["client"]:
-            raise ServiceUnavailableError(f"{service_type} client not initialized")
         
         # Optimize token usage
         optimization_result = self.token_optimizer.optimize_request(
@@ -415,7 +417,7 @@ class HybridAIService:
         
         try:
             # Create and execute request
-            response = config["create_method"](optimization_result.optimal_tokens, role, job_description)
+            response = config["create_method"](service_type, optimization_result.optimal_tokens, role, job_description)
             questions = config["parse_method"](response)
             
             # Track success
@@ -427,28 +429,9 @@ class HybridAIService:
             self._track_failed_request(service_type, optimization_result, role, str(e))
             raise
     
-    def _create_openai_request(self, max_tokens: int, role: str, job_description: str):
-        """Create OpenAI request."""
-        user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
-        return self.openai_client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
-            messages=[
-                {"role": "system", "content": PromptTemplates.QUESTION_GENERATION_SYSTEM},
-                {"role": "user", "content": user_prompt}
-            ],
-            max_tokens=max_tokens,
-            temperature=0.7
-        )
-    
-    def _create_anthropic_request(self, max_tokens: int, role: str, job_description: str):
-        """Create Anthropic request."""
-        user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
-        return self.anthropic_client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
-            max_tokens=max_tokens,
-            system=PromptTemplates.QUESTION_GENERATION_SYSTEM,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+    def _create_ai_request(self, service_type: str, max_tokens: int, role: str, job_description: str):
+        """Create unified AI request using the request handler."""
+        return self.ai_request_handler.create_request(service_type, max_tokens, role, job_description)
     
     def _parse_openai_response(self, response) -> List[Dict[str, Any]]:
         """Parse OpenAI response."""

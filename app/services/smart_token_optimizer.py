@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from app.utils.logger import get_logger
 from app.config import get_settings
+from app.utils.complexity_formula import ComplexityFormula, ComplexityData, ComplexityWeights, ComplexityConstraints
 
 logger = get_logger(__name__)
 
@@ -41,6 +42,17 @@ class SmartTokenOptimizer:
         self.industry_complexity = self.config['industry_complexity']
         self.complexity_weights = self.config['complexity_weights']
         self.constraints = self.config['constraints']
+        
+        # Initialize complexity formula with configuration
+        self.complexity_formula = self._initialize_complexity_formula()
+        
+        # Initialize job description processor for summarization
+        try:
+            from app.services.job_description_processor import ImprovedJobDescriptionProcessor
+            self.job_processor = ImprovedJobDescriptionProcessor()
+        except ImportError:
+            self.job_processor = None
+            logger.warning("ImprovedJobDescriptionProcessor not available - summarization disabled")
     
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load configuration from YAML file with fallback to defaults."""
@@ -197,39 +209,37 @@ class SmartTokenOptimizer:
             )
     
     def _analyze_complexity(self, role: str, job_description: str) -> Dict[str, Any]:
-        """Analyze the complexity of a request."""
-        # Extract seniority from role
-        seniority_score = self._extract_seniority_score(role)
+        """Analyze the complexity of a request using formula-based approach."""
+        # Extract analysis data
+        analysis_data = self._extract_analysis_data(role, job_description)
         
-        # Analyze job description
-        description_length = len(job_description.split())
-        technical_complexity = self._analyze_technical_complexity(job_description)
-        industry_complexity = self._analyze_industry_complexity(job_description)
-        skill_requirements = self._extract_skill_count(job_description)
-        
-        # Calculate total complexity score using configuration weights
-        weights = self.complexity_weights
-        constraints = self.constraints
-        
-        total_score = (
-            seniority_score * weights['seniority'] +
-            (description_length / constraints['description_length_divisor']) * weights['description_length'] +
-            technical_complexity * weights['technical'] +
-            industry_complexity * weights['industry'] +
-            (skill_requirements / constraints['skill_count_divisor']) * weights['skills']
-        )
-        
-        # Clamp between configured min and max
-        total_score = min(max(total_score, constraints['min_complexity_score']), constraints['max_complexity_score'])
+        # Calculate complexity score using formula
+        total_score = self.complexity_formula.calculate(analysis_data)
         
         return {
-            'seniority_score': seniority_score,
-            'description_length': description_length,
-            'technical_complexity': technical_complexity,
-            'industry_complexity': industry_complexity,
-            'skill_count': skill_requirements,
+            'seniority_score': analysis_data.seniority_score,
+            'description_length': analysis_data.description_length,
+            'technical_complexity': analysis_data.technical_complexity,
+            'industry_complexity': analysis_data.industry_complexity,
+            'skill_count': analysis_data.skill_count,
             'total_score': total_score
         }
+    
+    def _extract_analysis_data(self, role: str, job_description: str) -> ComplexityData:
+        """Extract all analysis data in one pass."""
+        return ComplexityData(
+            seniority_score=self._extract_seniority_score(role),
+            description_length=len(job_description.split()),
+            technical_complexity=self._analyze_technical_complexity(job_description),
+            industry_complexity=self._analyze_industry_complexity(job_description),
+            skill_count=self._extract_skill_count(job_description)
+        )
+    
+    def _initialize_complexity_formula(self) -> ComplexityFormula:
+        """Initialize complexity formula with configuration."""
+        weights = ComplexityWeights(**self.config['complexity_weights'])
+        constraints = ComplexityConstraints(**self.config['constraints'])
+        return ComplexityFormula(weights, constraints)
     
     def _extract_seniority_score(self, role: str) -> float:
         """Extract seniority level from role title."""
@@ -339,9 +349,61 @@ class SmartTokenOptimizer:
         else:
             return f"High complexity optimization ({service}): {optimal_tokens} tokens"
     
+    def optimize_job_description(self, job_description: str, target_length: int = 300) -> Dict[str, Any]:
+        """
+        Optimize job description for token efficiency while preserving key information.
+        
+        Args:
+            job_description: Full job description text
+            target_length: Target length in words for the optimized version
+            
+        Returns:
+            Dictionary with original, optimized, and analysis data
+        """
+        if not self.job_processor:
+            return {
+                "original": job_description,
+                "optimized": job_description,
+                "compression_ratio": 1.0,
+                "optimization_applied": "none",
+                "key_info_extracted": {}
+            }
+        
+        try:
+            # Process the job description
+            summary = self.job_processor.process_job_description(job_description, target_length)
+            
+            return {
+                "original": job_description,
+                "optimized": summary.summary_text,
+                "compression_ratio": summary.compression_ratio,
+                "optimization_applied": f"summarized_to_{summary.summary_length}_words",
+                "key_info_extracted": {
+                    "key_requirements": summary.key_requirements,
+                    "technical_skills": summary.technical_skills,
+                    "soft_skills": summary.soft_skills,
+                    "experience_requirements": summary.experience_requirements,
+                    "company_info": summary.company_info
+                },
+                "original_length": summary.original_length,
+                "optimized_length": summary.summary_length,
+                "tokens_saved": summary.original_length - summary.summary_length
+            }
+            
+        except Exception as e:
+            logger.error(f"Error optimizing job description: {e}")
+            return {
+                "original": job_description,
+                "optimized": job_description,
+                "compression_ratio": 1.0,
+                "optimization_applied": "error_fallback",
+                "key_info_extracted": {},
+                "error": str(e)
+            }
+    
     def get_optimization_stats(self) -> Dict[str, Any]:
         """Get optimization statistics and configuration."""
-        return {
+        stats = {
             "service_configs": self.service_configs,
             "role_complexity_map": self.role_complexity_map,
             "technical_keywords_count": len(self.technical_keywords),
@@ -350,3 +412,12 @@ class SmartTokenOptimizer:
             "constraints": self.constraints,
             "config_source": "yaml_file" if hasattr(self, '_config_loaded_from_file') else "defaults"
         }
+        
+        # Add job processor stats if available
+        if self.job_processor:
+            stats["job_processor_available"] = True
+            stats["job_processor_stats"] = self.job_processor.get_processing_stats()
+        else:
+            stats["job_processor_available"] = False
+        
+        return stats
