@@ -21,27 +21,29 @@ class DatabaseOperationHandler:
     def __init__(self, use_async: Optional[bool] = None):
         self.settings = get_settings()
         self.use_async = use_async if use_async is not None else self.settings.ASYNC_DATABASE_ENABLED
-        
-        # Unified operation handlers that work for both async and sync
-        self.operation_handlers = {
-            "parse_jd": self._handle_parse_jd_operation,
-            "analyze_answer": self._handle_analyze_answer_operation,
-            "get_services": self._handle_get_services_operation,
-            "list_models": self._handle_list_models_operation,
-            "pull_model": self._handle_pull_model_operation
-        }
     
     async def handle_operation(self, operation_type: str, **kwargs) -> Any:
-        """Handle database operation with automatic async/sync detection."""
-        handler = self.operation_handlers.get(operation_type)
-        if not handler:
-            raise HTTPException(status_code=400, detail=f"Unknown operation: {operation_type}")
-        
-        # Auto-detect if handler is async and execute accordingly
-        if self.use_async:
-            return await self._execute_async(handler, **kwargs)
+        """Handle database operation with direct method calls."""
+        # Use direct method calls instead of dictionary mapping
+        if operation_type == "parse_jd":
+            return await self._call_service_method(self._handle_parse_jd_operation, **kwargs)
+        elif operation_type == "analyze_answer":
+            return await self._call_service_method(self._handle_analyze_answer_operation, **kwargs)
+        elif operation_type == "get_services":
+            return await self._call_service_method(self._handle_get_services_operation, **kwargs)
+        elif operation_type == "list_models":
+            return await self._call_service_method(self._handle_list_models_operation, **kwargs)
+        elif operation_type == "pull_model":
+            return await self._call_service_method(self._handle_pull_model_operation, **kwargs)
         else:
-            return await self._execute_sync(handler, **kwargs)
+            raise HTTPException(status_code=400, detail=f"Unknown operation: {operation_type}")
+    
+    async def _call_service_method(self, method: Callable, **kwargs) -> Any:
+        """Call service method with automatic async/sync detection."""
+        if self.use_async:
+            return await self._execute_async(method, **kwargs)
+        else:
+            return await self._execute_sync(method, **kwargs)
     
     
     async def _execute_async(self, handler: Callable, **kwargs) -> Any:

@@ -53,21 +53,14 @@ class QuestionBankService:
             List of selected questions
         """
         try:
-            # Define processing pipeline
-            pipeline = [
-                lambda r, jd: self._analyze_role(r, jd),
-                lambda analysis: self._find_compatible_questions(analysis),
-                lambda questions: self._ensure_question_diversity(questions, count),
-                self._update_usage_stats
-            ]
+            # Clear, step-by-step approach
+            role_analysis = self._analyze_role(role, job_description)
+            compatible_questions = self._find_compatible_questions(role_analysis)
+            diverse_questions = self._ensure_question_diversity(compatible_questions, count)
+            self._update_usage_stats(diverse_questions)
             
-            # Execute pipeline
-            result = (role, job_description)
-            for step in pipeline:
-                result = step(*result) if isinstance(result, tuple) else step(result)
-            
-            logger.info(f"Selected {len(result)} questions for role '{role}'")
-            return result
+            logger.info(f"Selected {len(diverse_questions)} questions for role '{role}'")
+            return diverse_questions
             
         except Exception as e:
             logger.error(f"Error selecting questions for role '{role}': {e}")

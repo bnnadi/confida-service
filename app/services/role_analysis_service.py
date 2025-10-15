@@ -117,30 +117,66 @@ class RoleAnalysisService:
         }
 
     async def analyze_role(self, role: str, job_description: str) -> RoleAnalysis:
-        """Perform comprehensive role analysis with unified pattern-based extraction."""
+        """Perform comprehensive role analysis with declarative configuration."""
         try:
             logger.info(f"Analyzing role: {role}")
             
-            # Execute pattern-based extractions in parallel
-            extraction_tasks = [
-                self._extract_with_pattern('required_skills', job_description),
-                self._extract_with_pattern('tech_stack', job_description),
-                self._extract_with_pattern('soft_skills', job_description),
-                self._extract_with_pattern('experience_years', job_description),
-                self._detect_industry(job_description),
-                self._detect_seniority(job_description),
-                self._detect_company_size(job_description),
-                self._detect_job_function(role, job_description),
-                self._extract_education_requirements(job_description),
-                self._extract_certifications(job_description)
-            ]
+            # Use declarative configuration for analysis tasks
+            analysis_config = self._get_analysis_config(role)
+            results = await self._execute_analysis_pipeline(analysis_config, job_description)
             
-            results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
             return self._build_role_analysis(role, results)
             
         except Exception as e:
             logger.error(f"Error in role analysis: {e}")
             return self._get_default_analysis(role)
+    
+    def _get_analysis_config(self, role: str) -> Dict[str, Any]:
+        """Get analysis configuration for the role."""
+        return {
+            'extractions': [
+                'required_skills',
+                'tech_stack', 
+                'soft_skills',
+                'experience_years'
+            ],
+            'detections': [
+                'industry',
+                'seniority',
+                'company_size',
+                'job_function'
+            ],
+            'requirements': [
+                'education',
+                'certifications'
+            ]
+        }
+    
+    async def _execute_analysis_pipeline(self, config: Dict[str, Any], job_description: str) -> List[Any]:
+        """Execute analysis pipeline using declarative configuration."""
+        tasks = []
+        
+        # Add extraction tasks
+        for extraction_type in config['extractions']:
+            tasks.append(self._extract_with_pattern(extraction_type, job_description))
+        
+        # Add detection tasks
+        for detection_type in config['detections']:
+            if detection_type == 'job_function':
+                tasks.append(self._detect_job_function('', job_description))  # Role will be handled in _build_role_analysis
+            else:
+                method_name = f"_detect_{detection_type}"
+                method = getattr(self, method_name)
+                tasks.append(method(job_description))
+        
+        # Add requirement tasks
+        for requirement_type in config['requirements']:
+            method_name = f"_extract_{requirement_type}_requirements"
+            method = getattr(self, method_name)
+            tasks.append(method(job_description))
+        
+        # Execute all tasks in parallel
+        return await asyncio.gather(*tasks, return_exceptions=True)
     
     async def _extract_with_pattern(self, pattern_name: str, text: str) -> Any:
         """Generic pattern-based extraction using unified logic."""

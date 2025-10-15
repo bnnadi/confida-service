@@ -13,6 +13,7 @@ from app.services.dynamic_prompt_service import DynamicPromptService
 from app.services.intelligent_question_selector import IntelligentQuestionSelector, UserContext
 from app.services.ai_fallback_service import AIFallbackService
 from app.services.ai_service_orchestrator import AIServiceOrchestrator, AIServiceType
+from app.services.service_factory import ServiceFactory
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
@@ -34,63 +35,28 @@ class AIServiceType(Enum):
 
 class HybridAIService:
     def __init__(self, db_session: Optional[Session] = None):
-        self.ollama_service = OllamaService()
-        self.service_priority = self._get_service_priority()
-        self.openai_client = None
-        self.anthropic_client = None
         self.db_session = db_session
         self.settings = get_settings()
         
-        # Initialize question bank service if database session is available
-        self.question_bank_service = None
-        if self.db_session:
-            self.question_bank_service = QuestionBankService(self.db_session)
+        # Use factory pattern for service initialization
+        self._services = ServiceFactory.create_services(db_session, self.settings)
+        self._orchestrator = ServiceFactory.create_orchestrator(self._services)
         
-        # Initialize role analysis and dynamic prompt services
-        self.role_analysis_service = RoleAnalysisService()
-        self.dynamic_prompt_service = DynamicPromptService()
-        
-        # Initialize intelligent selection services
-        self.intelligent_selector = IntelligentQuestionSelector(db_session)
-        self.ai_fallback_service = AIFallbackService(db_session)
-        
-        # Initialize AI service orchestrator
-        self._init_ai_orchestrator()
-        
-        # Initialize external services if configured
-        self._init_external_services()
+        # Assign services to instance variables for backward compatibility
+        self._assign_services()
     
-    def _init_ai_orchestrator(self):
-        """Initialize AI service orchestrator with available services."""
-        services = [self.ollama_service]
-        if self.openai_client:
-            services.append(self.openai_client)
-        if self.anthropic_client:
-            services.append(self.anthropic_client)
-        
-        self.orchestrator = AIServiceOrchestrator(services, self.service_priority)
-    
-    def _get_service_priority(self) -> List[AIServiceType]:
-        """Get service priority using functional approach."""
-        service_configs = [
-            (AIServiceType.OLLAMA, "OLLAMA_BASE_URL"),
-            (AIServiceType.OPENAI, "OPENAI_API_KEY"),
-            (AIServiceType.ANTHROPIC, "ANTHROPIC_API_KEY")
-        ]
-        
-        # Filter services based on configuration
-        available_services = [
-            service_type for service_type, env_var in service_configs
-            if os.getenv(env_var)
-        ]
-        
-        # Default to Ollama if nothing configured
-        return available_services or [AIServiceType.OLLAMA]
-    
-    def _init_external_services(self):
-        """Initialize external AI service clients with better error handling."""
-        self.openai_client = ServiceInitializer.init_openai_client()
-        self.anthropic_client = ServiceInitializer.init_anthropic_client()
+    def _assign_services(self):
+        """Assign services from factory to instance variables for backward compatibility."""
+        self.ollama_service = self._services['ollama_service']
+        self.openai_client = self._services['openai_client']
+        self.anthropic_client = self._services['anthropic_client']
+        self.question_bank_service = self._services['question_bank_service']
+        self.role_analysis_service = self._services['role_analysis_service']
+        self.dynamic_prompt_service = self._services['dynamic_prompt_service']
+        self.intelligent_selector = self._services['intelligent_selector']
+        self.ai_fallback_service = self._services['ai_fallback_service']
+        self.service_priority = self._services['service_priority']
+        self.orchestrator = self._orchestrator
     
     @cached("question_generation", ttl=3600, cache_key_params=["role", "job_description", "preferred_service"])
     @with_metrics("generate_interview_questions")
