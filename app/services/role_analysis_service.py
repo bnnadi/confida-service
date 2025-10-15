@@ -1,313 +1,325 @@
 """
-Role Analysis Service for Dynamic Prompt Generation.
-
-This service analyzes job descriptions and roles to determine industry,
-job function, seniority level, and other characteristics for generating
-role-specific interview questions.
+Enhanced role analysis service for intelligent question selection.
+Extracts skills, industry, seniority, and other role characteristics.
 """
 import re
-import hashlib
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 from app.utils.logger import get_logger
+from app.services.dynamic_prompt_service import DynamicPromptService
 
 logger = get_logger(__name__)
 
-
-class IndustryType(str, Enum):
-    """Supported industry types."""
+class Industry(Enum):
     TECHNOLOGY = "technology"
-    HEALTHCARE = "healthcare"
     FINANCE = "finance"
-    SALES_MARKETING = "sales_marketing"
-    UNKNOWN = "unknown"
+    HEALTHCARE = "healthcare"
+    EDUCATION = "education"
+    RETAIL = "retail"
+    MANUFACTURING = "manufacturing"
+    CONSULTING = "consulting"
+    MEDIA = "media"
+    GOVERNMENT = "government"
+    NONPROFIT = "nonprofit"
+    OTHER = "other"
 
-
-class JobFunction(str, Enum):
-    """Supported job functions."""
-    DEVELOPMENT = "development"
-    DATA_SCIENCE = "data_science"
-    DEVOPS = "devops"
-    NURSING = "nursing"
-    MEDICAL = "medical"
-    BANKING = "banking"
-    INSURANCE = "insurance"
-    SALES = "sales"
-    MARKETING = "marketing"
-    MANAGEMENT = "management"
-    OPERATIONS = "operations"
-    UNKNOWN = "unknown"
-
-
-class SeniorityLevel(str, Enum):
-    """Seniority levels."""
+class SeniorityLevel(Enum):
     JUNIOR = "junior"
     MID = "mid"
     SENIOR = "senior"
+    STAFF = "staff"
+    PRINCIPAL = "principal"
     LEAD = "lead"
-    UNKNOWN = "unknown"
+    MANAGER = "manager"
+    DIRECTOR = "director"
+    VP = "vp"
+    C_LEVEL = "c_level"
 
+class CompanySize(Enum):
+    STARTUP = "startup"  # 1-50 employees
+    SMALL = "small"      # 51-200 employees
+    MEDIUM = "medium"    # 201-1000 employees
+    LARGE = "large"      # 1001-5000 employees
+    ENTERPRISE = "enterprise"  # 5000+ employees
 
 @dataclass
 class RoleAnalysis:
-    """Result of role analysis."""
-    industry: IndustryType
-    job_function: JobFunction
+    """Comprehensive role analysis result."""
+    primary_role: str
+    required_skills: List[str]
+    industry: Industry
     seniority_level: SeniorityLevel
-    key_skills: List[str]
-    confidence_score: float
-    analysis_hash: str
-
+    company_size: CompanySize
+    tech_stack: List[str]
+    soft_skills: List[str]
+    job_function: str
+    experience_years: Optional[int] = None
+    education_requirements: List[str] = None
+    certifications: List[str] = None
 
 class RoleAnalysisService:
-    """Service for analyzing roles and job descriptions."""
-    
-    # Industry detection keywords
-    INDUSTRY_KEYWORDS = {
-        IndustryType.TECHNOLOGY: [
-            "software", "programming", "developer", "engineer", "coding", "python", "javascript",
-            "java", "react", "node", "api", "database", "cloud", "aws", "azure", "devops",
-            "data science", "machine learning", "ai", "artificial intelligence", "backend",
-            "frontend", "full stack", "mobile", "ios", "android", "web development"
-        ],
-        IndustryType.HEALTHCARE: [
-            "nurse", "nursing", "doctor", "physician", "medical", "healthcare", "hospital",
-            "clinic", "patient", "treatment", "diagnosis", "pharmaceutical", "pharmacy",
-            "therapist", "counselor", "health", "medicine", "clinical", "surgery", "emergency"
-        ],
-        IndustryType.FINANCE: [
-            "banking", "finance", "financial", "investment", "trading", "portfolio", "risk",
-            "compliance", "audit", "accounting", "insurance", "fintech", "payments", "loans",
-            "credit", "wealth management", "hedge fund", "private equity", "analyst"
-        ],
-        IndustryType.SALES_MARKETING: [
-            "sales", "marketing", "advertising", "promotion", "brand", "customer", "client",
-            "revenue", "leads", "conversion", "campaign", "digital marketing", "social media",
-            "seo", "content", "copywriting", "account manager", "business development"
-        ]
-    }
-    
-    # Job function detection keywords
-    JOB_FUNCTION_KEYWORDS = {
-        JobFunction.DEVELOPMENT: [
-            "developer", "programmer", "software engineer", "coding", "programming",
-            "frontend", "backend", "full stack", "mobile developer", "web developer"
-        ],
-        JobFunction.DATA_SCIENCE: [
-            "data scientist", "data analyst", "machine learning", "ai engineer", "ml engineer",
-            "statistics", "analytics", "data mining", "predictive modeling", "deep learning"
-        ],
-        JobFunction.DEVOPS: [
-            "devops", "sre", "site reliability", "infrastructure", "deployment", "ci/cd",
-            "kubernetes", "docker", "aws", "azure", "cloud engineer", "platform engineer"
-        ],
-        JobFunction.NURSING: [
-            "nurse", "nursing", "rn", "registered nurse", "lpn", "cna", "nurse practitioner",
-            "clinical nurse", "nurse manager", "nurse educator"
-        ],
-        JobFunction.MEDICAL: [
-            "doctor", "physician", "surgeon", "specialist", "resident", "intern", "medical",
-            "clinical", "diagnosis", "treatment", "patient care"
-        ],
-        JobFunction.BANKING: [
-            "banker", "loan officer", "credit analyst", "investment banker", "financial advisor",
-            "wealth manager", "commercial banking", "retail banking"
-        ],
-        JobFunction.INSURANCE: [
-            "insurance", "underwriter", "claims adjuster", "actuary", "insurance agent",
-            "risk analyst", "insurance broker"
-        ],
-        JobFunction.SALES: [
-            "sales rep", "sales representative", "account executive", "business development",
-            "sales manager", "sales director", "territory manager"
-        ],
-        JobFunction.MARKETING: [
-            "marketing manager", "marketing coordinator", "brand manager", "digital marketing",
-            "content marketing", "social media manager", "marketing analyst"
-        ],
-        JobFunction.MANAGEMENT: [
-            "manager", "director", "vp", "vice president", "ceo", "cto", "cfo", "lead",
-            "team lead", "project manager", "product manager", "operations manager"
-        ],
-        JobFunction.OPERATIONS: [
-            "operations", "supply chain", "logistics", "procurement", "manufacturing",
-            "production", "quality assurance", "process improvement"
-        ]
-    }
-    
-    # Seniority level detection keywords
-    SENIORITY_KEYWORDS = {
-        SeniorityLevel.JUNIOR: [
-            "junior", "entry level", "associate", "trainee", "intern", "graduate",
-            "0-2 years", "1-2 years", "new grad", "recent graduate"
-        ],
-        SeniorityLevel.MID: [
-            "mid level", "intermediate", "2-5 years", "3-5 years", "experienced",
-            "mid-level", "mid level"
-        ],
-        SeniorityLevel.SENIOR: [
-            "senior", "sr", "5+ years", "experienced", "expert", "specialist",
-            "advanced", "lead", "principal"
-        ],
-        SeniorityLevel.LEAD: [
-            "lead", "principal", "staff", "architect", "tech lead", "team lead",
-            "senior lead", "staff engineer", "distinguished"
-        ]
-    }
+    """Enhanced role analysis service for intelligent question selection."""
     
     def __init__(self):
-        self.cache: Dict[str, RoleAnalysis] = {}
-    
-    def analyze_role(self, role: str, job_description: str) -> RoleAnalysis:
-        """
-        Analyze role and job description to determine industry, function, and seniority.
+        self.dynamic_prompt_service = DynamicPromptService()
         
-        Args:
-            role: Job title/role
-            job_description: Full job description text
+        # Common skill patterns
+        self.technical_skills = {
+            'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'php', 'ruby'],
+            'databases': ['sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'cassandra'],
+            'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'cloudformation'],
+            'frameworks': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express', 'fastapi'],
+            'tools': ['git', 'jenkins', 'ci/cd', 'agile', 'scrum', 'jira', 'confluence'],
+            'ai_ml': ['machine learning', 'deep learning', 'tensorflow', 'pytorch', 'nlp', 'computer vision']
+        }
+        
+        self.soft_skills = [
+            'leadership', 'communication', 'teamwork', 'problem solving', 'critical thinking',
+            'time management', 'adaptability', 'creativity', 'emotional intelligence',
+            'mentoring', 'collaboration', 'presentation', 'negotiation'
+        ]
+        
+        # Industry keywords
+        self.industry_keywords = {
+            Industry.TECHNOLOGY: ['software', 'tech', 'startup', 'saas', 'platform', 'api', 'development'],
+            Industry.FINANCE: ['banking', 'finance', 'fintech', 'investment', 'trading', 'risk', 'compliance'],
+            Industry.HEALTHCARE: ['healthcare', 'medical', 'pharma', 'clinical', 'patient', 'health'],
+            Industry.EDUCATION: ['education', 'learning', 'training', 'academic', 'university', 'school'],
+            Industry.RETAIL: ['retail', 'ecommerce', 'shopping', 'customer', 'sales', 'marketing'],
+            Industry.MANUFACTURING: ['manufacturing', 'production', 'industrial', 'supply chain', 'logistics'],
+            Industry.CONSULTING: ['consulting', 'advisory', 'strategy', 'management', 'business'],
+            Industry.MEDIA: ['media', 'entertainment', 'content', 'publishing', 'broadcast'],
+            Industry.GOVERNMENT: ['government', 'public sector', 'policy', 'regulatory', 'federal'],
+            Industry.NONPROFIT: ['nonprofit', 'ngo', 'charity', 'social impact', 'volunteer']
+        }
+        
+        # Seniority indicators
+        self.seniority_indicators = {
+            SeniorityLevel.JUNIOR: ['junior', 'entry', 'graduate', 'intern', '0-2 years', '1-3 years'],
+            SeniorityLevel.MID: ['mid', 'intermediate', '3-5 years', '4-6 years', 'experienced'],
+            SeniorityLevel.SENIOR: ['senior', '5+ years', '6+ years', 'expert', 'advanced'],
+            SeniorityLevel.STAFF: ['staff', 'staff engineer', 'principal engineer'],
+            SeniorityLevel.LEAD: ['lead', 'tech lead', 'team lead', 'technical lead'],
+            SeniorityLevel.MANAGER: ['manager', 'engineering manager', 'product manager'],
+            SeniorityLevel.DIRECTOR: ['director', 'head of', 'vp engineering'],
+            SeniorityLevel.VP: ['vp', 'vice president', 'vp of'],
+            SeniorityLevel.C_LEVEL: ['cto', 'ceo', 'cfo', 'coo', 'chief']
+        }
+        
+        # Company size indicators
+        self.company_size_indicators = {
+            CompanySize.STARTUP: ['startup', 'early stage', 'seed', 'series a', 'small team'],
+            CompanySize.SMALL: ['small company', 'growing team', '50-200', 'medium company'],
+            CompanySize.MEDIUM: ['mid-size', 'established', '200-1000', 'growing company'],
+            CompanySize.LARGE: ['large company', 'enterprise', '1000+', 'fortune 500'],
+            CompanySize.ENTERPRISE: ['enterprise', 'fortune 500', 'global', 'multinational']
+        }
+        
+        # Job function keywords for simplified detection
+        self.job_function_keywords = {
+            "frontend_development": ['frontend', 'front-end', 'ui', 'ux', 'react', 'angular', 'vue'],
+            "backend_development": ['backend', 'api', 'server', 'database', 'microservices'],
+            "fullstack_development": ['fullstack', 'full-stack', 'full stack'],
+            "devops": ['devops', 'sre', 'infrastructure', 'deployment'],
+            "data_science": ['data', 'analytics', 'ml', 'ai', 'machine learning'],
+            "mobile_development": ['mobile', 'ios', 'android', 'react native'],
+            "quality_assurance": ['qa', 'testing', 'test', 'quality assurance'],
+            "product_management": ['product', 'product manager', 'pm'],
+            "design": ['design', 'designer', 'ux', 'ui']
+        }
+
+    async def analyze_role(self, role: str, job_description: str) -> RoleAnalysis:
+        """Perform comprehensive role analysis."""
+        try:
+            logger.info(f"Analyzing role: {role}")
             
-        Returns:
-            RoleAnalysis with detected characteristics
-        """
-        # Generate cache key
-        cache_key = self._generate_cache_key(role, job_description)
-        
-        # Check cache first
-        if cache_key in self.cache:
-            logger.debug(f"Using cached role analysis for: {role}")
-            return self.cache[cache_key]
-        
-        # Perform analysis
-        analysis = self._perform_analysis(role, job_description)
-        
-        # Cache the result
-        self.cache[cache_key] = analysis
-        
-        logger.info(f"Analyzed role '{role}': {analysis.industry.value}, {analysis.job_function.value}, {analysis.seniority_level.value}")
-        return analysis
+            # Extract skills
+            required_skills = await self._extract_skills(job_description)
+            tech_stack = await self._extract_tech_stack(job_description)
+            soft_skills = await self._extract_soft_skills(job_description)
+            
+            # Detect characteristics
+            industry = await self._detect_industry(job_description)
+            seniority_level = await self._detect_seniority(job_description)
+            company_size = await self._detect_company_size(job_description)
+            job_function = await self._detect_job_function(role, job_description)
+            experience_years = await self._extract_experience_years(job_description)
+            education_requirements = await self._extract_education_requirements(job_description)
+            certifications = await self._extract_certifications(job_description)
+            
+            analysis = RoleAnalysis(
+                primary_role=role,
+                required_skills=required_skills,
+                industry=industry,
+                seniority_level=seniority_level,
+                company_size=company_size,
+                tech_stack=tech_stack,
+                soft_skills=soft_skills,
+                job_function=job_function,
+                experience_years=experience_years,
+                education_requirements=education_requirements or [],
+                certifications=certifications or []
+            )
+            
+            logger.info(f"Role analysis completed: {industry.value}, {seniority_level.value}, {len(required_skills)} skills")
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Error in role analysis: {e}")
+            # Return default analysis
+            return RoleAnalysis(
+                primary_role=role,
+                required_skills=[],
+                industry=Industry.OTHER,
+                seniority_level=SeniorityLevel.MID,
+                company_size=CompanySize.MEDIUM,
+                tech_stack=[],
+                soft_skills=[],
+                job_function="software_development"
+            )
+
+    def _find_matching_items(self, text: str, item_dict: Dict[Any, List[str]]) -> List[str]:
+        """Generic method to find matching items in text."""
+        text_lower = text.lower()
+        matches = []
+        for category, items in item_dict.items():
+            for item in items:
+                if item in text_lower:
+                    matches.append(item)
+        return list(set(matches))
     
-    def _generate_cache_key(self, role: str, job_description: str) -> str:
-        """Generate cache key for role analysis."""
-        content = f"{role.lower()}|{job_description.lower()}"
-        return hashlib.md5(content.encode()).hexdigest()
-    
-    def _perform_analysis(self, role: str, job_description: str) -> RoleAnalysis:
-        """Perform the actual role analysis."""
-        combined_text = f"{role} {job_description}".lower()
+    async def _extract_skills(self, job_description: str) -> List[str]:
+        """Extract required skills from job description."""
+        return self._find_matching_items(job_description, self.technical_skills)
+
+    async def _extract_tech_stack(self, job_description: str) -> List[str]:
+        """Extract technology stack from job description."""
+        return self._find_matching_items(job_description, self.technical_skills)
+
+    async def _extract_soft_skills(self, job_description: str) -> List[str]:
+        """Extract soft skills from job description."""
+        return self._find_matching_items(job_description, {"soft_skills": self.soft_skills})
+
+    async def _detect_industry(self, job_description: str) -> Industry:
+        """Detect industry from job description."""
+        text_lower = job_description.lower()
         
-        # Detect industry
-        industry = self._detect_industry(combined_text)
+        for industry, keywords in self.industry_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                return industry
         
-        # Detect job function
-        job_function = self._detect_job_function(combined_text, industry)
+        return Industry.OTHER
+
+    async def _detect_seniority(self, job_description: str) -> SeniorityLevel:
+        """Detect seniority level from job description."""
+        text_lower = job_description.lower()
         
-        # Detect seniority level
-        seniority_level = self._detect_seniority_level(combined_text)
+        for seniority, indicators in self.seniority_indicators.items():
+            if any(indicator in text_lower for indicator in indicators):
+                return seniority
         
-        # Extract key skills
-        key_skills = self._extract_key_skills(combined_text, industry, job_function)
+        return SeniorityLevel.MID
+
+    async def _detect_company_size(self, job_description: str) -> CompanySize:
+        """Detect company size from job description."""
+        text_lower = job_description.lower()
         
-        # Calculate confidence score
-        confidence_score = self._calculate_confidence(industry, job_function, seniority_level, combined_text)
+        for size, indicators in self.company_size_indicators.items():
+            if any(indicator in text_lower for indicator in indicators):
+                return size
         
-        # Generate analysis hash
-        analysis_hash = self._generate_analysis_hash(industry, job_function, seniority_level, key_skills)
+        return CompanySize.MEDIUM
+
+    async def _detect_job_function(self, role: str, job_description: str) -> str:
+        """Detect job function from role and description."""
+        text_lower = f"{role} {job_description}".lower()
         
-        return RoleAnalysis(
-            industry=industry,
-            job_function=job_function,
-            seniority_level=seniority_level,
-            key_skills=key_skills,
-            confidence_score=confidence_score,
-            analysis_hash=analysis_hash
-        )
-    
-    def _detect_by_keywords(self, text: str, keyword_dict: Dict, default_value, unknown_value=None):
-        """Generic keyword-based detection method."""
-        scores = {key: sum(1 for keyword in keywords if keyword in text) 
-                  for key, keywords in keyword_dict.items()}
+        for function, keywords in self.job_function_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                return function
         
-        if not any(scores.values()):
-            return unknown_value or default_value
-        
-        return max(scores.items(), key=lambda x: x[1])[0]
-    
-    def _detect_industry(self, text: str) -> IndustryType:
-        """Detect industry using keyword matching."""
-        return self._detect_by_keywords(text, self.INDUSTRY_KEYWORDS, IndustryType.UNKNOWN)
-    
-    def _detect_job_function(self, text: str, industry: IndustryType) -> JobFunction:
-        """Detect job function using keyword matching."""
-        return self._detect_by_keywords(text, self.JOB_FUNCTION_KEYWORDS, JobFunction.UNKNOWN)
-    
-    def _detect_seniority_level(self, text: str) -> SeniorityLevel:
-        """Detect seniority level using keyword matching."""
-        return self._detect_by_keywords(text, self.SENIORITY_KEYWORDS, SeniorityLevel.MID)
-    
-    def _extract_key_skills(self, text: str, industry: IndustryType, job_function: JobFunction) -> List[str]:
-        """Extract key skills using functional approach."""
-        # Define skill sources
-        technical_skills = [
-            "python", "javascript", "java", "react", "node", "sql", "aws", "azure",
-            "docker", "kubernetes", "git", "linux", "api", "database", "machine learning",
-            "data analysis", "project management", "agile", "scrum"
+        return "software_development"
+
+    async def _extract_experience_years(self, job_description: str) -> Optional[int]:
+        """Extract required experience years from job description."""
+        # Look for patterns like "3-5 years", "5+ years", etc.
+        patterns = [
+            r'(\d+)[\+\-]?\s*years?',
+            r'(\d+)\s*to\s*(\d+)\s*years?',
+            r'minimum\s*(\d+)\s*years?'
         ]
         
-        industry_skills = {
-            IndustryType.HEALTHCARE: ["patient care", "medical terminology", "clinical", "hipaa"],
-            IndustryType.FINANCE: ["financial modeling", "risk management", "compliance", "regulatory"],
-            IndustryType.SALES_MARKETING: ["crm", "lead generation", "digital marketing", "seo"]
-        }
+        for pattern in patterns:
+            matches = re.findall(pattern, job_description.lower())
+            if matches:
+                if isinstance(matches[0], tuple):
+                    # Range like "3-5 years"
+                    return int(matches[0][1])  # Take the higher number
+                else:
+                    # Single number
+                    return int(matches[0])
         
-        function_skills = {
-            JobFunction.DATA_SCIENCE: ["statistics", "pandas", "numpy", "tensorflow", "pytorch"],
-            JobFunction.DEVOPS: ["ci/cd", "infrastructure", "monitoring", "automation"],
-            JobFunction.MANAGEMENT: ["leadership", "team management", "strategic planning"]
-        }
+        return None
+
+    async def _extract_education_requirements(self, job_description: str) -> List[str]:
+        """Extract education requirements from job description."""
+        education = []
+        text_lower = job_description.lower()
         
-        # Combine all skill sources functionally
-        skill_sources = [
-            technical_skills,
-            industry_skills.get(industry, []),
-            function_skills.get(job_function, [])
+        if 'bachelor' in text_lower or 'bs' in text_lower or 'ba' in text_lower:
+            education.append('bachelor')
+        if 'master' in text_lower or 'ms' in text_lower or 'ma' in text_lower:
+            education.append('master')
+        if 'phd' in text_lower or 'doctorate' in text_lower:
+            education.append('phd')
+        if 'computer science' in text_lower or 'cs' in text_lower:
+            education.append('computer_science')
+        if 'engineering' in text_lower:
+            education.append('engineering')
+        
+        return education
+
+    async def _extract_certifications(self, job_description: str) -> List[str]:
+        """Extract required certifications from job description."""
+        certifications = []
+        text_lower = job_description.lower()
+        
+        cert_keywords = [
+            'aws certified', 'azure certified', 'gcp certified', 'pmp', 'scrum master',
+            'certified', 'certification', 'cissp', 'itil', 'six sigma'
         ]
         
-        all_skills = [skill for skills in skill_sources for skill in skills]
-        return [skill for skill in all_skills if skill in text][:10]
-    
-    def _calculate_confidence(self, industry: IndustryType, job_function: JobFunction, 
-                            seniority_level: SeniorityLevel, text: str) -> float:
-        """Calculate confidence score for the analysis."""
-        confidence = 0.0
+        for cert in cert_keywords:
+            if cert in text_lower:
+                certifications.append(cert)
         
-        # Base confidence for each detection
-        if industry != IndustryType.UNKNOWN:
-            confidence += 0.4
-        if job_function != JobFunction.UNKNOWN:
-            confidence += 0.3
-        if seniority_level != SeniorityLevel.UNKNOWN:
-            confidence += 0.2
+        return certifications
+
+    def get_question_categories_for_role(self, role_analysis: RoleAnalysis) -> List[str]:
+        """Get relevant question categories for a role analysis."""
+        categories = ['technical', 'behavioral']
         
-        # Bonus for text length (more context = higher confidence)
-        if len(text) > 500:
-            confidence += 0.1
+        # Add role-specific categories
+        if role_analysis.seniority_level in [SeniorityLevel.LEAD, SeniorityLevel.MANAGER, SeniorityLevel.DIRECTOR]:
+            categories.append('leadership')
         
-        return min(confidence, 1.0)
-    
-    def _generate_analysis_hash(self, industry: IndustryType, job_function: JobFunction,
-                              seniority_level: SeniorityLevel, key_skills: List[str]) -> str:
-        """Generate hash for the analysis result."""
-        content = f"{industry.value}|{job_function.value}|{seniority_level.value}|{','.join(sorted(key_skills))}"
-        return hashlib.md5(content.encode()).hexdigest()
-    
-    def get_analysis_summary(self, analysis: RoleAnalysis) -> Dict[str, Any]:
-        """Get a summary of the role analysis for logging/debugging."""
-        return {
-            "industry": analysis.industry.value,
-            "job_function": analysis.job_function.value,
-            "seniority_level": analysis.seniority_level.value,
-            "key_skills": analysis.key_skills,
-            "confidence_score": analysis.confidence_score,
-            "analysis_hash": analysis.analysis_hash
-        }
+        if role_analysis.seniority_level in [SeniorityLevel.SENIOR, SeniorityLevel.STAFF, SeniorityLevel.PRINCIPAL]:
+            categories.append('system_design')
+        
+        if role_analysis.job_function in ['backend_development', 'fullstack_development']:
+            categories.append('system_design')
+        
+        if role_analysis.job_function == 'data_science':
+            categories.append('data_analysis')
+        
+        return categories
+
+    def get_difficulty_levels_for_role(self, role_analysis: RoleAnalysis) -> List[str]:
+        """Get appropriate difficulty levels for a role analysis."""
+        if role_analysis.seniority_level == SeniorityLevel.JUNIOR:
+            return ['easy', 'medium']
+        elif role_analysis.seniority_level in [SeniorityLevel.MID, SeniorityLevel.SENIOR]:
+            return ['easy', 'medium', 'hard']
+        else:  # Senior+ roles
+            return ['medium', 'hard']
