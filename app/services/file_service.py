@@ -3,7 +3,7 @@ import uuid
 import shutil
 import hashlib
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, BinaryIO
+from typing import Optional, List, Dict, Any, BinaryIO, Union
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
@@ -11,34 +11,61 @@ from app.models.schemas import FileType, FileStatus, FileUploadResponse, FileInf
 from app.utils.file_validator import FileValidator
 from app.config import get_settings
 import logging
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class FileService:
-    """Service for handling file uploads, storage, and management."""
+    """Service for handling file uploads, storage, and management with modern pathlib operations."""
     
     def __init__(self, db: Session):
         self.db = db
         self.upload_dir = Path(settings.FILE_UPLOAD_DIR)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create subdirectories for different file types
-        for file_type in FileType:
-            (self.upload_dir / file_type.value).mkdir(exist_ok=True)
+        # Create subdirectories for different file types using pathlib
+        self._create_type_directories()
+        
+        # File operation factory for different file types
+        self.file_operations = FileOperationFactory()
     
-    def generate_file_id(self) -> str:
+    def _create_type_directories(self):
+        """Create subdirectories for different file types using pathlib."""
+        for file_type in FileType:
+            type_dir = self.upload_dir / file_type.value
+            type_dir.mkdir(exist_ok=True)
+    
+    @staticmethod
+    def generate_file_id() -> str:
         """Generate a unique file ID."""
         return str(uuid.uuid4())
     
-    def calculate_file_hash(self, file_content: bytes) -> str:
+    @staticmethod
+    def calculate_file_hash(file_content: bytes) -> str:
         """Calculate SHA-256 hash of file content."""
         return hashlib.sha256(file_content).hexdigest()
     
     def get_file_path(self, file_id: str, file_type: FileType, filename: str) -> Path:
-        """Get the full file path for a given file."""
+        """Get the full file path for a given file using pathlib operations."""
         safe_filename = FileValidator.generate_safe_filename(filename, file_id)
         return self.upload_dir / file_type.value / safe_filename
+    
+    @lru_cache(maxsize=128)
+    def get_file_info(self, file_path: Union[str, Path]) -> Dict[str, Any]:
+        """Get file information with caching."""
+        path = Path(file_path)
+        if not path.exists():
+            return {}
+        
+        stat = path.stat()
+        return {
+            "size": stat.st_size,
+            "created": datetime.fromtimestamp(stat.st_ctime),
+            "modified": datetime.fromtimestamp(stat.st_mtime),
+            "is_file": path.is_file(),
+            "is_dir": path.is_dir()
+        }
     
     def save_file(self, file: UploadFile, file_type: FileType, file_id: str) -> Dict[str, Any]:
         """Save uploaded file to disk."""
@@ -273,3 +300,60 @@ class FileService:
             stats["newest_file"] = all_files[-1]["created_at"]
         
         return stats
+
+
+class FileOperationFactory:
+    """Factory for file operations with type-specific handling."""
+    
+    def __init__(self):
+        self.operations = {
+            FileType.AUDIO: self._handle_audio_file,
+            FileType.VIDEO: self._handle_video_file,
+            FileType.DOCUMENT: self._handle_document_file,
+            FileType.IMAGE: self._handle_image_file
+        }
+    
+    def process_file(self, file_type: FileType, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Process file based on type using factory pattern."""
+        handler = self.operations.get(file_type, self._handle_generic_file)
+        return handler(file_path, **kwargs)
+    
+    def _handle_audio_file(self, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Handle audio file operations."""
+        return {
+            "type": "audio",
+            "operations": ["transcribe", "analyze_quality", "extract_metadata"],
+            "path": str(file_path)
+        }
+    
+    def _handle_video_file(self, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Handle video file operations."""
+        return {
+            "type": "video",
+            "operations": ["extract_audio", "analyze_frames", "compress"],
+            "path": str(file_path)
+        }
+    
+    def _handle_document_file(self, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Handle document file operations."""
+        return {
+            "type": "document",
+            "operations": ["extract_text", "convert_format", "validate"],
+            "path": str(file_path)
+        }
+    
+    def _handle_image_file(self, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Handle image file operations."""
+        return {
+            "type": "image",
+            "operations": ["resize", "optimize", "extract_metadata"],
+            "path": str(file_path)
+        }
+    
+    def _handle_generic_file(self, file_path: Path, **kwargs) -> Dict[str, Any]:
+        """Handle generic file operations."""
+        return {
+            "type": "generic",
+            "operations": ["validate", "store", "hash"],
+            "path": str(file_path)
+        }

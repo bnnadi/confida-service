@@ -455,8 +455,19 @@ class QuestionBankService:
         return self.difficulty_engine.determine_difficulty(question_text, role_analysis)
     
     def _categorize_question(self, question_text: str) -> str:
-        """Categorize question using rule engine."""
-        return self.category_engine.categorize_question(question_text)
+        """Categorize question using data-driven configuration."""
+        scores = {}
+        text_lower = question_text.lower()
+        
+        for category, config in self.CATEGORIZATION_CONFIG.items():
+            score = 0
+            for keyword in config["keywords"]:
+                if keyword in text_lower:
+                    score += config["weight"]
+            scores[category] = score
+        
+        # Return category with highest score, or technical as default
+        return max(scores, key=scores.get) if any(scores.values()) else "technical"
     
     def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
         """Generic keyword-based categorization."""

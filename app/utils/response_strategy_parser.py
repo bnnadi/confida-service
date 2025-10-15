@@ -5,8 +5,10 @@ Replaces sequential strategy execution with weighted, prioritized parsing.
 
 import json
 import re
+import yaml
 from typing import List, Optional, Dict, Any, Tuple, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.logger import get_logger
 from app.utils.base_strategy_parser import BaseStrategyParser, ParsingStrategy, PatternMatchingMixin
@@ -14,33 +16,85 @@ from app.utils.base_strategy_parser import BaseStrategyParser, ParsingStrategy, 
 logger = get_logger(__name__)
 
 class ResponseStrategyParser(BaseStrategyParser, PatternMatchingMixin):
-    """Parser using weighted strategies for robust response parsing."""
+    """Parser using configuration-driven strategies for robust response parsing."""
     
-    def __init__(self):
-        # Strategy configuration with defaults
-        strategy_configs = [
-            ("json_format", self._parse_json_format, 1.0, 3),
-            ("numbered_list", self._parse_numbered_list, 0.8, 3),
-            ("bullet_list", self._parse_bullet_list, 0.6, 3),
-            ("line_by_line", self._parse_line_by_line, 0.4, 2)
-        ]
+    def __init__(self, config_path: Optional[str] = None):
+        # Load configuration from file or use defaults
+        self.config = self._load_config(config_path)
         
-        strategies = [
-            ParsingStrategy(
-                name=name,
-                func=func,
-                weight=weight,
-                min_results=min_results,
-                required=False
-            )
-            for name, func, weight, min_results in strategy_configs
-        ]
+        # Build strategies from configuration
+        strategies = self._build_strategies_from_config()
         
         super().__init__(strategies, self._get_fallback_questions)
     
+    def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+        """Load strategy configuration from YAML file or use defaults."""
+        if config_path and Path(config_path).exists():
+            try:
+                with open(config_path, 'r') as f:
+                    return yaml.safe_load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load config from {config_path}: {e}")
+        
+        # Default configuration
+        return {
+            "strategies": {
+                "json_format": {
+                    "weight": 1.0,
+                    "min_results": 3,
+                    "required": False,
+                    "patterns": ["json", "\{[^}]+\}"]
+                },
+                "numbered_list": {
+                    "weight": 0.8,
+                    "min_results": 3,
+                    "required": False,
+                    "patterns": ["^\d+\.", "^\d+\)"]
+                },
+                "bullet_list": {
+                    "weight": 0.6,
+                    "min_results": 3,
+                    "required": False,
+                    "patterns": ["^[-*•]", "^\s*[-*•]"]
+                },
+                "line_by_line": {
+                    "weight": 0.4,
+                    "min_results": 2,
+                    "required": False,
+                    "patterns": ["^[A-Z].*\?", "^[^\n]+\?"]
+                }
+            },
+            "fallback": {
+                "enabled": True,
+                "min_questions": 3
+            }
+        }
+    
+    def _build_strategies_from_config(self) -> List[ParsingStrategy]:
+        """Build parsing strategies from configuration."""
+        strategies = []
+        
+        for strategy_name, config in self.config["strategies"].items():
+            # Get the corresponding parsing method
+            method = getattr(self, f'_parse_{strategy_name}', None)
+            if method:
+                strategy = ParsingStrategy(
+                    name=strategy_name,
+                    func=method,
+                    weight=config["weight"],
+                    min_results=config["min_results"],
+                    required=config.get("required", False)
+                )
+                strategies.append(strategy)
+            else:
+                logger.warning(f"No parsing method found for strategy: {strategy_name}")
+        
+        return strategies
+    
     def parse_questions_from_response(self, response_text: str) -> List[str]:
-        """Parse questions using weighted strategies."""
-        return self.parse_with_strategies(response_text, min_results=3)
+        """Parse questions using configuration-driven strategies."""
+        min_results = self.config.get("fallback", {}).get("min_questions", 3)
+        return self.parse_with_strategies(response_text, min_results=min_results)
     
     def _parse_json_format(self, response_text: str) -> List[str]:
         """Parse JSON format responses."""

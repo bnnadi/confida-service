@@ -18,24 +18,57 @@ class RoleAnalysisService:
         # DynamicPromptService will be imported when needed to avoid circular imports
         self.dynamic_prompt_service = None
         
-        # Common skill patterns
-        self.technical_skills = {
-            'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'php', 'ruby'],
-            'databases': ['sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'cassandra'],
-            'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'cloudformation'],
-            'frameworks': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express', 'fastapi'],
-            'tools': ['git', 'jenkins', 'ci/cd', 'agile', 'scrum', 'jira', 'confluence'],
-            'ai_ml': ['machine learning', 'deep learning', 'tensorflow', 'pytorch', 'nlp', 'computer vision']
+        # Centralized extraction patterns for unified processing
+        self.extraction_patterns = {
+            'required_skills': {
+                'patterns': [
+                    r'(?:proficient in|experience with|knowledge of|skills in)\s+([\w\s+]+)',
+                    r'(?:required|must have|should have)\s+([\w\s+]+)\s+(?:experience|knowledge|skills)'
+                ],
+                'keywords': {
+                    'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'php', 'ruby'],
+                    'databases': ['sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'cassandra'],
+                    'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'cloudformation'],
+                    'frameworks': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express', 'fastapi'],
+                    'tools': ['git', 'jenkins', 'ci/cd', 'agile', 'scrum', 'jira', 'confluence'],
+                    'ai_ml': ['machine learning', 'deep learning', 'tensorflow', 'pytorch', 'nlp', 'computer vision']
+                },
+                'default': []
+            },
+            'tech_stack': {
+                'patterns': [
+                    r'(?:tech stack|technologies|tools)\s*:?\s*([\w\s,]+)',
+                    r'(?:using|working with|familiar with)\s+([\w\s,]+)'
+                ],
+                'keywords': {},
+                'default': []
+            },
+            'soft_skills': {
+                'patterns': [
+                    r'(?:soft skills|interpersonal|communication)\s*:?\s*([\w\s,]+)',
+                    r'(?:leadership|teamwork|problem solving|communication)'
+                ],
+                'keywords': {
+                    'soft_skills': [
+                        'leadership', 'communication', 'teamwork', 'problem solving', 'critical thinking',
+                        'time management', 'adaptability', 'creativity', 'emotional intelligence',
+                        'mentoring', 'collaboration', 'presentation', 'negotiation'
+                    ]
+                },
+                'default': []
+            },
+            'experience_years': {
+                'patterns': [
+                    r'(\d+)[\+\-]?\s*years?',
+                    r'(\d+)\s*to\s*(\d+)\s*years?',
+                    r'minimum\s*(\d+)\s*years?'
+                ],
+                'default': 0
+            }
         }
         
-        self.soft_skills = [
-            'leadership', 'communication', 'teamwork', 'problem solving', 'critical thinking',
-            'time management', 'adaptability', 'creativity', 'emotional intelligence',
-            'mentoring', 'collaboration', 'presentation', 'negotiation'
-        ]
-        
-        # Industry keywords
-        self.industry_keywords = {
+        # Industry detection patterns
+        self.industry_patterns = {
             Industry.TECHNOLOGY: ['software', 'tech', 'startup', 'saas', 'platform', 'api', 'development'],
             Industry.FINANCE: ['banking', 'finance', 'fintech', 'investment', 'trading', 'risk', 'compliance'],
             Industry.HEALTHCARE: ['healthcare', 'medical', 'pharma', 'clinical', 'patient', 'health'],
@@ -84,20 +117,20 @@ class RoleAnalysisService:
         }
 
     async def analyze_role(self, role: str, job_description: str) -> RoleAnalysis:
-        """Perform comprehensive role analysis with parallel execution."""
+        """Perform comprehensive role analysis with unified pattern-based extraction."""
         try:
             logger.info(f"Analyzing role: {role}")
             
-            # Execute all extractions in parallel
+            # Execute pattern-based extractions in parallel
             extraction_tasks = [
-                self._extract_skills(job_description),
-                self._extract_tech_stack(job_description),
-                self._extract_soft_skills(job_description),
+                self._extract_with_pattern('required_skills', job_description),
+                self._extract_with_pattern('tech_stack', job_description),
+                self._extract_with_pattern('soft_skills', job_description),
+                self._extract_with_pattern('experience_years', job_description),
                 self._detect_industry(job_description),
                 self._detect_seniority(job_description),
                 self._detect_company_size(job_description),
                 self._detect_job_function(role, job_description),
-                self._extract_experience_years(job_description),
                 self._extract_education_requirements(job_description),
                 self._extract_certifications(job_description)
             ]
@@ -109,6 +142,41 @@ class RoleAnalysisService:
             logger.error(f"Error in role analysis: {e}")
             return self._get_default_analysis(role)
     
+    async def _extract_with_pattern(self, pattern_name: str, text: str) -> Any:
+        """Generic pattern-based extraction using unified logic."""
+        pattern_config = self.extraction_patterns.get(pattern_name)
+        if not pattern_config:
+            return pattern_config.get('default', None)
+        
+        text_lower = text.lower()
+        
+        # Try regex patterns first
+        for pattern in pattern_config.get('patterns', []):
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                if pattern_name == 'experience_years':
+                    # Handle experience years extraction
+                    if isinstance(matches[0], tuple):
+                        return int(matches[0][1])  # Take higher number from range
+                    else:
+                        return int(matches[0])
+                else:
+                    # Handle list extractions
+                    return [match.strip() for match in matches if match.strip()]
+        
+        # Fall back to keyword matching
+        keywords = pattern_config.get('keywords', {})
+        if keywords:
+            found_items = []
+            for category, keyword_list in keywords.items():
+                for keyword in keyword_list:
+                    if keyword in text_lower:
+                        found_items.append(keyword)
+            if found_items:
+                return found_items
+        
+        return pattern_config.get('default', None)
+    
     def _build_role_analysis(self, role: str, results: List[Any]) -> RoleAnalysis:
         """Build RoleAnalysis from parallel extraction results."""
         # Define extraction mapping with defaults
@@ -116,11 +184,11 @@ class RoleAnalysisService:
             ('required_skills', []),
             ('tech_stack', []),
             ('soft_skills', []),
+            ('experience_years', 0),
             ('industry', Industry.OTHER),
             ('seniority_level', SeniorityLevel.MID),
             ('company_size', CompanySize.MEDIUM),
             ('job_function', "software_development"),
-            ('experience_years', 0),
             ('education_requirements', []),
             ('certifications', [])
         ]
@@ -160,23 +228,12 @@ class RoleAnalysisService:
         """Generic method to find matching items in text."""
         return ValidationMixin.find_matching_items(text, item_dict)
     
-    async def _extract_skills(self, job_description: str) -> List[str]:
-        """Extract required skills from job description."""
-        return self._find_matching_items(job_description, self.technical_skills)
-
-    async def _extract_tech_stack(self, job_description: str) -> List[str]:
-        """Extract technology stack from job description."""
-        return self._find_matching_items(job_description, self.technical_skills)
-
-    async def _extract_soft_skills(self, job_description: str) -> List[str]:
-        """Extract soft skills from job description."""
-        return self._find_matching_items(job_description, {"soft_skills": self.soft_skills})
 
     async def _detect_industry(self, job_description: str) -> Industry:
-        """Detect industry from job description."""
+        """Detect industry from job description using pattern matching."""
         text_lower = job_description.lower()
         
-        for industry, keywords in self.industry_keywords.items():
+        for industry, keywords in self.industry_patterns.items():
             if any(keyword in text_lower for keyword in keywords):
                 return industry
         

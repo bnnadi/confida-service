@@ -4,9 +4,11 @@ Eliminates massive code duplication in vector service methods.
 """
 
 import uuid
-from typing import Dict, Any, List, Optional
+import inspect
+from typing import Dict, Any, List, Optional, Type
 from qdrant_client.http.models import PointStruct, Filter, FieldCondition, MatchValue
 from app.utils.logger import get_logger
+from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -17,13 +19,16 @@ class VectorStorageEngine:
         self.qdrant = qdrant_client
         self.embedding_service = embedding_service
         
-        # Type-specific metadata field mappings
-        self.metadata_mappings = {
-            "answer": {"user_id", "question_id", "session_id", "score"},
-            "user_pattern": {"user_id", "skill_level", "performance_trend", "learning_style"},
-            "job_description": {"role"},
-            "question": {"category", "difficulty_level", "tags"},
-            "session": {"user_id", "session_type", "status"}
+        # Auto-generate metadata mappings from Pydantic models
+        self.metadata_mappings = self._generate_metadata_mappings()
+        
+        # Content type to model mapping for auto-generation
+        self.content_models = {
+            "answer": self._get_answer_model(),
+            "user_pattern": self._get_user_pattern_model(),
+            "job_description": self._get_job_description_model(),
+            "question": self._get_question_model(),
+            "session": self._get_session_model()
         }
     
     async def store_content(self, content: str, collection_name: str, 
@@ -47,6 +52,72 @@ class VectorStorageEngine:
             
             logger.info(f"✅ Stored {content_type} in {collection_name} (ID: {point_id})")
             return point_id
+    
+    def _generate_metadata_mappings(self) -> Dict[str, set]:
+        """Auto-generate metadata mappings from Pydantic models."""
+        mappings = {}
+        
+        for content_type, model_class in self.content_models.items():
+            if model_class and hasattr(model_class, '__fields__'):
+                # Extract field names from Pydantic model
+                field_names = set(model_class.__fields__.keys())
+                mappings[content_type] = field_names
+            else:
+                # Fallback to manual mappings for non-Pydantic models
+                mappings[content_type] = self._get_fallback_mappings(content_type)
+        
+        return mappings
+    
+    def _get_fallback_mappings(self, content_type: str) -> set:
+        """Fallback mappings for content types without Pydantic models."""
+        fallback_mappings = {
+            "answer": {"user_id", "question_id", "session_id", "score"},
+            "user_pattern": {"user_id", "skill_level", "performance_trend", "learning_style"},
+            "job_description": {"role"},
+            "question": {"category", "difficulty_level", "tags"},
+            "session": {"user_id", "session_type", "status"}
+        }
+        return fallback_mappings.get(content_type, set())
+    
+    def _get_answer_model(self) -> Optional[Type[BaseModel]]:
+        """Get Answer model class for auto-generation."""
+        try:
+            from app.models.schemas import Answer
+            return Answer
+        except ImportError:
+            return None
+    
+    def _get_user_pattern_model(self) -> Optional[Type[BaseModel]]:
+        """Get UserPattern model class for auto-generation."""
+        try:
+            from app.models.schemas import UserPattern
+            return UserPattern
+        except ImportError:
+            return None
+    
+    def _get_job_description_model(self) -> Optional[Type[BaseModel]]:
+        """Get JobDescription model class for auto-generation."""
+        try:
+            from app.models.schemas import JobDescription
+            return JobDescription
+        except ImportError:
+            return None
+    
+    def _get_question_model(self) -> Optional[Type[BaseModel]]:
+        """Get Question model class for auto-generation."""
+        try:
+            from app.models.schemas import Question
+            return Question
+        except ImportError:
+            return None
+    
+    def _get_session_model(self) -> Optional[Type[BaseModel]]:
+        """Get Session model class for auto-generation."""
+        try:
+            from app.models.schemas import Session
+            return Session
+        except ImportError:
+            return None
             
         except Exception as e:
             logger.error(f"❌ Failed to store {content_type}: {e}")
