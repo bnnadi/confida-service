@@ -122,6 +122,26 @@ class Answer(Base):
     def __repr__(self):
         return f"<Answer(id={self.id}, question_id={self.question_id})>"
 
+class Scenario(Base):
+    """Practice scenario model for managing interview practice scenarios."""
+    __tablename__ = "scenarios"
+    
+    id = Column(String(100), primary_key=True)  # Use string ID for easier scenario identification
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True, index=True)
+    difficulty_level = Column(String(20), default="medium", nullable=False, index=True)
+    compatible_roles = Column(JSONB, nullable=True)  # List of compatible roles
+    question_ids = Column(JSONB, nullable=True)  # References to questions in the global question bank
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    usage_count = Column(Integer, default=0, nullable=False)
+    average_rating = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    def __repr__(self):
+        return f"<Scenario(id={self.id}, name={self.name}, category={self.category})>"
+
 class UserPerformance(Base):
     """User performance tracking model for analytics."""
     __tablename__ = "user_performance"
