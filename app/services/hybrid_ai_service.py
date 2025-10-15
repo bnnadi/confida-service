@@ -15,9 +15,11 @@ from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
 from app.utils.fallback_responses import FallbackResponses
 from app.utils.cache import cached
+from app.utils.metrics import metrics
 from app.utils.logger import get_logger
 from app.exceptions import ServiceUnavailableError
 from app.config import get_settings
+import time
 
 logger = get_logger(__name__)
 
@@ -73,33 +75,76 @@ class HybridAIService:
     def generate_interview_questions(self, role: str, job_description: str, 
                                    preferred_service: Optional[str] = None) -> ParseJDResponse:
         """Generate questions using dynamic prompts and role analysis."""
+        start_time = time.time()
         
-        # Perform role analysis
         try:
-            analysis = self.role_analysis_service.analyze_role(role, job_description)
-            logger.info(f"Role analysis completed: {analysis.industry.value}, {analysis.job_function.value}, {analysis.seniority_level.value}")
-        except Exception as e:
-            logger.error(f"Role analysis failed: {e}")
-            # Fallback to original method
-            return self._generate_interview_questions_fallback(role, job_description, preferred_service)
-        
-        # Try question bank first with role analysis
-        if result := self._try_question_bank_with_analysis(role, job_description, analysis):
-            return result
-        
-        # Generate dynamic prompt based on role analysis
-        try:
-            dynamic_prompt = self.dynamic_prompt_service.generate_question_prompt(
-                role, job_description, analysis
+            # Perform role analysis
+            try:
+                analysis = self.role_analysis_service.analyze_role(role, job_description)
+                logger.info(f"Role analysis completed: {analysis.industry.value}, {analysis.job_function.value}, {analysis.seniority_level.value}")
+            except Exception as e:
+                logger.error(f"Role analysis failed: {e}")
+                # Fallback to original method
+                result = self._generate_interview_questions_fallback(role, job_description, preferred_service)
+                # Record metrics for fallback
+                duration = time.time() - start_time
+                metrics.record_ai_service_request(
+                    service="fallback",
+                    operation="generate_interview_questions",
+                    status="success",
+                    duration=duration
+                )
+                return result
+            
+            # Try question bank first with role analysis
+            if result := self._try_question_bank_with_analysis(role, job_description, analysis):
+                # Record metrics for question bank
+                duration = time.time() - start_time
+                metrics.record_ai_service_request(
+                    service="question_bank",
+                    operation="generate_interview_questions",
+                    status="success",
+                    duration=duration
+                )
+                return result
+            
+            # Generate dynamic prompt based on role analysis
+            try:
+                dynamic_prompt = self.dynamic_prompt_service.generate_question_prompt(
+                    role, job_description, analysis
+                )
+                logger.info(f"Generated dynamic prompt for {analysis.industry.value} {analysis.job_function.value}")
+            except Exception as e:
+                logger.error(f"Dynamic prompt generation failed: {e}")
+                # Fallback to template prompt
+                dynamic_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
+            
+            # Try AI services with dynamic prompt
+            result = self._try_ai_services_with_dynamic_prompt("generate_interview_questions", role, job_description, dynamic_prompt, analysis, preferred_service)
+            
+            # Record metrics for AI service
+            duration = time.time() - start_time
+            service_name = preferred_service or "auto"
+            metrics.record_ai_service_request(
+                service=service_name,
+                operation="generate_interview_questions",
+                status="success",
+                duration=duration
             )
-            logger.info(f"Generated dynamic prompt for {analysis.industry.value} {analysis.job_function.value}")
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Dynamic prompt generation failed: {e}")
-            # Fallback to template prompt
-            dynamic_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
-        
-        # Try AI services with dynamic prompt
-        return self._try_ai_services_with_dynamic_prompt("generate_interview_questions", role, job_description, dynamic_prompt, analysis, preferred_service)
+            # Record error metrics
+            duration = time.time() - start_time
+            service_name = preferred_service or "auto"
+            metrics.record_ai_service_request(
+                service=service_name,
+                operation="generate_interview_questions",
+                status="error",
+                duration=duration
+            )
+            raise
     
     def _generate_interview_questions_fallback(self, role: str, job_description: str, 
                                              preferred_service: Optional[str] = None) -> ParseJDResponse:
@@ -115,7 +160,34 @@ class HybridAIService:
     def analyze_answer(self, job_description: str, question: str, answer: str,
                       preferred_service: Optional[str] = None) -> AnalyzeAnswerResponse:
         """Analyze answer using the best available service."""
-        return self._try_ai_services("analyze_answer", job_description, question, answer, preferred_service)
+        start_time = time.time()
+        
+        try:
+            result = self._try_ai_services("analyze_answer", job_description, question, answer, preferred_service)
+            
+            # Record metrics for AI service
+            duration = time.time() - start_time
+            service_name = preferred_service or "auto"
+            metrics.record_ai_service_request(
+                service=service_name,
+                operation="analyze_answer",
+                status="success",
+                duration=duration
+            )
+            
+            return result
+            
+        except Exception as e:
+            # Record error metrics
+            duration = time.time() - start_time
+            service_name = preferred_service or "auto"
+            metrics.record_ai_service_request(
+                service=service_name,
+                operation="analyze_answer",
+                status="error",
+                duration=duration
+            )
+            raise
     
     def _get_services_to_try(self, preferred_service: Optional[str] = None) -> List[AIServiceType]:
         """Get services to try using functional approach."""
