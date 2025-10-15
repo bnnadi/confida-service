@@ -16,25 +16,26 @@ class ResponseParsers:
     
     @staticmethod
     def parse_questions_from_response(response_text: str) -> List[str]:
-        """Parse questions from AI response - extracted from multiple files."""
+        """Parse questions from AI response using functional approach."""
         lines = [line.strip() for line in response_text.split('\n') if line.strip()]
-        questions = []
         
-        for line in lines:
-            # Remove numbering if present
-            if '. ' in line:
-                question = line.split('. ', 1)[-1]
-            elif ') ' in line:
-                question = line.split(') ', 1)[-1]
-            else:
-                question = line
+        def extract_question(line: str) -> Optional[str]:
+            """Extract question from line using pattern matching."""
+            patterns = [
+                (r'^\d+\.\s+(.+)$', lambda m: m.group(1)),  # "1. Question"
+                (r'^\(\d+\)\s+(.+)$', lambda m: m.group(1)),  # "(1) Question"
+                (r'^(.+)$', lambda m: m.group(1))  # Plain question
+            ]
             
-            # Clean up the question
-            question = question.strip()
-            if question and not question.startswith(('Here', 'These')):
-                questions.append(question)
+            for pattern, extractor in patterns:
+                match = re.match(pattern, line)
+                if match:
+                    question = extractor(match).strip()
+                    if question and not question.startswith(('Here', 'These')):
+                        return question
+            return None
         
-        # Limit to 10 questions
+        questions = [q for q in map(extract_question, lines) if q]
         return questions[:10]
     
     @staticmethod
