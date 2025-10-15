@@ -1,358 +1,380 @@
 """
-Async database operations utilities.
+Async Database Operations for Question Bank and Session Management.
 
-This module provides common async database operations and utilities
-for working with async SQLAlchemy sessions.
+This module provides async database operations for the question bank system,
+enabling concurrent operations and improved performance.
 """
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func, text
-from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.exc import SQLAlchemyError
-from app.utils.logger import get_logger
 import asyncio
+import uuid
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
+from sqlalchemy import select, update, insert, delete, and_, or_, func, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from app.database.models import Question, SessionQuestion, InterviewSession, User, Answer
+from app.database.async_connection import get_async_db_connection
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-T = TypeVar('T')
 
 class AsyncDatabaseOperations:
-    """Async database operations utility class."""
+    """Async database operations for question bank and session management."""
     
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self, db_session: Optional[AsyncSession] = None):
+        self.db_session = db_session
     
-    async def _execute_with_transaction(self, operation: Callable, *args, **kwargs):
-        """Generic database operation with transaction handling."""
-        try:
-            result = await operation(*args, **kwargs)
-            await self.session.commit()
-            return result
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Database operation failed: {e}")
-            raise
-    
-    async def create(self, model: Type[T], **kwargs) -> T:
+    async def create(self, model_class, **kwargs):
         """Create a new record asynchronously."""
-        async def _create_operation():
-            instance = model(**kwargs)
-            self.session.add(instance)
-            await self.session.flush()  # Get ID without committing
-            await self.session.refresh(instance)
-            logger.debug(f"✅ Created {model.__name__} record: {instance.id}")
+        if self.db_session:
+            instance = model_class(**kwargs)
+            self.db_session.add(instance)
+            await self.db_session.flush()
             return instance
-        
-        return await self._execute_with_transaction(_create_operation)
+        else:
+            # Use direct database connection
+            async with get_async_db_connection() as conn:
+                # This would need to be implemented with raw SQL
+                # For now, we'll use the session-based approach
+                pass
     
-    async def get_by_id(self, model: Type[T], record_id: Any) -> Optional[T]:
+    async def get_by_id(self, model_class, record_id):
         """Get a record by ID asynchronously."""
+        if not self.db_session:
+            return None
+        
         try:
-            result = await self.session.execute(
-                select(model).where(model.id == record_id)
-            )
+            query = select(model_class).where(model_class.id == record_id)
+            result = await self.db_session.execute(query)
             return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error getting {model.__name__} by ID {record_id}: {e}")
-            raise
+        except Exception as e:
+            logger.error(f"Error getting {model_class.__name__} by ID {record_id}: {e}")
+            return None
     
-    async def get_by_field(self, model: Type[T], field_name: str, field_value: Any) -> Optional[T]:
-        """Get a record by field value asynchronously."""
+    async def get_all(self, model_class, limit: int = 100, offset: int = 0):
+        """Get all records with pagination."""
+        if not self.db_session:
+            return []
+        
         try:
-            field = getattr(model, field_name)
-            result = await self.session.execute(
-                select(model).where(field == field_value)
-            )
-            return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error getting {model.__name__} by {field_name}: {e}")
-            raise
-    
-    async def get_all(
-        self, 
-        model: Type[T], 
-        limit: Optional[int] = None, 
-        offset: Optional[int] = None,
-        order_by: Optional[str] = None,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[T]:
-        """Get all records with optional filtering and pagination."""
-        try:
-            query = select(model)
-            
-            # Apply filters
-            if filters:
-                for field_name, field_value in filters.items():
-                    if hasattr(model, field_name):
-                        field = getattr(model, field_name)
-                        query = query.where(field == field_value)
-            
-            # Apply ordering
-            if order_by and hasattr(model, order_by):
-                order_field = getattr(model, order_by)
-                query = query.order_by(order_field)
-            
-            # Apply pagination
-            if offset:
-                query = query.offset(offset)
-            if limit:
-                query = query.limit(limit)
-            
-            result = await self.session.execute(query)
+            query = select(model_class).offset(offset).limit(limit)
+            result = await self.db_session.execute(query)
             return result.scalars().all()
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error getting all {model.__name__}: {e}")
-            raise
+        except Exception as e:
+            logger.error(f"Error getting all {model_class.__name__}: {e}")
+            return []
     
-    async def update_by_id(self, model: Type[T], record_id: Any, **kwargs) -> Optional[T]:
-        """Update a record by ID asynchronously."""
+    async def update_by_id(self, model_class, record_id: str, **updates):
+        """Update a record by ID."""
+        if not self.db_session:
+            return None
+        
         try:
-            # First get the record
-            record = await self.get_by_id(model, record_id)
-            if not record:
-                return None
-            
-            # Update fields
-            for field_name, field_value in kwargs.items():
-                if hasattr(record, field_name):
-                    setattr(record, field_name, field_value)
-            
-            await self.session.commit()
-            await self.session.refresh(record)
-            logger.debug(f"✅ Updated {model.__name__} record: {record_id}")
-            return record
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error updating {model.__name__} {record_id}: {e}")
-            raise
+            query = update(model_class).where(model_class.id == record_id).values(**updates)
+            await self.db_session.execute(query)
+            await self.db_session.commit()
+            return await self.get_by_id(model_class, record_id)
+        except Exception as e:
+            logger.error(f"Error updating {model_class.__name__} {record_id}: {e}")
+            await self.db_session.rollback()
+            return None
     
-    async def delete_by_id(self, model: Type[T], record_id: Any) -> bool:
-        """Delete a record by ID asynchronously."""
+    async def delete_by_id(self, model_class, record_id: str):
+        """Delete a record by ID."""
+        if not self.db_session:
+            return False
+        
         try:
-            result = await self.session.execute(
-                delete(model).where(model.id == record_id)
-            )
-            await self.session.commit()
-            deleted = result.rowcount > 0
-            if deleted:
-                logger.debug(f"✅ Deleted {model.__name__} record: {record_id}")
-            return deleted
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error deleting {model.__name__} {record_id}: {e}")
-            raise
+            query = delete(model_class).where(model_class.id == record_id)
+            result = await self.db_session.execute(query)
+            await self.db_session.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting {model_class.__name__} {record_id}: {e}")
+            await self.db_session.rollback()
+            return False
     
-    async def count(self, model: Type[T], filters: Optional[Dict[str, Any]] = None) -> int:
-        """Count records with optional filtering."""
+    async def find_questions_by_role(self, role: str, limit: int = 10) -> List[Question]:
+        """Find questions compatible with a specific role."""
+        if not self.db_session:
+            return []
+        
         try:
-            query = select(func.count(model.id))
+            query = select(Question).where(
+                Question.compatible_roles.contains([role])
+            ).order_by(desc(Question.usage_count)).limit(limit)
             
-            if filters:
-                for field_name, field_value in filters.items():
-                    if hasattr(model, field_name):
-                        field = getattr(model, field_name)
-                        query = query.where(field == field_value)
-            
-            result = await self.session.execute(query)
-            return result.scalar()
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error counting {model.__name__}: {e}")
-            raise
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error finding questions for role {role}: {e}")
+            return []
     
-    async def exists(self, model: Type[T], filters: Dict[str, Any]) -> bool:
-        """Check if a record exists with given filters."""
+    async def find_questions_by_skills(self, skills: List[str], limit: int = 10) -> List[Question]:
+        """Find questions that require specific skills."""
+        if not self.db_session or not skills:
+            return []
+        
         try:
-            query = select(model.id)
+            skill_conditions = [
+                Question.required_skills.contains([skill]) 
+                for skill in skills
+            ]
             
-            for field_name, field_value in filters.items():
-                if hasattr(model, field_name):
-                    field = getattr(model, field_name)
-                    query = query.where(field == field_value)
+            query = select(Question).where(
+                or_(*skill_conditions)
+            ).order_by(desc(Question.usage_count)).limit(limit)
             
-            query = query.limit(1)
-            result = await self.session.execute(query)
-            return result.scalar_one_or_none() is not None
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error checking existence of {model.__name__}: {e}")
-            raise
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error finding questions for skills {skills}: {e}")
+            return []
     
-    async def bulk_create(self, model: Type[T], records: List[Dict[str, Any]]) -> List[T]:
-        """Create multiple records in bulk asynchronously."""
+    async def find_questions_by_category(self, category: str, limit: int = 10) -> List[Question]:
+        """Find questions by category."""
+        if not self.db_session:
+            return []
+        
         try:
-            instances = [model(**record_data) for record_data in records]
-            self.session.add_all(instances)
-            await self.session.commit()
+            query = select(Question).where(
+                Question.category == category
+            ).order_by(desc(Question.usage_count)).limit(limit)
             
-            # Refresh all instances to get their IDs
-            for instance in instances:
-                await self.session.refresh(instance)
-            
-            logger.debug(f"✅ Bulk created {len(instances)} {model.__name__} records")
-            return instances
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error bulk creating {model.__name__}: {e}")
-            raise
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error finding questions for category {category}: {e}")
+            return []
     
-    async def bulk_update(self, model: Type[T], updates: List[Dict[str, Any]]) -> int:
-        """Update multiple records in bulk asynchronously."""
+    async def find_questions_by_difficulty(self, difficulty: str, limit: int = 10) -> List[Question]:
+        """Find questions by difficulty level."""
+        if not self.db_session:
+            return []
+        
         try:
-            updated_count = 0
+            query = select(Question).where(
+                Question.difficulty_level == difficulty
+            ).order_by(desc(Question.usage_count)).limit(limit)
             
-            for update_data in updates:
-                record_id = update_data.pop('id', None)
-                if record_id:
-                    result = await self.session.execute(
-                        update(model)
-                        .where(model.id == record_id)
-                        .values(**update_data)
-                    )
-                    updated_count += result.rowcount
-            
-            await self.session.commit()
-            logger.debug(f"✅ Bulk updated {updated_count} {model.__name__} records")
-            return updated_count
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error bulk updating {model.__name__}: {e}")
-            raise
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error finding questions for difficulty {difficulty}: {e}")
+            return []
     
-    async def execute_raw_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        """Execute raw SQL query asynchronously."""
+    async def get_question_statistics(self) -> Dict[str, Any]:
+        """Get question bank statistics."""
+        if not self.db_session:
+            return {}
+        
         try:
-            result = await self.session.execute(text(query), params or {})
-            await self.session.commit()
-            return result
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error executing raw query: {e}")
-            raise
-    
-    async def get_with_relationships(
-        self, 
-        model: Type[T], 
-        record_id: Any, 
-        relationships: List[str]
-    ) -> Optional[T]:
-        """Get a record with specified relationships loaded."""
-        try:
-            query = select(model).where(model.id == record_id)
+            # Total questions
+            total_query = select(func.count(Question.id))
+            total_result = await self.db_session.execute(total_query)
+            total_questions = total_result.scalar()
             
-            # Add relationship loading
-            for relationship in relationships:
-                if hasattr(model, relationship):
-                    query = query.options(selectinload(getattr(model, relationship)))
+            # Questions by category
+            category_query = select(
+                Question.category,
+                func.count(Question.id).label('count')
+            ).group_by(Question.category)
+            category_result = await self.db_session.execute(category_query)
+            category_stats = {row.category: row.count for row in category_result}
             
-            result = await self.session.execute(query)
-            return result.scalar_one_or_none()
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error getting {model.__name__} with relationships: {e}")
-            raise
-    
-    async def paginate(
-        self,
-        model: Type[T],
-        page: int = 1,
-        per_page: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
-        order_by: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Paginate records with metadata."""
-        try:
-            # Calculate offset
-            offset = (page - 1) * per_page
+            # Questions by difficulty
+            difficulty_query = select(
+                Question.difficulty_level,
+                func.count(Question.id).label('count')
+            ).group_by(Question.difficulty_level)
+            difficulty_result = await self.db_session.execute(difficulty_query)
+            difficulty_stats = {row.difficulty_level: row.count for row in difficulty_result}
             
-            # Get total count
-            total = await self.count(model, filters)
-            
-            # Get records for current page
-            records = await self.get_all(
-                model=model,
-                limit=per_page,
-                offset=offset,
-                filters=filters,
-                order_by=order_by
-            )
-            
-            # Calculate pagination metadata
-            total_pages = (total + per_page - 1) // per_page
-            has_next = page < total_pages
-            has_prev = page > 1
+            # Most used questions
+            popular_query = select(Question).order_by(desc(Question.usage_count)).limit(5)
+            popular_result = await self.db_session.execute(popular_query)
+            popular_questions = popular_result.scalars().all()
             
             return {
-                "records": records,
-                "pagination": {
-                    "page": page,
-                    "per_page": per_page,
-                    "total": total,
-                    "total_pages": total_pages,
-                    "has_next": has_next,
-                    "has_prev": has_prev,
-                    "next_page": page + 1 if has_next else None,
-                    "prev_page": page - 1 if has_prev else None
-                }
+                "total_questions": total_questions,
+                "category_distribution": category_stats,
+                "difficulty_distribution": difficulty_stats,
+                "popular_questions": [
+                    {
+                        "id": str(q.id),
+                        "question_text": q.question_text[:100] + "..." if len(q.question_text) > 100 else q.question_text,
+                        "usage_count": q.usage_count,
+                        "category": q.category
+                    }
+                    for q in popular_questions
+                ],
+                "last_updated": datetime.utcnow().isoformat()
             }
-        except SQLAlchemyError as e:
-            logger.error(f"❌ Error paginating {model.__name__}: {e}")
+        except Exception as e:
+            logger.error(f"Error getting question statistics: {e}")
+            return {}
+    
+    async def update_question_usage(self, question_id: str, score: Optional[float] = None):
+        """Update question usage statistics."""
+        if not self.db_session:
+            return False
+        
+        try:
+            # Get current question
+            question = await self.get_by_id(Question, question_id)
+            if not question:
+                return False
+            
+            # Update usage count
+            question.usage_count = (question.usage_count or 0) + 1
+            
+            # Update performance metrics if score provided
+            if score is not None:
+                if question.average_score is None:
+                    question.average_score = score
+                else:
+                    # Update running average
+                    question.average_score = (question.average_score * (question.usage_count - 1) + score) / question.usage_count
+                
+                # Update success rate (assuming score > 0.7 is success)
+                success = score > 0.7
+                if question.success_rate is None:
+                    question.success_rate = 1.0 if success else 0.0
+                else:
+                    total_successes = question.success_rate * (question.usage_count - 1)
+                    if success:
+                        total_successes += 1
+                    question.success_rate = total_successes / question.usage_count
+            
+            question.updated_at = datetime.utcnow()
+            await self.db_session.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question usage for {question_id}: {e}")
+            await self.db_session.rollback()
+            return False
+    
+    async def create_session_with_questions(self, user_id: str, role: str, 
+                                          job_description: str, questions: List[str]) -> Tuple[InterviewSession, List[SessionQuestion]]:
+        """Create a session with questions atomically."""
+        if not self.db_session:
+            raise Exception("Database session not available")
+        
+        try:
+            # Create session
+            session_data = {
+                "id": uuid.uuid4(),
+                "user_id": user_id,
+                "role": role,
+                "job_description": job_description,
+                "title": f"Interview for {role}",
+                "status": "active",
+                "total_questions": len(questions),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            session = await self.create(InterviewSession, **session_data)
+            
+            # Create session questions
+            session_questions = []
+            for i, question_text in enumerate(questions):
+                # Find or create question
+                existing_question = await self._find_question_by_text(question_text)
+                
+                if existing_question:
+                    question_id = existing_question.id
+                    # Update usage count
+                    await self.update_question_usage(str(question_id))
+                else:
+                    # Create new question
+                    question_data = {
+                        "id": uuid.uuid4(),
+                        "question_text": question_text,
+                        "question_metadata": {
+                            "created_from_session": str(session.id),
+                            "created_at": datetime.utcnow().isoformat()
+                        },
+                        "difficulty_level": "medium",
+                        "category": "general",
+                        "usage_count": 1,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
+                    new_question = await self.create(Question, **question_data)
+                    question_id = new_question.id
+                
+                # Create session question relationship
+                session_question_data = {
+                    "id": uuid.uuid4(),
+                    "session_id": session.id,
+                    "question_id": question_id,
+                    "question_order": i + 1,
+                    "created_at": datetime.utcnow()
+                }
+                session_question = await self.create(SessionQuestion, **session_question_data)
+                session_questions.append(session_question)
+            
+            await self.db_session.commit()
+            logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")
+            return session, session_questions
+            
+        except Exception as e:
+            await self.db_session.rollback()
+            logger.error(f"Error creating session with questions: {e}")
             raise
-
-# Utility functions for common async database operations
-async def async_create_record(session: AsyncSession, model: Type[T], **kwargs) -> T:
-    """Create a record using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.create(model, **kwargs)
-
-async def async_get_record_by_id(session: AsyncSession, model: Type[T], record_id: Any) -> Optional[T]:
-    """Get a record by ID using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.get_by_id(model, record_id)
-
-async def async_get_records(
-    session: AsyncSession, 
-    model: Type[T], 
-    limit: Optional[int] = None,
-    offset: Optional[int] = None,
-    filters: Optional[Dict[str, Any]] = None
-) -> List[T]:
-    """Get records using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.get_all(model, limit, offset, filters=filters)
-
-async def async_update_record(session: AsyncSession, model: Type[T], record_id: Any, **kwargs) -> Optional[T]:
-    """Update a record using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.update_by_id(model, record_id, **kwargs)
-
-async def async_delete_record(session: AsyncSession, model: Type[T], record_id: Any) -> bool:
-    """Delete a record using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.delete_by_id(model, record_id)
-
-async def async_count_records(session: AsyncSession, model: Type[T], filters: Optional[Dict[str, Any]] = None) -> int:
-    """Count records using async database operations."""
-    db_ops = AsyncDatabaseOperations(session)
-    return await db_ops.count(model, filters)
-
-# Transaction management utilities
-async def async_transaction(session: AsyncSession):
-    """Context manager for async database transactions."""
-    try:
-        yield session
-        await session.commit()
-    except Exception:
-        await session.rollback()
-        raise
-
-async def async_bulk_operation(session: AsyncSession, operations: List[callable]):
-    """Execute multiple async database operations in a single transaction."""
-    try:
-        results = []
-        for operation in operations:
-            result = await operation(session)
-            results.append(result)
-        await session.commit()
-        return results
-    except Exception:
-        await session.rollback()
-        raise
+    
+    async def _find_question_by_text(self, question_text: str) -> Optional[Question]:
+        """Find a question by its text."""
+        if not self.db_session:
+            return None
+        
+        try:
+            query = select(Question).where(Question.question_text == question_text)
+            result = await self.db_session.execute(query)
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error finding question by text: {e}")
+            return None
+    
+    async def get_user_sessions(self, user_id: str, limit: int = 20) -> List[InterviewSession]:
+        """Get user's interview sessions."""
+        if not self.db_session:
+            return []
+        
+        try:
+            query = select(InterviewSession).where(
+                InterviewSession.user_id == user_id
+            ).order_by(desc(InterviewSession.created_at)).limit(limit)
+            
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting sessions for user {user_id}: {e}")
+            return []
+    
+    async def get_session_questions(self, session_id: str) -> List[SessionQuestion]:
+        """Get questions for a specific session."""
+        if not self.db_session:
+            return []
+        
+        try:
+            query = select(SessionQuestion).where(
+                SessionQuestion.session_id == session_id
+            ).order_by(SessionQuestion.question_order)
+            
+            result = await self.db_session.execute(query)
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting questions for session {session_id}: {e}")
+            return []
+    
+    async def commit(self):
+        """Commit the current transaction."""
+        if self.db_session:
+            await self.db_session.commit()
+    
+    async def rollback(self):
+        """Rollback the current transaction."""
+        if self.db_session:
+            await self.db_session.rollback()

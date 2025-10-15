@@ -1,308 +1,235 @@
 """
-Async database connection and session management with connection pooling.
+Async Database Connection Management with Connection Pooling.
 
-This module provides async database operations with proper connection pooling,
-monitoring, and health checks for high-performance applications.
+This module provides async database connection management with connection pooling
+for optimal performance and resource management.
 """
 import asyncio
+import asyncpg
+from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Optional, Dict, Any, List
-from sqlalchemy.ext.asyncio import (
-    create_async_engine, 
-    AsyncSession, 
-    async_sessionmaker,
-    AsyncEngine
-)
-from sqlalchemy.pool import QueuePool, StaticPool
-from sqlalchemy import text, event
-from sqlalchemy.engine import Engine
 from app.config import get_settings
 from app.utils.logger import get_logger
-import time
-import threading
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 
 logger = get_logger(__name__)
-settings = get_settings()
 
-@dataclass
-class ConnectionPoolStats:
-    """Connection pool statistics for monitoring."""
-    pool_size: int
-    checked_in: int
-    checked_out: int
-    overflow: int
-    invalid: int
-    created_at: datetime
-    last_checked: datetime
 
-class AsyncDatabaseManager:
-    """Async database manager with connection pooling and monitoring."""
+class AsyncDatabaseConfig:
+    """Configuration for async database operations."""
     
     def __init__(self):
-        self.engine: Optional[AsyncEngine] = None
-        self.session_factory: Optional[async_sessionmaker] = None
-        self._stats: Optional[ConnectionPoolStats] = None
-        self._monitoring_task: Optional[asyncio.Task] = None
-        self._monitoring_enabled = True
-        self._lock = threading.Lock()
+        settings = get_settings()
+        self.pool_size = getattr(settings, 'DB_POOL_SIZE', 20)
+        self.max_overflow = getattr(settings, 'DB_MAX_OVERFLOW', 30)
+        self.pool_timeout = getattr(settings, 'DB_POOL_TIMEOUT', 30)
+        self.pool_recycle = getattr(settings, 'DB_POOL_RECYCLE', 3600)
+        self.echo = getattr(settings, 'DB_ECHO', False)
+        self.database_url = settings.DATABASE_URL
+
+
+class ConnectionPoolMetrics:
+    """Metrics for connection pool monitoring."""
     
-    async def initialize(self) -> None:
-        """Initialize async database engine and session factory."""
+    def __init__(self):
+        self.total_connections = 0
+        self.active_connections = 0
+        self.idle_connections = 0
+        self.connection_requests = 0
+        self.connection_timeouts = 0
+        self.connection_errors = 0
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current pool metrics."""
+        return {
+            "total_connections": self.total_connections,
+            "active_connections": self.active_connections,
+            "idle_connections": self.idle_connections,
+            "connection_requests": self.connection_requests,
+            "connection_timeouts": self.connection_timeouts,
+            "connection_errors": self.connection_errors,
+            "pool_utilization": self.active_connections / max(self.total_connections, 1)
+        }
+
+
+class AsyncDatabasePoolManager:
+    """Manages async database connection pool."""
+    
+    def __init__(self):
+        self.config = AsyncDatabaseConfig()
+        self.pool: Optional[asyncpg.Pool] = None
+        self.metrics = ConnectionPoolMetrics()
+        self._initialized = False
+    
+    async def initialize_pool(self) -> None:
+        """Initialize the connection pool."""
+        if self._initialized:
+            return
+        
         try:
-            # Convert sync database URL to async
-            database_url = self._convert_to_async_url(settings.DATABASE_URL)
+            logger.info(f"Initializing async database pool with size {self.config.pool_size}")
             
-            # Create async engine with connection pooling
-            if database_url.startswith("sqlite+aiosqlite"):
-                # SQLite async configuration
-                self.engine = create_async_engine(
-                    database_url,
-                    echo=False,
-                    poolclass=StaticPool,
-                    connect_args={"check_same_thread": False}
-                )
-            else:
-                # PostgreSQL async configuration with advanced pooling
-                self.engine = create_async_engine(
-                    database_url,
-                    echo=False,
-                    pool_size=settings.ASYNC_DATABASE_POOL_SIZE,
-                    max_overflow=settings.ASYNC_DATABASE_MAX_OVERFLOW,
-                    pool_timeout=settings.ASYNC_DATABASE_POOL_TIMEOUT,
-                    pool_recycle=settings.ASYNC_DATABASE_POOL_RECYCLE,
-                    pool_pre_ping=True
-                )
-            
-            # Create async session factory
-            self.session_factory = async_sessionmaker(
-                bind=self.engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-                autoflush=True,
-                autocommit=False
+            self.pool = await asyncpg.create_pool(
+                self.config.database_url,
+                min_size=self.config.pool_size,
+                max_size=self.config.max_overflow,
+                command_timeout=self.config.pool_timeout,
+                server_settings={
+                    'application_name': 'interviewiq_service',
+                    'jit': 'off'  # Disable JIT for better connection stability
+                }
             )
             
-            # Set up connection pool event listeners for monitoring
-            self._setup_pool_monitoring()
+            self.metrics.total_connections = self.config.pool_size
+            self._initialized = True
             
-            # Start monitoring task
-            if self._monitoring_enabled and settings.ASYNC_DATABASE_MONITORING_ENABLED:
-                self._monitoring_task = asyncio.create_task(self._monitor_connections())
-                
-                # Start database monitor
-                from app.services.async_database_monitor import async_db_monitor
-                asyncio.create_task(async_db_monitor.start_monitoring())
-            
-            logger.info("✅ Async database engine initialized successfully")
+            logger.info(f"✅ Async database pool initialized successfully")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize async database: {e}")
+            logger.error(f"❌ Failed to initialize async database pool: {e}")
             raise
     
-    def _convert_to_async_url(self, sync_url: str) -> str:
-        """Convert synchronous database URL to async URL."""
-        if sync_url.startswith("postgresql://"):
-            return sync_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif sync_url.startswith("sqlite:///"):
-            return sync_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
-        elif sync_url.startswith("mysql://"):
-            return sync_url.replace("mysql://", "mysql+aiomysql://", 1)
-        else:
-            return sync_url
+    async def close_pool(self) -> None:
+        """Close the connection pool."""
+        if self.pool:
+            await self.pool.close()
+            self.pool = None
+            self._initialized = False
+            logger.info("Database pool closed")
     
-    def _setup_pool_monitoring(self) -> None:
-        """Set up connection pool event listeners for monitoring."""
-        if not self.engine:
-            return
+    @asynccontextmanager
+    async def get_connection(self):
+        """Get a connection from the pool with automatic cleanup."""
+        if not self._initialized:
+            await self.initialize_pool()
         
-        @event.listens_for(self.engine.sync_engine, "connect")
-        def on_connect(dbapi_connection, connection_record):
-            """Log when a new connection is created."""
-            logger.debug("🔗 New database connection created")
-        
-        @event.listens_for(self.engine.sync_engine, "checkout")
-        def on_checkout(dbapi_connection, connection_record, connection_proxy):
-            """Log when a connection is checked out from the pool."""
-            logger.debug("📤 Database connection checked out")
-        
-        @event.listens_for(self.engine.sync_engine, "checkin")
-        def on_checkin(dbapi_connection, connection_record):
-            """Log when a connection is checked back into the pool."""
-            logger.debug("📥 Database connection checked in")
-        
-        @event.listens_for(self.engine.sync_engine, "invalidate")
-        def on_invalidate(dbapi_connection, connection_record, exception):
-            """Log when a connection is invalidated."""
-            logger.warning(f"⚠️ Database connection invalidated: {exception}")
-    
-    async def _monitor_connections(self) -> None:
-        """Monitor connection pool health and statistics."""
-        while self._monitoring_enabled:
-            try:
-                await asyncio.sleep(30)  # Check every 30 seconds
-                await self._update_pool_stats()
-                
-                # Log pool statistics periodically
-                if self._stats:
-                    logger.debug(f"📊 Pool stats - Size: {self._stats.pool_size}, "
-                               f"Checked out: {self._stats.checked_out}, "
-                               f"Overflow: {self._stats.overflow}")
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"❌ Error monitoring connections: {e}")
-    
-    async def _update_pool_stats(self) -> None:
-        """Update connection pool statistics."""
-        if not self.engine:
-            return
-        
+        connection = None
         try:
-            pool = self.engine.pool
-            self._stats = ConnectionPoolStats(
-                pool_size=pool.size(),
-                checked_in=pool.checkedin(),
-                checked_out=pool.checkedout(),
-                overflow=pool.overflow(),
-                invalid=pool.invalid(),
-                created_at=datetime.utcnow(),
-                last_checked=datetime.utcnow()
-            )
+            self.metrics.connection_requests += 1
+            connection = await self.pool.acquire()
+            self.metrics.active_connections += 1
+            self.metrics.idle_connections = max(0, self.metrics.idle_connections - 1)
+            
+            yield connection
+            
+        except asyncio.TimeoutError:
+            self.metrics.connection_timeouts += 1
+            logger.warning("Connection request timed out")
+            raise
         except Exception as e:
-            logger.error(f"❌ Error updating pool stats: {e}")
-    
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Get async database session with proper cleanup."""
-        if not self.session_factory:
-            raise RuntimeError("Database not initialized. Call initialize() first.")
-        
-        async with self.session_factory() as session:
-            try:
-                yield session
-            except Exception as e:
-                await session.rollback()
-                logger.error(f"❌ Database session error: {e}")
-                raise
-            finally:
-                await session.close()
-    
-    async def check_connection(self) -> bool:
-        """Check if database connection is working."""
-        try:
-            if not self.session_factory:
-                return False
-            
-            async with self.session_factory() as session:
-                result = await session.execute(text("SELECT 1"))
-                result.fetchone()
-            logger.debug("✅ Async database connection successful")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Async database connection failed: {e}")
-            return False
-    
-    async def get_pool_stats(self) -> Optional[ConnectionPoolStats]:
-        """Get current connection pool statistics."""
-        await self._update_pool_stats()
-        return self._stats
-    
-    async def health_check(self) -> Dict[str, Any]:
-        """Comprehensive database health check."""
-        health_status = {
-            "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "connection_check": False,
-            "pool_stats": None,
-            "errors": []
-        }
-        
-        try:
-            # Test connection
-            health_status["connection_check"] = await self.check_connection()
-            
-            # Get pool statistics
-            health_status["pool_stats"] = await self.get_pool_stats()
-            
-            # Check for potential issues
-            if health_status["pool_stats"]:
-                stats = health_status["pool_stats"]
-                if stats.overflow > 0:
-                    health_status["errors"].append(f"Connection pool overflow: {stats.overflow}")
-                if stats.invalid > 0:
-                    health_status["errors"].append(f"Invalid connections: {stats.invalid}")
-                if stats.checked_out > stats.pool_size * 0.8:
-                    health_status["errors"].append("High connection usage detected")
-            
-            if health_status["errors"]:
-                health_status["status"] = "degraded"
-            
-        except Exception as e:
-            health_status["status"] = "unhealthy"
-            health_status["errors"].append(str(e))
-        
-        return health_status
-    
-    async def close(self) -> None:
-        """Close database connections and cleanup resources."""
-        try:
-            self._monitoring_enabled = False
-            
-            if self._monitoring_task:
-                self._monitoring_task.cancel()
-                try:
-                    await self._monitoring_task
-                except asyncio.CancelledError:
-                    pass
-            
-            if self.engine:
-                await self.engine.dispose()
-                logger.info("✅ Async database connections closed")
-                
-        except Exception as e:
-            logger.error(f"❌ Error closing database connections: {e}")
-
-# Global async database manager instance
-async_db_manager = AsyncDatabaseManager()
-
-# Dependency function for FastAPI
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency to get async database session."""
-    if not async_db_manager.session_factory:
-        raise RuntimeError("Async database not initialized. Call init_async_db() first.")
-    
-    async with async_db_manager.session_factory() as session:
-        try:
-            yield session
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"❌ Database session error: {e}")
+            self.metrics.connection_errors += 1
+            logger.error(f"Connection error: {e}")
             raise
         finally:
-            await session.close()
-
-# Initialize database on startup
-async def init_async_db() -> None:
-    """Initialize async database on application startup."""
-    await async_db_manager.initialize()
+            if connection:
+                await self.pool.release(connection)
+                self.metrics.active_connections = max(0, self.metrics.active_connections - 1)
+                self.metrics.idle_connections += 1
     
-    # Import all models to ensure they're registered
-    from app.database import models
+    async def execute_query(self, query: str, *args) -> List[Dict[str, Any]]:
+        """Execute a query and return results."""
+        async with self.get_connection() as conn:
+            try:
+                rows = await conn.fetch(query, *args)
+                return [dict(row) for row in rows]
+            except Exception as e:
+                logger.error(f"Query execution failed: {e}")
+                raise
     
-    # Create all tables
-    async with async_db_manager.engine.begin() as conn:
-        await conn.run_sync(models.Base.metadata.create_all)
+    async def execute_command(self, command: str, *args) -> str:
+        """Execute a command and return the result."""
+        async with self.get_connection() as conn:
+            try:
+                result = await conn.execute(command, *args)
+                return result
+            except Exception as e:
+                logger.error(f"Command execution failed: {e}")
+                raise
     
-    logger.info("✅ Async database tables created successfully")
+    async def fetch_one(self, query: str, *args) -> Optional[Dict[str, Any]]:
+        """Fetch a single row."""
+        async with self.get_connection() as conn:
+            try:
+                row = await conn.fetchrow(query, *args)
+                return dict(row) if row else None
+            except Exception as e:
+                logger.error(f"Fetch one failed: {e}")
+                raise
+    
+    async def fetch_many(self, query: str, *args, limit: int = 100) -> List[Dict[str, Any]]:
+        """Fetch multiple rows with limit."""
+        async with self.get_connection() as conn:
+            try:
+                rows = await conn.fetch(query, *args)
+                return [dict(row) for row in rows[:limit]]
+            except Exception as e:
+                logger.error(f"Fetch many failed: {e}")
+                raise
+    
+    def get_pool_status(self) -> Dict[str, Any]:
+        """Get current pool status and metrics."""
+        if not self.pool:
+            return {"status": "not_initialized"}
+        
+        return {
+            "status": "active",
+            "pool_size": self.pool.get_size(),
+            "pool_min_size": self.pool.get_min_size(),
+            "pool_max_size": self.pool.get_max_size(),
+            "pool_idle_size": self.pool.get_idle_size(),
+            "metrics": self.metrics.get_metrics()
+        }
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Perform a health check on the database connection."""
+        try:
+            async with self.get_connection() as conn:
+                result = await conn.fetchval("SELECT 1")
+                return {
+                    "status": "healthy",
+                    "database_connected": True,
+                    "test_query_result": result
+                }
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            return {
+                "status": "unhealthy",
+                "database_connected": False,
+                "error": str(e)
+            }
 
-# Health check endpoint data
-async def get_db_health() -> Dict[str, Any]:
-    """Get database health status for monitoring endpoints."""
-    return await async_db_manager.health_check()
 
-# Connection pool statistics
-async def get_connection_pool_stats() -> Optional[ConnectionPoolStats]:
-    """Get connection pool statistics for monitoring."""
-    return await async_db_manager.get_pool_stats()
+# Global pool manager instance
+_pool_manager: Optional[AsyncDatabasePoolManager] = None
+
+
+async def get_async_db_pool() -> AsyncDatabasePoolManager:
+    """Get the global async database pool manager."""
+    global _pool_manager
+    if _pool_manager is None:
+        _pool_manager = AsyncDatabasePoolManager()
+        await _pool_manager.initialize_pool()
+    return _pool_manager
+
+
+async def close_async_db_pool() -> None:
+    """Close the global async database pool."""
+    global _pool_manager
+    if _pool_manager:
+        await _pool_manager.close_pool()
+        _pool_manager = None
+
+
+@asynccontextmanager
+async def get_async_db_connection():
+    """Get an async database connection from the global pool."""
+    pool_manager = await get_async_db_pool()
+    async with pool_manager.get_connection() as conn:
+        yield conn
+
+
+# Dependency for FastAPI
+async def get_async_db():
+    """FastAPI dependency for async database connection."""
+    pool_manager = await get_async_db_pool()
+    async with pool_manager.get_connection() as conn:
+        yield conn
