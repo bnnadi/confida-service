@@ -10,6 +10,8 @@ from app.services.ollama_service import OllamaService
 from app.services.question_bank_service import QuestionBankService
 from app.services.role_analysis_service import RoleAnalysisService
 from app.services.dynamic_prompt_service import DynamicPromptService
+from app.services.intelligent_question_selector import IntelligentQuestionSelector, UserContext
+from app.services.ai_fallback_service import AIFallbackService
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
@@ -45,6 +47,10 @@ class HybridAIService:
         # Initialize role analysis and dynamic prompt services
         self.role_analysis_service = RoleAnalysisService()
         self.dynamic_prompt_service = DynamicPromptService()
+        
+        # Initialize intelligent selection services
+        self.intelligent_selector = IntelligentQuestionSelector(db_session)
+        self.ai_fallback_service = AIFallbackService(db_session)
         
         # Initialize external services if configured
         self._init_external_services()
@@ -188,6 +194,85 @@ class HybridAIService:
                 duration=duration
             )
             raise
+    
+    async def generate_intelligent_questions(self, 
+                                           role: str, 
+                                           job_description: str,
+                                           user_context: Optional[UserContext] = None,
+                                           target_count: int = 10) -> Dict[str, Any]:
+        """Generate questions using intelligent selection with AI fallback."""
+        try:
+            logger.info(f"Starting intelligent question generation for role: {role}")
+            
+            # Use intelligent question selector
+            selection_result = await self.intelligent_selector.select_questions(
+                role=role,
+                job_description=job_description,
+                user_context=user_context,
+                target_count=target_count
+            )
+            
+            # Convert to response format
+            questions = [q.question_text for q in selection_result.questions]
+            
+            # Create response similar to ParseJDResponse
+            response = {
+                "questions": questions,
+                "source": selection_result.source,
+                "database_hit_rate": selection_result.database_hit_rate,
+                "ai_generated_count": selection_result.ai_generated_count,
+                "diversity_score": selection_result.diversity_score,
+                "selection_time": selection_result.selection_time,
+                "role_analysis": {
+                    "primary_role": selection_result.role_analysis.primary_role,
+                    "industry": selection_result.role_analysis.industry.value,
+                    "seniority_level": selection_result.role_analysis.seniority_level.value,
+                    "required_skills": selection_result.role_analysis.required_skills,
+                    "tech_stack": selection_result.role_analysis.tech_stack
+                } if selection_result.role_analysis else None
+            }
+            
+            logger.info(f"Intelligent question generation completed: "
+                       f"{len(questions)} questions, "
+                       f"database hit rate: {selection_result.database_hit_rate:.2%}")
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in intelligent question generation: {e}")
+            # Fallback to traditional AI generation
+            return await self._fallback_to_traditional_generation(role, job_description, target_count)
+    
+    async def _fallback_to_traditional_generation(self, 
+                                                role: str, 
+                                                job_description: str, 
+                                                target_count: int) -> Dict[str, Any]:
+        """Fallback to traditional AI generation when intelligent selection fails."""
+        try:
+            # Use existing generate_interview_questions method
+            response = self.generate_interview_questions(role, job_description)
+            
+            return {
+                "questions": response.questions[:target_count],
+                "source": "ai_fallback",
+                "database_hit_rate": 0.0,
+                "ai_generated_count": len(response.questions[:target_count]),
+                "diversity_score": 0.5,  # Default diversity score
+                "selection_time": 0.0,
+                "role_analysis": None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in fallback generation: {e}")
+            return {
+                "questions": [],
+                "source": "error",
+                "database_hit_rate": 0.0,
+                "ai_generated_count": 0,
+                "diversity_score": 0.0,
+                "selection_time": 0.0,
+                "role_analysis": None
+            }
     
     def _get_services_to_try(self, preferred_service: Optional[str] = None) -> List[AIServiceType]:
         """Get services to try using functional approach."""
