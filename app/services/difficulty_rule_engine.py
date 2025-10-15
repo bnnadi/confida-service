@@ -44,10 +44,10 @@ class DifficultyRuleEngine:
         }
     
     def determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
-        """Apply all rules in priority order."""
-        for rule_name, rule_func in self.rules.items():
+        """Determine difficulty using unified rule processing."""
+        for rule_name, rule_config in self.rule_configs.items():
             try:
-                if difficulty := rule_func(question_text, role_analysis):
+                if difficulty := self._apply_rule(rule_name, rule_config, question_text, role_analysis):
                     logger.debug(f"Difficulty determined by {rule_name} rule: {difficulty}")
                     return difficulty
             except Exception as e:
@@ -57,43 +57,36 @@ class DifficultyRuleEngine:
         logger.debug("No rules matched, defaulting to medium difficulty")
         return 'medium'
     
-    def _apply_seniority_rule(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Apply seniority-based difficulty rule."""
-        seniority = role_analysis.get('seniority_level', 'mid')
-        return self.seniority_mapping.get(seniority)
-    
-    def _apply_keyword_rule(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Apply keyword-based difficulty rule."""
-        text_lower = question_text.lower()
+    def _apply_rule(self, rule_name: str, rule_config: Dict[str, Any], question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
+        """Apply a rule using unified pattern-based logic."""
+        rule_type = rule_config['type']
+        source_field = rule_config['source_field']
         
-        # Check for hard keywords first (highest priority)
-        for difficulty, keywords in self.keyword_rules.items():
-            if any(keyword in text_lower for keyword in keywords):
-                return difficulty
+        # Get source data based on field
+        if source_field == 'question_text':
+            source_data = question_text.lower()
+        elif source_field == 'seniority_level':
+            source_data = role_analysis.get('seniority_level', 'mid')
+        else:
+            return None
         
-        return None
-    
-    def _apply_length_rule(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Apply length-based difficulty rule."""
-        text_length = len(question_text)
-        
-        if text_length <= self.length_thresholds['easy']:
-            return 'easy'
-        elif text_length >= self.length_thresholds['hard']:
-            return 'hard'
-        
-        return None
-    
-    def _apply_complexity_rule(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Apply complexity indicator rule."""
-        text_lower = question_text.lower()
-        
-        # Check for complexity indicators
-        for difficulty, indicators in self.complexity_indicators.items():
-            if any(indicator in text_lower for indicator in indicators):
-                return difficulty
+        # Apply rule based on type
+        if rule_type == 'mapping':
+            return rule_config['data'].get(source_data)
+        elif rule_type == 'keyword_match':
+            for difficulty, keywords in rule_config['data'].items():
+                if any(keyword in source_data for keyword in keywords):
+                    return difficulty
+        elif rule_type == 'threshold':
+            if source_field == 'question_text':
+                text_length = len(question_text)
+                if text_length <= rule_config['data']['easy']:
+                    return 'easy'
+                elif text_length >= rule_config['data']['hard']:
+                    return 'hard'
         
         return None
+    
     
     def add_custom_rule(self, rule_name: str, rule_func: Callable, priority: int = 0):
         """Add a custom rule to the engine."""
