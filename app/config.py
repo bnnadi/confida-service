@@ -79,6 +79,19 @@ class Settings:
     RATE_LIMIT_DEFAULT_REQUESTS: int = int(os.getenv("RATE_LIMIT_DEFAULT_REQUESTS", "100"))
     RATE_LIMIT_DEFAULT_WINDOW: int = int(os.getenv("RATE_LIMIT_DEFAULT_WINDOW", "3600"))  # seconds
     
+    # Cache Settings
+    CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+    CACHE_BACKEND: str = os.getenv("CACHE_BACKEND", "memory")  # "memory" or "redis"
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    
+    # Cache TTL settings (in seconds)
+    CACHE_TTL_QUESTION_GENERATION: int = int(os.getenv("CACHE_TTL_QUESTION_GENERATION", "3600"))  # 1 hour
+    CACHE_TTL_ANSWER_ANALYSIS: int = int(os.getenv("CACHE_TTL_ANSWER_ANALYSIS", "1800"))  # 30 minutes
+    CACHE_TTL_TRANSCRIPTION: int = int(os.getenv("CACHE_TTL_TRANSCRIPTION", "7200"))  # 2 hours
+    CACHE_TTL_EMBEDDINGS: int = int(os.getenv("CACHE_TTL_EMBEDDINGS", "86400"))  # 24 hours
+    CACHE_TTL_SERVICE_STATUS: int = int(os.getenv("CACHE_TTL_SERVICE_STATUS", "300"))  # 5 minutes
+    CACHE_TTL_DEFAULT: int = int(os.getenv("CACHE_TTL_DEFAULT", "3600"))  # 1 hour
+    
     # Security Headers Settings
     SECURITY_HEADERS_ENABLED: bool = os.getenv("SECURITY_HEADERS_ENABLED", "true").lower() == "true"
     
@@ -299,6 +312,18 @@ class Settings:
         
         validator = ConfigValidator()
         return validator.get_validation_summary()
+    
+    @property
+    def cache_ttl_config(self) -> Dict[str, int]:
+        """Get cache TTL configuration for different operations."""
+        return {
+            "question_generation": self.CACHE_TTL_QUESTION_GENERATION,
+            "answer_analysis": self.CACHE_TTL_ANSWER_ANALYSIS,
+            "transcription": self.CACHE_TTL_TRANSCRIPTION,
+            "embeddings": self.CACHE_TTL_EMBEDDINGS,
+            "service_status": self.CACHE_TTL_SERVICE_STATUS,
+            "default": self.CACHE_TTL_DEFAULT
+        }
 
 @lru_cache()
 def get_settings():

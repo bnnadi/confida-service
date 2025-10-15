@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.async_question_bank_service import AsyncQuestionBankService
 from app.services.ollama_service import OllamaService
+from app.utils.cache import cached
 from app.utils.logger import get_logger
 from datetime import datetime
 
@@ -22,6 +23,7 @@ class AsyncHybridAIService:
         self.question_bank_service = AsyncQuestionBankService(db_session)
         self.ollama_service = OllamaService()
     
+    @cached("async_question_generation", ttl=3600, cache_key_params=["role", "job_description", "count", "difficulty", "categories"])
     async def generate_interview_questions(
         self,
         role: str,

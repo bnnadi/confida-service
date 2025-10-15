@@ -14,8 +14,10 @@ from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
 from app.utils.fallback_responses import FallbackResponses
+from app.utils.cache import cached
 from app.utils.logger import get_logger
 from app.exceptions import ServiceUnavailableError
+from app.config import get_settings
 
 logger = get_logger(__name__)
 
@@ -31,6 +33,7 @@ class HybridAIService:
         self.openai_client = None
         self.anthropic_client = None
         self.db_session = db_session
+        self.settings = get_settings()
         
         # Initialize question bank service if database session is available
         self.question_bank_service = None
@@ -66,6 +69,7 @@ class HybridAIService:
         self.openai_client = ServiceInitializer.init_openai_client()
         self.anthropic_client = ServiceInitializer.init_anthropic_client()
     
+    @cached("question_generation", ttl=3600, cache_key_params=["role", "job_description", "preferred_service"])
     def generate_interview_questions(self, role: str, job_description: str, 
                                    preferred_service: Optional[str] = None) -> ParseJDResponse:
         """Generate questions using dynamic prompts and role analysis."""
@@ -107,6 +111,7 @@ class HybridAIService:
         # Try AI services with simplified fallback
         return self._try_ai_services("generate_interview_questions", role, job_description, preferred_service)
     
+    @cached("answer_analysis", ttl=1800, cache_key_params=["job_description", "question", "answer", "preferred_service"])
     def analyze_answer(self, job_description: str, question: str, answer: str,
                       preferred_service: Optional[str] = None) -> AnalyzeAnswerResponse:
         """Analyze answer using the best available service."""
