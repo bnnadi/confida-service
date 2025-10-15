@@ -174,48 +174,60 @@ class HybridAIService:
         
         return None
     
-    def _try_ai_services(self, method: str, *args, **kwargs) -> ParseJDResponse:
-        """Simplified AI service orchestration with early returns."""
-        preferred_service = kwargs.pop('preferred_service', None) if 'preferred_service' in kwargs else None
-        services_to_try = self._get_services_to_try(preferred_service)
-        
+    def _try_ai_services_generic(self, method: str, services_to_try: List[AIServiceType], 
+                                call_func, store_func, fallback_func, *args, **kwargs) -> ParseJDResponse:
+        """Generic AI service orchestration with configurable call/store/fallback functions."""
         for service_type in services_to_try:
             try:
-                result = self._call_ai_service(service_type, method, *args, **kwargs)
-                self._store_generated_questions_if_needed(result, method, *args, **kwargs)
+                result = call_func(service_type, method, *args, **kwargs)
+                store_func(result, method, *args, **kwargs)
                 return result
             except ServiceUnavailableError as e:
                 logger.warning(f"Error with {service_type.value}: {e}")
                 continue
         
-        # Return appropriate fallback based on method
-        if method == "generate_interview_questions":
-            return FallbackResponses.get_fallback_questions(args[0] if args else "unknown")
-        else:
-            return FallbackResponses.get_fallback_analysis()
+        return fallback_func(*args, **kwargs)
+    
+    def _try_ai_services(self, method: str, *args, **kwargs) -> ParseJDResponse:
+        """Simplified AI service orchestration with early returns."""
+        preferred_service = kwargs.pop('preferred_service', None) if 'preferred_service' in kwargs else None
+        services_to_try = self._get_services_to_try(preferred_service)
+        
+        def fallback_func(*args, **kwargs):
+            if method == "generate_interview_questions":
+                return FallbackResponses.get_fallback_questions(args[0] if args else "unknown")
+            else:
+                return FallbackResponses.get_fallback_analysis()
+        
+        return self._try_ai_services_generic(
+            method, services_to_try, 
+            self._call_ai_service, 
+            self._store_generated_questions_if_needed,
+            fallback_func,
+            *args, **kwargs
+        )
     
     def _try_ai_services_with_dynamic_prompt(self, method: str, role: str, job_description: str, 
                                            dynamic_prompt: str, analysis, preferred_service: Optional[str] = None) -> ParseJDResponse:
         """Try AI services with dynamic prompt and role analysis."""
         services_to_try = self._get_services_to_try(preferred_service)
         
-        for service_type in services_to_try:
-            try:
-                result = self._call_ai_service_with_dynamic_prompt(service_type, method, dynamic_prompt)
-                self._store_generated_questions_with_analysis(result, role, job_description, analysis)
-                return result
-            except ServiceUnavailableError as e:
-                logger.warning(f"Error with {service_type.value}: {e}")
-                continue
+        def fallback_func(*args, **kwargs):
+            fallback_questions = FallbackResponses.get_fallback_questions(role)
+            return ParseJDResponse(
+                questions=fallback_questions,
+                metadata={
+                    "source": "fallback",
+                    "role_analysis": self.role_analysis_service.get_analysis_summary(analysis)
+                }
+            )
         
-        # Return fallback with role analysis metadata
-        fallback_questions = FallbackResponses.get_fallback_questions(role)
-        return ParseJDResponse(
-            questions=fallback_questions,
-            metadata={
-                "source": "fallback",
-                "role_analysis": self.role_analysis_service.get_analysis_summary(analysis)
-            }
+        return self._try_ai_services_generic(
+            method, services_to_try,
+            self._call_ai_service_with_dynamic_prompt,
+            lambda result, method, *args, **kwargs: self._store_generated_questions_with_analysis(result, role, job_description, analysis),
+            fallback_func,
+            dynamic_prompt
         )
     
     def _store_generated_questions_if_needed(self, result: ParseJDResponse, method: str, *args, **kwargs):

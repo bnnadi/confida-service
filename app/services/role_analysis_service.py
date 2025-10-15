@@ -223,83 +223,58 @@ class RoleAnalysisService:
             analysis_hash=analysis_hash
         )
     
+    def _detect_by_keywords(self, text: str, keyword_dict: Dict, default_value, unknown_value=None):
+        """Generic keyword-based detection method."""
+        scores = {key: sum(1 for keyword in keywords if keyword in text) 
+                  for key, keywords in keyword_dict.items()}
+        
+        if not any(scores.values()):
+            return unknown_value or default_value
+        
+        return max(scores.items(), key=lambda x: x[1])[0]
+    
     def _detect_industry(self, text: str) -> IndustryType:
         """Detect industry using keyword matching."""
-        industry_scores = {}
-        
-        for industry, keywords in self.INDUSTRY_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
-            if score > 0:
-                industry_scores[industry] = score
-        
-        if not industry_scores:
-            return IndustryType.UNKNOWN
-        
-        # Return industry with highest score
-        return max(industry_scores.items(), key=lambda x: x[1])[0]
+        return self._detect_by_keywords(text, self.INDUSTRY_KEYWORDS, IndustryType.UNKNOWN)
     
     def _detect_job_function(self, text: str, industry: IndustryType) -> JobFunction:
         """Detect job function using keyword matching."""
-        function_scores = {}
-        
-        for job_function, keywords in self.JOB_FUNCTION_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
-            if score > 0:
-                function_scores[job_function] = score
-        
-        if not function_scores:
-            return JobFunction.UNKNOWN
-        
-        # Return job function with highest score
-        return max(function_scores.items(), key=lambda x: x[1])[0]
+        return self._detect_by_keywords(text, self.JOB_FUNCTION_KEYWORDS, JobFunction.UNKNOWN)
     
     def _detect_seniority_level(self, text: str) -> SeniorityLevel:
         """Detect seniority level using keyword matching."""
-        seniority_scores = {}
-        
-        for seniority, keywords in self.SENIORITY_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
-            if score > 0:
-                seniority_scores[seniority] = score
-        
-        if not seniority_scores:
-            return SeniorityLevel.MID  # Default to mid-level
-        
-        # Return seniority with highest score
-        return max(seniority_scores.items(), key=lambda x: x[1])[0]
+        return self._detect_by_keywords(text, self.SENIORITY_KEYWORDS, SeniorityLevel.MID)
     
     def _extract_key_skills(self, text: str, industry: IndustryType, job_function: JobFunction) -> List[str]:
-        """Extract key skills from the text."""
-        # Common technical skills
+        """Extract key skills using functional approach."""
+        # Define skill sources
         technical_skills = [
             "python", "javascript", "java", "react", "node", "sql", "aws", "azure",
             "docker", "kubernetes", "git", "linux", "api", "database", "machine learning",
             "data analysis", "project management", "agile", "scrum"
         ]
         
-        # Industry-specific skills
         industry_skills = {
             IndustryType.HEALTHCARE: ["patient care", "medical terminology", "clinical", "hipaa"],
             IndustryType.FINANCE: ["financial modeling", "risk management", "compliance", "regulatory"],
             IndustryType.SALES_MARKETING: ["crm", "lead generation", "digital marketing", "seo"]
         }
         
-        # Job function specific skills
         function_skills = {
             JobFunction.DATA_SCIENCE: ["statistics", "pandas", "numpy", "tensorflow", "pytorch"],
             JobFunction.DEVOPS: ["ci/cd", "infrastructure", "monitoring", "automation"],
             JobFunction.MANAGEMENT: ["leadership", "team management", "strategic planning"]
         }
         
-        # Combine all skill lists
-        all_skills = technical_skills.copy()
-        all_skills.extend(industry_skills.get(industry, []))
-        all_skills.extend(function_skills.get(job_function, []))
+        # Combine all skill sources functionally
+        skill_sources = [
+            technical_skills,
+            industry_skills.get(industry, []),
+            function_skills.get(job_function, [])
+        ]
         
-        # Find skills mentioned in text
-        found_skills = [skill for skill in all_skills if skill in text]
-        
-        return found_skills[:10]  # Limit to top 10 skills
+        all_skills = [skill for skills in skill_sources for skill in skills]
+        return [skill for skill in all_skills if skill in text][:10]
     
     def _calculate_confidence(self, industry: IndustryType, job_function: JobFunction, 
                             seniority_level: SeniorityLevel, text: str) -> float:
