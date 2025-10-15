@@ -10,6 +10,7 @@ from app.utils.fallback_responses import FallbackResponses
 from app.utils.http_pool import http_pool
 from app.utils.logger import get_logger
 from app.exceptions import ServiceUnavailableError
+from app.services.smart_token_optimizer import SmartTokenOptimizer
 
 logger = get_logger(__name__)
 
@@ -19,6 +20,7 @@ class OllamaService:
         self.model = os.getenv("OLLAMA_MODEL", "llama2")  # or "mistral", "codellama", etc.
         self.api_url = f"{self.base_url}/api/generate"
         self.session = http_pool.get_session()
+        self.token_optimizer = SmartTokenOptimizer()
     
     def _call_ollama(self, prompt: str, system_prompt: str = None, max_retries: int = 3) -> str:
         """Make a call to Ollama API with retry logic."""
@@ -53,13 +55,59 @@ class OllamaService:
                 logger.info(f"Attempt {attempt + 1} failed, retrying in {2 ** attempt} seconds...")
                 time.sleep(2 ** attempt)  # Exponential backoff
     
+    def _call_ollama_with_tokens(self, prompt: str, system_prompt: str = None, max_tokens: int = 2000, max_retries: int = 3) -> str:
+        """Make a call to Ollama API with optimized token count."""
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.7")),
+                "top_p": float(os.getenv("OLLAMA_TOP_P", "0.9")),
+                "num_predict": max_tokens  # Use optimized token count
+            }
+        }
+        
+        if system_prompt:
+            payload["system"] = system_prompt
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.session.post(
+                    self.api_url, 
+                    json=payload, 
+                    timeout=int(os.getenv("OLLAMA_TIMEOUT", "60"))
+                )
+                response.raise_for_status()
+                result = response.json()
+                return result.get("response", "").strip()
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Error calling Ollama after {max_retries} attempts: {e}")
+                    raise ServiceUnavailableError(f"Failed to communicate with Ollama after {max_retries} attempts: {str(e)}")
+                logger.info(f"Attempt {attempt + 1} failed, retrying in {2 ** attempt} seconds...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+    
     def generate_interview_questions(self, role: str, job_description: str) -> ParseJDResponse:
-        """Generate role-specific interview questions using Ollama."""
+        """Generate role-specific interview questions using Ollama with token optimization."""
+        
+        # Optimize token usage
+        optimization_result = self.token_optimizer.optimize_request(
+            role=role,
+            job_description=job_description,
+            service="ollama",
+            target_questions=10
+        )
         
         prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
         
         try:
-            response = self._call_ollama(prompt, PromptTemplates.QUESTION_GENERATION_SYSTEM)
+            # Use optimized token count in the call
+            response = self._call_ollama_with_tokens(
+                prompt, 
+                PromptTemplates.QUESTION_GENERATION_SYSTEM,
+                optimization_result.optimal_tokens
+            )
             questions = ResponseParsers.parse_questions_from_response(response)
             
             # Ensure we have some questions

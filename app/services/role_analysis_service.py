@@ -78,7 +78,7 @@ class RoleAnalysisService:
             Industry.CONSULTING: ['consulting', 'advisory', 'strategy', 'management', 'business'],
             Industry.MEDIA: ['media', 'entertainment', 'content', 'publishing', 'broadcast'],
             Industry.GOVERNMENT: ['government', 'public sector', 'policy', 'regulatory', 'federal'],
-            Industry.NONPROFIT: ['nonprofit', 'ngo', 'charity', 'social impact', 'volunteer']
+            Industry.NON_PROFIT: ['nonprofit', 'ngo', 'charity', 'social impact', 'volunteer']
         }
         
         # Seniority indicators
@@ -214,35 +214,60 @@ class RoleAnalysisService:
         return pattern_config.get('default', None)
     
     def _build_role_analysis(self, role: str, results: List[Any]) -> RoleAnalysis:
-        """Build RoleAnalysis from parallel extraction results."""
-        # Define extraction mapping with defaults
-        extraction_mapping = [
-            ('required_skills', []),
-            ('tech_stack', []),
-            ('soft_skills', []),
-            ('experience_years', 0),
-            ('industry', Industry.OTHER),
-            ('seniority_level', SeniorityLevel.MID),
-            ('company_size', CompanySize.MEDIUM),
-            ('job_function', "software_development"),
-            ('education_requirements', []),
-            ('certifications', [])
-        ]
+        """Build RoleAnalysis from parallel extraction results with automatic type conversion."""
+        # Define extraction schema with type information
+        extraction_schema = {
+            'required_skills': ([], list),
+            'tech_stack': ([], list),
+            'soft_skills': ([], list),
+            'experience_years': (0, int),
+            'industry': (Industry.OTHER, Industry),
+            'seniority_level': (SeniorityLevel.MID, SeniorityLevel),
+            'company_size': (CompanySize.MEDIUM, CompanySize),
+            'job_function': ("software_development", str),
+            'education_requirements': ([], list),
+            'certifications': ([], list)
+        }
         
-        # Extract results with error handling
+        # Process results with automatic type conversion
         extracted_data = {}
-        for i, (field_name, default_value) in enumerate(extraction_mapping):
-            extracted_data[field_name] = (
-                results[i] if not isinstance(results[i], Exception) else default_value
-            )
+        for i, (field_name, (default_value, expected_type)) in enumerate(extraction_schema.items()):
+            result = results[i] if i < len(results) else default_value
+            
+            if isinstance(result, Exception):
+                extracted_data[field_name] = default_value
+            else:
+                extracted_data[field_name] = self._convert_to_type(result, expected_type, default_value)
         
-        analysis = RoleAnalysis(
-            primary_role=role,
-            **extracted_data
-        )
+        analysis = RoleAnalysis(primary_role=role, **extracted_data)
         
         logger.info(f"Role analysis completed: {analysis.industry.value}, {analysis.seniority_level.value}, {len(analysis.required_skills)} skills")
         return analysis
+    
+    def _convert_to_type(self, value: Any, expected_type: type, default_value: Any) -> Any:
+        """Convert value to expected type with fallback to default."""
+        try:
+            if expected_type == list and not isinstance(value, list):
+                return [value] if value else []
+            elif expected_type == int and not isinstance(value, int):
+                return int(value) if value else default_value
+            elif expected_type == str and not isinstance(value, str):
+                return str(value) if value else default_value
+            elif hasattr(expected_type, '__members__'):  # Enum type
+                if isinstance(value, expected_type):
+                    return value
+                elif isinstance(value, str):
+                    # Try to find enum by value
+                    for enum_member in expected_type:
+                        if enum_member.value.lower() == value.lower():
+                            return enum_member
+                    return default_value
+                else:
+                    return default_value
+            else:
+                return value if isinstance(value, expected_type) else default_value
+        except (ValueError, TypeError, AttributeError):
+            return default_value
     
     def _get_default_analysis(self, role: str) -> RoleAnalysis:
         """Get default analysis when extraction fails."""

@@ -14,6 +14,8 @@ from app.services.intelligent_question_selector import IntelligentQuestionSelect
 from app.services.ai_fallback_service import AIFallbackService
 from app.services.ai_service_orchestrator import AIServiceOrchestrator, AIServiceType
 from app.services.service_factory import ServiceFactory
+from app.services.smart_token_optimizer import SmartTokenOptimizer
+from app.services.cost_tracker import CostTracker
 from app.utils.prompt_templates import PromptTemplates
 from app.utils.response_parsers import ResponseParsers
 from app.utils.service_initializer import ServiceInitializer
@@ -41,6 +43,10 @@ class HybridAIService:
         # Use factory pattern for service initialization
         self._services = ServiceFactory.create_services(db_session, self.settings)
         self._orchestrator = ServiceFactory.create_orchestrator(self._services)
+        
+        # Initialize token optimization and cost tracking
+        self.token_optimizer = SmartTokenOptimizer()
+        self.cost_tracker = CostTracker(db_session)
         
         # Assign services to instance variables for backward compatibility
         self._assign_services()
@@ -381,46 +387,128 @@ class HybridAIService:
             logger.warning(f"Error with {service_type.value} for {method}: {e}")
             raise ServiceUnavailableError(f"{service_type.value} service error: {e}")
     
-    def _generate_questions_openai(self, role: str, job_description: str) -> ParseJDResponse:
-        """Generate questions using OpenAI."""
-        if not self.openai_client:
-            raise ServiceUnavailableError("OpenAI client not initialized")
+    def _generate_questions_with_service(self, service_type: str, role: str, job_description: str) -> ParseJDResponse:
+        """Unified question generation for all AI services."""
+        service_config = {
+            "openai": {
+                "client": self.openai_client,
+                "model": os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
+                "create_method": self._create_openai_request,
+                "parse_method": self._parse_openai_response
+            },
+            "anthropic": {
+                "client": self.anthropic_client,
+                "model": os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
+                "create_method": self._create_anthropic_request,
+                "parse_method": self._parse_anthropic_response
+            }
+        }
         
+        config = service_config[service_type]
+        if not config["client"]:
+            raise ServiceUnavailableError(f"{service_type} client not initialized")
+        
+        # Optimize token usage
+        optimization_result = self.token_optimizer.optimize_request(
+            role, job_description, service_type, 10
+        )
+        
+        try:
+            # Create and execute request
+            response = config["create_method"](optimization_result.optimal_tokens, role, job_description)
+            questions = config["parse_method"](response)
+            
+            # Track success
+            self._track_successful_request(service_type, optimization_result, response, role)
+            return ParseJDResponse(questions=questions)
+            
+        except Exception as e:
+            # Track failure
+            self._track_failed_request(service_type, optimization_result, role, str(e))
+            raise
+    
+    def _create_openai_request(self, max_tokens: int, role: str, job_description: str):
+        """Create OpenAI request."""
         user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
-        
-        response = self.openai_client.chat.completions.create(
+        return self.openai_client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
             messages=[
                 {"role": "system", "content": PromptTemplates.QUESTION_GENERATION_SYSTEM},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=1000,
+            max_tokens=max_tokens,
             temperature=0.7
         )
-        
-        questions_text = response.choices[0].message.content.strip()
-        questions = ResponseParsers.parse_questions_from_response(questions_text)
-        
-        return ParseJDResponse(questions=questions)
     
-    def _generate_questions_anthropic(self, role: str, job_description: str) -> ParseJDResponse:
-        """Generate questions using Anthropic Claude."""
-        if not self.anthropic_client:
-            raise ServiceUnavailableError("Anthropic client not initialized")
-        
+    def _create_anthropic_request(self, max_tokens: int, role: str, job_description: str):
+        """Create Anthropic request."""
         user_prompt = PromptTemplates.get_question_generation_prompt(role, job_description)
-        
-        response = self.anthropic_client.messages.create(
+        return self.anthropic_client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
-            max_tokens=1000,
+            max_tokens=max_tokens,
             system=PromptTemplates.QUESTION_GENERATION_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}]
         )
-        
+    
+    def _parse_openai_response(self, response) -> List[Dict[str, Any]]:
+        """Parse OpenAI response."""
+        questions_text = response.choices[0].message.content.strip()
+        return ResponseParsers.parse_questions_from_response(questions_text)
+    
+    def _parse_anthropic_response(self, response) -> List[Dict[str, Any]]:
+        """Parse Anthropic response."""
         questions_text = response.content[0].text.strip()
-        questions = ResponseParsers.parse_questions_from_response(questions_text)
+        return ResponseParsers.parse_questions_from_response(questions_text)
+    
+    def _track_successful_request(self, service_type: str, optimization_result, response, role: str):
+        """Track successful AI service request."""
+        from app.services.cost_tracker import CostTrackingRequest
         
-        return ParseJDResponse(questions=questions)
+        actual_tokens = self._get_actual_tokens(service_type, response)
+        request = CostTrackingRequest(
+            service=service_type,
+            operation="generate_questions",
+            tokens_used=actual_tokens,
+            estimated_cost=optimization_result.estimated_cost,
+            role=role,
+            complexity_score=optimization_result.complexity_score,
+            optimization_applied=optimization_result.optimization_applied,
+            success=True
+        )
+        self.cost_tracker.track_request(request)
+    
+    def _track_failed_request(self, service_type: str, optimization_result, role: str, error_message: str):
+        """Track failed AI service request."""
+        from app.services.cost_tracker import CostTrackingRequest
+        
+        request = CostTrackingRequest(
+            service=service_type,
+            operation="generate_questions",
+            tokens_used=0,
+            estimated_cost=0.0,
+            role=role,
+            complexity_score=optimization_result.complexity_score,
+            optimization_applied=optimization_result.optimization_applied,
+            success=False,
+            error_message=error_message
+        )
+        self.cost_tracker.track_request(request)
+    
+    def _get_actual_tokens(self, service_type: str, response) -> int:
+        """Get actual tokens used from response."""
+        if service_type == "openai" and hasattr(response, 'usage'):
+            return response.usage.total_tokens
+        elif service_type == "anthropic" and hasattr(response, 'usage'):
+            return response.usage.input_tokens + response.usage.output_tokens
+        return 0
+
+    def _generate_questions_openai(self, role: str, job_description: str) -> ParseJDResponse:
+        """Generate questions using OpenAI with token optimization."""
+        return self._generate_questions_with_service("openai", role, job_description)
+    
+    def _generate_questions_anthropic(self, role: str, job_description: str) -> ParseJDResponse:
+        """Generate questions using Anthropic Claude with token optimization."""
+        return self._generate_questions_with_service("anthropic", role, job_description)
     
     def _analyze_answer_openai(self, job_description: str, question: str, answer: str) -> AnalyzeAnswerResponse:
         """Analyze answer using OpenAI."""

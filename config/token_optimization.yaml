@@ -1,0 +1,89 @@
+# Token Optimization Configuration
+# This file contains all configuration for the SmartTokenOptimizer service
+
+services:
+  ollama:
+    base_tokens: 200
+    max_tokens: 2000
+    cost_per_1k_tokens: 0.0  # Free
+    quality_factor: 0.8
+  
+  openai:
+    base_tokens: 300
+    max_tokens: 1500
+    cost_per_1k_tokens: 0.01  # $0.01 per 1K tokens
+    quality_factor: 1.0
+  
+  anthropic:
+    base_tokens: 400
+    max_tokens: 1800
+    cost_per_1k_tokens: 0.015  # $0.015 per 1K tokens
+    quality_factor: 1.1
+
+role_complexity:
+  intern: 0.5
+  junior: 1.0
+  mid: 1.5
+  senior: 2.0
+  lead: 2.5
+  principal: 3.0
+  staff: 2.8
+  architect: 3.2
+
+technical_keywords:
+  - "machine learning"
+  - "artificial intelligence"
+  - "deep learning"
+  - "distributed systems"
+  - "microservices"
+  - "kubernetes"
+  - "docker"
+  - "cloud computing"
+  - "aws"
+  - "azure"
+  - "gcp"
+  - "scalability"
+  - "performance optimization"
+  - "system design"
+  - "architecture"
+  - "algorithms"
+  - "data structures"
+  - "database design"
+  - "nosql"
+  - "react"
+  - "angular"
+  - "vue"
+  - "node.js"
+  - "python"
+  - "java"
+  - "go"
+  - "devops"
+  - "ci/cd"
+  - "infrastructure"
+  - "security"
+  - "encryption"
+
+industry_complexity:
+  fintech: 1.3
+  healthcare: 1.2
+  e-commerce: 1.1
+  gaming: 1.0
+  education: 0.9
+  nonprofit: 0.8
+
+# Complexity calculation weights
+complexity_weights:
+  seniority: 0.4      # 40% from seniority
+  description_length: 0.2  # 20% from description length
+  technical: 0.25     # 25% from technical complexity
+  industry: 0.1       # 10% from industry
+  skills: 0.05        # 5% from skill count
+
+# Optimization constraints
+constraints:
+  min_complexity_score: 0.5
+  max_complexity_score: 3.0
+  max_skill_count: 20
+  technical_keywords_divisor: 5  # For normalizing technical complexity
+  description_length_divisor: 100  # For normalizing description length
+  skill_count_divisor: 10  # For normalizing skill count
