@@ -1,0 +1,79 @@
+# Pattern Matching Configuration for Job Description Processing
+# This file contains all regex patterns and validation rules for extracting
+# information from job descriptions.
+
+# Technical skill patterns - more specific and accurate
+technical_patterns:
+  # Programming languages
+  - '\b(?:proficient|experienced|skilled|expert)\s+(?:in|with)\s+(python|java|javascript|typescript|go|rust|c\+\+|c#|php|ruby|swift|kotlin|scala|r|matlab)\b'
+  
+  # Frameworks and libraries
+  - '\b(?:experience|knowledge|proficient)\s+(?:with|in)\s+(react|angular|vue|django|flask|spring|express|laravel|rails|asp\.net|jquery|bootstrap|tailwind)\b'
+  
+  # Cloud and infrastructure
+  - '\b(aws|azure|gcp|google cloud|amazon web services|kubernetes|docker|terraform|ansible|jenkins|gitlab|github)\b'
+  
+  # Databases
+  - '\b(postgresql|mysql|mongodb|redis|elasticsearch|dynamodb|cassandra|oracle|sql server)\b'
+  
+  # Tools and technologies
+  - '\b(git|jira|confluence|slack|figma|sketch|photoshop|illustrator|tableau|power bi|splunk|datadog)\b'
+  
+  # Methodologies
+  - '\b(agile|scrum|kanban|devops|ci/cd|tdd|bdd|microservices|api|rest|graphql|soa)\b'
+
+# Soft skill patterns - more specific
+soft_skill_patterns:
+  - '\b(?:strong|excellent|good)\s+(?:communication|leadership|teamwork|problem-solving|analytical|organizational)\s+skills?\b'
+  - '\b(?:ability|capable|skilled)\s+(?:to work|at working|in)\s+(?:collaboratively|in teams|under pressure|independently)\b'
+  - '\b(?:passion|enthusiasm|interest)\s+(?:for|in)\s+(?:learning|innovation|technology|mentoring)\b'
+
+# Experience patterns - more specific
+experience_patterns:
+  - '(\d+)\+?\s*years?\s+(?:of\s+)?(?:hands-on|professional|relevant|proven)\s+(?:experience|background)'
+  - '(?:minimum|at least|required)\s+(\d+)\+?\s*years?\s+(?:of\s+)?(?:experience|background)'
+  - '(?:senior|lead|principal|staff|architect|director|manager)\s+(?:level|position|role)'
+  - '(?:entry-level|junior|mid-level|experienced|expert)\s+(?:position|role|level)'
+
+# Company information patterns
+company_patterns:
+  name:
+    - 'at\s+([A-Z][a-zA-Z\s&.,]+?)(?:\s+is|\s+we|\s+our|\s+the)'
+    - 'join\s+([A-Z][a-zA-Z\s&.,]+?)(?:\s+as|\s+to|\s+and)'
+    - '([A-Z][a-zA-Z\s&.,]+?)\s+(?:is\s+looking|seeking|hiring)'
+  
+  location:
+    - '(?:location|based in|office in)\s*:?\s*([^.,\n]+)'
+    - '(?:remote|hybrid|onsite|distributed|flexible)\s+(?:work|position|role)'
+    - '(?:san francisco|new york|seattle|austin|boston|chicago|los angeles|denver|miami|atlanta)'
+
+# Key requirements patterns
+requirement_patterns:
+  - '•\s*([^•\n]+?)(?=\n|$)'
+  - 'You will:\s*([^.\n]+)'
+  - 'Responsibilities:\s*([^.\n]+)'
+  - 'Key\s+(?:responsibilities|requirements):\s*([^.\n]+)'
+
+# Validation settings
+validation:
+  min_input_length: 10
+  max_input_length: 10000
+  min_requirement_length: 10
+  max_requirement_length: 200
+  min_skill_length: 2
+  max_skill_length: 50
+  max_requirements: 10
+  max_technical_skills: 15
+  max_soft_skills: 8
+  max_experience_requirements: 5
+
+# Processing settings
+processing:
+  enable_html_cleanup: true
+  enable_error_tracking: true
+  validate_compression_ratio: true
+  min_compression_ratio: 0.1
+  max_compression_ratio: 1.5
+  default_target_length: 300
+  max_summary_length: 500
+  min_summary_length: 100

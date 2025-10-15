@@ -87,3 +87,25 @@ constraints:
   technical_keywords_divisor: 5  # For normalizing technical complexity
   description_length_divisor: 100  # For normalizing description length
   skill_count_divisor: 10  # For normalizing skill count
+
+# Job description processing settings
+job_description_processing:
+  enabled: true
+  default_target_length: 300  # Default target length for summarization
+  max_summary_length: 500     # Maximum allowed summary length
+  min_summary_length: 100     # Minimum allowed summary length
+  preserve_key_sections: true # Whether to preserve key sections like requirements
+  extract_technical_skills: true # Whether to extract and highlight technical skills
+  extract_company_info: true  # Whether to extract company information
+  
+  # Quality and validation settings
+  min_input_length: 10        # Minimum input length to process
+  max_input_length: 10000     # Maximum input length to process
+  enable_html_cleanup: true   # Clean HTML tags and formatting
+  enable_error_tracking: true # Track processing issues
+  validate_compression_ratio: true # Validate compression ratios
+  
+  # Performance settings
+  use_compiled_patterns: true # Use compiled regex for better performance
+  max_processing_time: 5.0    # Maximum processing time in seconds
+  enable_caching: false       # Enable result caching (future feature)
