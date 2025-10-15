@@ -62,23 +62,33 @@ class QuestionEngine:
             List of question dictionaries with id, text, and type
         """
         try:
-            # Use the existing AI service to generate questions
-            ai_response = self.ai_service.generate_interview_questions(job_title, job_description)
+            # Use enhanced QuestionBankService with hybrid approach
+            from app.services.question_bank_service import QuestionBankService
+            question_bank = QuestionBankService(self.db)
+            
+            # Get questions using hybrid method (database + AI fallback)
+            result = question_bank.get_questions_hybrid(job_title, job_description, 10)
             
             questions = []
-            for i, question_text in enumerate(ai_response.questions, 1):
-                # Determine question type based on content
-                question_type = self._classify_question_type(question_text)
-                
+            for i, question in enumerate(result['questions'], 1):
+                # Convert Question object to dictionary format
                 questions.append({
                     "id": f"job_{hash(job_title)}_{i}",
-                    "text": question_text,
-                    "type": question_type,
-                    "difficulty_level": "medium",
-                    "category": "job_based"
+                    "text": question.question_text,
+                    "type": self._classify_question_type(question.question_text),
+                    "difficulty_level": question.difficulty_level,
+                    "category": question.category,
+                    "source": result['generation_method'],
+                    "metadata": {
+                        "generation_method": result['generation_method'],
+                        "database_questions": result['database_questions'],
+                        "ai_questions": result['ai_questions'],
+                        "estimated_cost": result['estimated_cost'],
+                        "processing_time_ms": result['processing_time_ms']
+                    }
                 })
             
-            logger.info(f"Generated {len(questions)} questions for job: {job_title}")
+            logger.info(f"Generated {len(questions)} questions for job '{job_title}' using {result['generation_method']} method")
             return questions
             
         except Exception as e:

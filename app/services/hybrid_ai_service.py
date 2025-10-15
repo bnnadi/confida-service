@@ -7,7 +7,7 @@ from enum import Enum
 from sqlalchemy.orm import Session
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.services.ollama_service import OllamaService
-from app.services.question_bank_service import QuestionBankService
+# Removed circular import - QuestionBankService will be injected when needed
 from app.services.role_analysis_service import RoleAnalysisService
 from app.services.dynamic_prompt_service import DynamicPromptService
 from app.services.intelligent_question_selector import IntelligentQuestionSelector, UserContext
