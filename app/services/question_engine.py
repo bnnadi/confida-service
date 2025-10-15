@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from app.database.models import Question
 from app.services.hybrid_ai_service import HybridAIService
+from app.services.scenario_service import ScenarioService
 from app.utils.logger import get_logger
 from app.exceptions import AIServiceError
 
@@ -19,10 +20,11 @@ class QuestionEngine:
     def __init__(self, db: Session):
         self.db = db
         self.ai_service = HybridAIService()
+        self.scenario_service = ScenarioService(db)
     
     def generate_questions_from_scenario(self, scenario_id: str) -> List[Dict[str, Any]]:
         """
-        Generate questions from a practice scenario.
+        Generate questions from a practice scenario using database integration.
         
         Args:
             scenario_id: ID of the practice scenario
@@ -31,19 +33,15 @@ class QuestionEngine:
             List of question dictionaries with id, text, and type
         """
         try:
-            # For now, we'll use a predefined set of practice questions
-            # In a full implementation, this would query a scenarios table
-            practice_questions = self._get_practice_questions_by_scenario(scenario_id)
+            # Get questions from database using ScenarioService
+            questions = self.scenario_service.get_scenario_questions(scenario_id)
             
-            questions = []
-            for i, question_text in enumerate(practice_questions, 1):
-                questions.append({
-                    "id": f"scenario_{scenario_id}_q_{i}",
-                    "text": question_text,
-                    "type": "behavioral",
-                    "difficulty_level": "medium",
-                    "category": "practice"
-                })
+            if not questions:
+                logger.warning(f"No questions found for scenario {scenario_id}")
+                return []
+            
+            # Increment usage count for analytics
+            self.scenario_service.increment_usage_count(scenario_id)
             
             logger.info(f"Generated {len(questions)} questions for scenario {scenario_id}")
             return questions
@@ -87,58 +85,6 @@ class QuestionEngine:
             logger.error(f"Error generating questions from job {job_title}: {e}")
             raise AIServiceError(f"Failed to generate questions from job description: {e}")
     
-    def _get_practice_questions_by_scenario(self, scenario_id: str) -> List[str]:
-        """
-        Get practice questions for a specific scenario.
-        This is a placeholder implementation - in production, this would query a database.
-        """
-        # Define practice scenarios with their questions
-        scenario_questions = {
-            "software_engineer": [
-                "Tell me about a challenging technical problem you solved recently.",
-                "How do you approach debugging a complex issue?",
-                "Describe a time when you had to learn a new technology quickly.",
-                "How do you ensure code quality in your projects?",
-                "Tell me about a time you had to work with a difficult team member."
-            ],
-            "data_scientist": [
-                "Describe a data analysis project you're particularly proud of.",
-                "How do you handle missing or incomplete data?",
-                "Tell me about a time you had to explain complex data insights to non-technical stakeholders.",
-                "What's your approach to feature selection in machine learning?",
-                "Describe a time when your analysis led to a significant business decision."
-            ],
-            "product_manager": [
-                "How do you prioritize features for a product roadmap?",
-                "Tell me about a time you had to make a difficult product decision.",
-                "How do you gather and analyze user feedback?",
-                "Describe a time when you had to manage conflicting stakeholder requirements.",
-                "How do you measure the success of a product feature?"
-            ],
-            "sales_representative": [
-                "Tell me about your most successful sales achievement.",
-                "How do you handle objections from potential customers?",
-                "Describe a time when you had to rebuild a relationship with a difficult client.",
-                "How do you qualify leads and prospects?",
-                "Tell me about a time you had to meet an aggressive sales target."
-            ],
-            "marketing_manager": [
-                "Describe a successful marketing campaign you've managed.",
-                "How do you measure the ROI of marketing activities?",
-                "Tell me about a time you had to pivot a marketing strategy mid-campaign.",
-                "How do you stay updated with marketing trends and technologies?",
-                "Describe a time when you had to work with a limited marketing budget."
-            ]
-        }
-        
-        # Return questions for the scenario, or default general questions
-        return scenario_questions.get(scenario_id, [
-            "Tell me about yourself and your background.",
-            "What are your greatest strengths and weaknesses?",
-            "Why are you interested in this position?",
-            "Where do you see yourself in 5 years?",
-            "Do you have any questions for us?"
-        ])
     
     def _classify_question_type(self, question_text: str) -> str:
         """
@@ -178,37 +124,29 @@ class QuestionEngine:
     
     def get_available_scenarios(self) -> List[Dict[str, str]]:
         """
-        Get list of available practice scenarios.
+        Get list of available practice scenarios from database.
         
         Returns:
             List of scenario dictionaries with id, name, and description
         """
-        scenarios = [
-            {
-                "id": "software_engineer",
-                "name": "Software Engineer",
-                "description": "Practice questions for software engineering roles"
-            },
-            {
-                "id": "data_scientist", 
-                "name": "Data Scientist",
-                "description": "Practice questions for data science roles"
-            },
-            {
-                "id": "product_manager",
-                "name": "Product Manager", 
-                "description": "Practice questions for product management roles"
-            },
-            {
-                "id": "sales_representative",
-                "name": "Sales Representative",
-                "description": "Practice questions for sales roles"
-            },
-            {
-                "id": "marketing_manager",
-                "name": "Marketing Manager",
-                "description": "Practice questions for marketing roles"
-            }
-        ]
-        
-        return scenarios
+        try:
+            scenarios = self.scenario_service.get_all_scenarios()
+            
+            scenario_list = []
+            for scenario in scenarios:
+                scenario_list.append({
+                    "id": scenario.id,
+                    "name": scenario.name,
+                    "description": scenario.description or f"Practice questions for {scenario.name} roles",
+                    "category": scenario.category,
+                    "difficulty_level": scenario.difficulty_level,
+                    "compatible_roles": scenario.compatible_roles
+                })
+            
+            logger.info(f"Retrieved {len(scenario_list)} available scenarios")
+            return scenario_list
+            
+        except Exception as e:
+            logger.error(f"Error retrieving available scenarios: {e}")
+            # Return empty list on error to prevent API failures
+            return []
