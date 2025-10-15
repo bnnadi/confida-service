@@ -11,10 +11,17 @@ from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
 from app.database.models import Question, SessionQuestion, InterviewSession
+from app.database.question_database_models import QuestionTemplate, QuestionGenerationLog
 from app.utils.logger import get_logger
 from app.utils.validation_mixin import ValidationMixin
 from app.services.difficulty_rule_engine import DifficultyRuleEngine, CategoryRuleEngine
+# Lazy imports to avoid circular dependencies
+# from app.services.hybrid_ai_service import HybridAIService
+# from app.services.smart_token_optimizer import SmartTokenOptimizer
 from app.models.schemas import ParseJDResponse
+import time
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 
 logger = get_logger(__name__)
 
@@ -39,6 +46,15 @@ class QuestionBankService:
         self.db = db_session
         self.difficulty_engine = DifficultyRuleEngine()
         self.category_engine = CategoryRuleEngine()
+        
+        # Phase 2 enhancements (lazy initialization to avoid circular imports)
+        self.ai_service = None
+        self.token_optimizer = None
+        
+        # Configuration
+        self.min_database_questions = 3
+        self.max_ai_fallback_questions = 7
+        self.min_confidence_threshold = 0.6
     
     def get_questions_for_role(self, role: str, job_description: str, count: int = 10) -> List[Question]:
         """
@@ -65,6 +81,184 @@ class QuestionBankService:
         except Exception as e:
             logger.error(f"Error selecting questions for role '{role}': {e}")
             return self._get_fallback_questions(role, count)
+    
+    def get_questions_hybrid(self, role: str, job_description: str, count: int = 10, 
+                           preferred_service: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get questions using hybrid approach: database first, AI fallback.
+        
+        Args:
+            role: The job role/title
+            job_description: The job description text
+            count: Number of questions to return
+            preferred_service: Preferred AI service for fallback
+            
+        Returns:
+            Dictionary with questions and metadata
+        """
+        start_time = time.time()
+        
+        try:
+            # Try database first
+            db_questions = self.get_questions_for_role(role, job_description, count)
+            
+            # Determine if we need AI fallback
+            questions_needed = count - len(db_questions)
+            ai_questions = []
+            ai_service_used = None
+            tokens_used = 0
+            estimated_cost = 0.0
+            
+            if questions_needed > 0:
+                logger.info(f"Need {questions_needed} more questions from AI")
+                ai_questions, ai_service_used, tokens_used, estimated_cost = self._get_ai_questions(
+                    role, job_description, questions_needed, preferred_service
+                )
+            
+            # Combine questions
+            all_questions = db_questions + ai_questions
+            
+            # Determine generation method
+            if len(db_questions) >= count:
+                generation_method = 'database'
+            elif len(ai_questions) >= count:
+                generation_method = 'ai'
+            else:
+                generation_method = 'hybrid'
+            
+            # Log the generation
+            self._log_generation(
+                role, job_description, generation_method, ai_service_used, 
+                tokens_used, estimated_cost, len(all_questions), len(db_questions), 
+                len(ai_questions), int((time.time() - start_time) * 1000)
+            )
+            
+            return {
+                'questions': all_questions,
+                'generation_method': generation_method,
+                'database_questions': len(db_questions),
+                'ai_questions': len(ai_questions),
+                'total_tokens_used': tokens_used,
+                'estimated_cost': estimated_cost,
+                'processing_time_ms': int((time.time() - start_time) * 1000),
+                'ai_service_used': ai_service_used
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in hybrid question generation: {e}")
+            return self._fallback_to_ai(role, job_description, count, preferred_service, start_time)
+    
+    def _get_ai_questions(self, role: str, job_description: str, questions_needed: int, 
+                         preferred_service: Optional[str]) -> Tuple[List[Question], str, int, float]:
+        """Get questions from AI service as fallback."""
+        try:
+            # Lazy initialization to avoid circular imports
+            if self.token_optimizer is None:
+                from app.services.smart_token_optimizer import SmartTokenOptimizer
+                self.token_optimizer = SmartTokenOptimizer()
+            
+            if self.ai_service is None:
+                from app.services.hybrid_ai_service import HybridAIService
+                self.ai_service = HybridAIService(self.db)
+            
+            # Optimize token usage for AI generation
+            optimization_result = self.token_optimizer.optimize_request(
+                role, job_description, preferred_service or 'openai', questions_needed
+            )
+            
+            # Generate questions using AI service
+            ai_response = self.ai_service.generate_interview_questions(role, job_description, preferred_service)
+            
+            # Convert to Question objects
+            ai_questions = []
+            for i, question_text in enumerate(ai_response.questions[:questions_needed]):
+                question = Question(
+                    question_text=question_text,
+                    question_metadata={"source": "ai_generated", "ai_service": preferred_service or 'openai'},
+                    difficulty_level="medium",
+                    category="ai_generated"
+                )
+                ai_questions.append(question)
+            
+            # Calculate actual tokens used (simplified)
+            tokens_used = optimization_result.optimal_tokens
+            estimated_cost = optimization_result.estimated_cost
+            
+            logger.info(f"Generated {len(ai_questions)} AI questions using {preferred_service or 'openai'}")
+            return ai_questions, preferred_service or 'openai', tokens_used, estimated_cost
+            
+        except Exception as e:
+            logger.error(f"Error getting AI questions: {e}")
+            return [], preferred_service or 'openai', 0, 0.0
+    
+    def _log_generation(self, role: str, job_description: str, generation_method: str,
+                       ai_service_used: Optional[str], tokens_used: int, estimated_cost: float,
+                       total_questions: int, db_questions: int, ai_questions: int, processing_time_ms: int):
+        """Log the question generation for analytics."""
+        try:
+            # Lazy initialization to avoid circular imports
+            if self.token_optimizer is None:
+                from app.services.smart_token_optimizer import SmartTokenOptimizer
+                self.token_optimizer = SmartTokenOptimizer()
+            
+            # Calculate complexity score
+            complexity_score = self.token_optimizer._analyze_complexity(role, job_description)['total_score']
+            
+            log_entry = QuestionGenerationLog(
+                role=role,
+                job_description_length=len(job_description.split()),
+                complexity_score=complexity_score,
+                generation_method=generation_method,
+                ai_service_used=ai_service_used,
+                tokens_used=tokens_used,
+                estimated_cost=estimated_cost,
+                questions_generated=total_questions,
+                questions_from_database=db_questions,
+                questions_from_ai=ai_questions,
+                match_quality_score=0.8 if db_questions > 0 else 0.0,
+                processing_time_ms=processing_time_ms
+            )
+            
+            self.db.add(log_entry)
+            self.db.commit()
+            
+        except Exception as e:
+            logger.error(f"Error logging generation: {e}")
+            self.db.rollback()
+    
+    def _fallback_to_ai(self, role: str, job_description: str, count: int,
+                       preferred_service: Optional[str], start_time: float) -> Dict[str, Any]:
+        """Fallback to AI-only generation when database fails."""
+        try:
+            logger.warning("Falling back to AI-only generation")
+            
+            ai_questions, ai_service_used, tokens_used, estimated_cost = self._get_ai_questions(
+                role, job_description, count, preferred_service
+            )
+            
+            return {
+                'questions': ai_questions,
+                'generation_method': 'ai',
+                'database_questions': 0,
+                'ai_questions': len(ai_questions),
+                'total_tokens_used': tokens_used,
+                'estimated_cost': estimated_cost,
+                'processing_time_ms': int((time.time() - start_time) * 1000),
+                'ai_service_used': ai_service_used
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in AI fallback: {e}")
+            return {
+                'questions': [],
+                'generation_method': 'ai',
+                'database_questions': 0,
+                'ai_questions': 0,
+                'total_tokens_used': 0,
+                'estimated_cost': 0.0,
+                'processing_time_ms': int((time.time() - start_time) * 1000),
+                'ai_service_used': preferred_service or 'openai'
+            }
     
     def store_generated_questions(self, questions: List[str], role: str, job_description: str, 
                                 ai_service_used: str, prompt_hash: str) -> List[Question]:
