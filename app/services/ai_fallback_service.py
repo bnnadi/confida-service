@@ -5,9 +5,8 @@ Integrates with AI services to generate targeted questions for missing types.
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from app.services.role_analysis_service import RoleAnalysis
+from app.models.role_analysis_models import RoleAnalysis
 from app.services.question_diversity_engine import Question, QuestionCategory, DifficultyLevel
-from app.services.hybrid_ai_service import HybridAIService
 from app.services.async_question_bank_service import AsyncQuestionBankService
 from app.utils.logger import get_logger
 from app.utils.metrics import metrics
@@ -39,7 +38,8 @@ class AIFallbackService:
     """Service for AI-powered question generation when database has insufficient variety."""
     
     def __init__(self, db_session=None):
-        self.ai_service = HybridAIService()
+        # AI service will be injected when needed to avoid circular imports
+        self.ai_service = None
         self.question_bank_service = AsyncQuestionBankService(db_session) if db_session else None
         
         # Generation configuration
@@ -280,7 +280,12 @@ class AIFallbackService:
     async def _call_ai_service(self, prompt: str, role_analysis: RoleAnalysis) -> Any:
         """Call AI service to generate questions."""
         try:
-            # Use the hybrid AI service to generate questions
+            # Use the hybrid AI service to generate questions (if available)
+            if self.ai_service is None:
+                # Import here to avoid circular imports
+                from app.services.hybrid_ai_service import HybridAIService
+                self.ai_service = HybridAIService()
+            
             response = await self.ai_service.generate_interview_questions(
                 role=role_analysis.primary_role,
                 job_description=prompt,

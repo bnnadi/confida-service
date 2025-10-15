@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, select, func, and_, or_
 from app.database.models import Question, SessionQuestion, Answer
 from app.config import get_settings
 from app.utils.logger import get_logger
+from scripts.validation_pipeline import QuestionBankValidationPipeline
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,7 @@ class QuestionBankValidator:
     def __init__(self):
         self.settings = get_settings()
         self.engine = create_engine(self.settings.DATABASE_URL)
+        self.validation_pipeline = QuestionBankValidationPipeline()
         self.validation_results = {
             "total_questions": 0,
             "valid_questions": 0,
@@ -48,29 +50,17 @@ class QuestionBankValidator:
         }
     
     def run_full_validation(self) -> Dict[str, Any]:
-        """Run comprehensive validation of the question bank."""
+        """Run comprehensive validation using pipeline approach."""
         logger.info("🔍 Starting comprehensive question bank validation...")
         
         with Session(self.engine) as db:
             # Get all questions
             questions = db.execute(select(Question)).scalars().all()
-            self.validation_results["total_questions"] = len(questions)
             
             logger.info(f"Validating {len(questions)} questions...")
             
-            # Run validation checks
-            self._validate_question_text(questions)
-            self._validate_metadata(questions)
-            self._validate_categories(questions)
-            self._validate_difficulty_levels(questions)
-            self._validate_skills_and_roles(questions)
-            self._validate_usage_statistics(questions)
-            self._validate_duplicates(questions)
-            self._validate_orphaned_questions(questions)
-            self._validate_consistency(questions)
-            
-            # Calculate quality score
-            self._calculate_quality_score()
+            # Use the validation pipeline for clean, testable validation
+            self.validation_results = self.validation_pipeline.run_validation(questions)
             
             logger.info("✅ Validation completed!")
             return self.validation_results

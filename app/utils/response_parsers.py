@@ -8,6 +8,8 @@ import re
 from typing import List, Optional, Dict, Any, Tuple
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.logger import get_logger
+from app.utils.validation_mixin import ValidationMixin
+from app.utils.response_strategy_parser import ResponseStrategyParser, AnalysisResponseStrategyParser
 
 logger = get_logger(__name__)
 
@@ -43,18 +45,15 @@ class QualityValidator:
         """Validate question quality and return (is_valid, issues)."""
         issues = []
         
-        # Length validation
-        if len(question) < cls.MIN_QUESTION_LENGTH:
-            issues.append(f"Question too short (min {cls.MIN_QUESTION_LENGTH} chars)")
-        elif len(question) > cls.MAX_QUESTION_LENGTH:
-            issues.append(f"Question too long (max {cls.MAX_QUESTION_LENGTH} chars)")
-        
-        # Word count validation
-        word_count = len(question.split())
-        if word_count < cls.MIN_WORD_COUNT:
-            issues.append(f"Question has too few words (min {cls.MIN_WORD_COUNT})")
-        elif word_count > cls.MAX_WORD_COUNT:
-            issues.append(f"Question has too many words (max {cls.MAX_WORD_COUNT})")
+        # Use ValidationMixin for basic quality checks
+        is_valid, basic_issues = ValidationMixin.validate_quality(
+            question, 
+            cls.MIN_QUESTION_LENGTH, 
+            cls.MAX_QUESTION_LENGTH,
+            cls.MIN_WORD_COUNT, 
+            cls.MAX_WORD_COUNT
+        )
+        issues.extend(basic_issues)
         
         # Content safety validation
         if cls._contains_inappropriate_content(question):
@@ -100,32 +99,19 @@ class QualityValidator:
 class ResponseParsers:
     """Centralized response parsing utilities for all AI services."""
     
+    def __init__(self):
+        self.question_parser = ResponseStrategyParser()
+        self.analysis_parser = AnalysisResponseStrategyParser()
+    
+    def parse_questions_from_response(self, response_text: str) -> List[str]:
+        """Parse questions from AI response using strategy pattern."""
+        return self.question_parser.parse_questions_from_response(response_text)
+    
     @staticmethod
-    def parse_questions_from_response(response_text: str) -> List[str]:
-        """Parse questions from AI response with enhanced quality validation and error handling."""
-        try:
-            # Detect AI failure patterns early
-            if QualityValidator._detects_ai_failure(response_text):
-                logger.warning("AI failure pattern detected in response, using fallback")
-                return ResponseParsers._get_fallback_questions()
-            
-            # Parse response using multiple strategies
-            questions = ResponseParsers._parse_with_multiple_strategies(response_text)
-            
-            # Validate and filter questions
-            validated_questions = ResponseParsers._validate_and_filter_questions(questions)
-            
-            # Ensure minimum quality threshold
-            if len(validated_questions) < 3:
-                logger.warning(f"Only {len(validated_questions)} valid questions found, using fallback")
-                return ResponseParsers._get_fallback_questions()
-            
-            logger.info(f"Successfully parsed {len(validated_questions)} high-quality questions")
-            return validated_questions[:10]
-            
-        except Exception as e:
-            logger.error(f"Error parsing questions from response: {e}")
-            return ResponseParsers._get_fallback_questions()
+    def parse_questions_from_response_static(response_text: str) -> List[str]:
+        """Static method for backward compatibility."""
+        parser = ResponseStrategyParser()
+        return parser.parse_questions_from_response(response_text)
     
     @staticmethod
     def _parse_with_multiple_strategies(response_text: str) -> List[str]:
@@ -228,21 +214,15 @@ class ResponseParsers:
             "What questions do you have about this role?"
         ]
     
+    def parse_analysis_response(self, response_text: str) -> AnalyzeAnswerResponse:
+        """Parse analysis response using strategy pattern."""
+        return self.analysis_parser.parse_analysis_response(response_text)
+    
     @staticmethod
-    def parse_analysis_response(response_text: str) -> AnalyzeAnswerResponse:
-        """Parse analysis with simplified pattern matching."""
-        json_patterns = [
-            r'\{.*\}',
-            r'```json\s*(\{.*?\})\s*```',
-            r'```\s*(\{.*?\})\s*```',
-        ]
-        
-        for pattern in json_patterns:
-            if analysis := ResponseParsers._try_parse_with_pattern(response_text, pattern):
-                return ResponseParsers._build_analysis_response(analysis)
-        
-        logger.warning("Could not parse JSON from AI response, using fallback")
-        return ResponseParsers._get_fallback_analysis()
+    def parse_analysis_response_static(response_text: str) -> AnalyzeAnswerResponse:
+        """Static method for backward compatibility."""
+        parser = AnalysisResponseStrategyParser()
+        return parser.parse_analysis_response(response_text)
     
     @staticmethod
     def _try_parse_with_pattern(response_text: str, pattern: str) -> Optional[dict]:

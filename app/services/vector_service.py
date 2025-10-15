@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from qdrant_client.http.models import PointStruct, Filter, FieldCondition, MatchValue, SearchRequest
 from app.database.qdrant_config import qdrant_config
 from app.services.embedding_service import embedding_service
+from app.services.vector_storage_engine import VectorStorageEngine, VectorContentManager
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -19,6 +20,10 @@ class VectorService:
     def __init__(self):
         self.qdrant = qdrant_config
         self.embedding_service = embedding_service
+        
+        # Initialize unified storage engine
+        self.storage_engine = VectorStorageEngine(self.qdrant, self.embedding_service)
+        self.content_manager = VectorContentManager(self.storage_engine)
     
     async def initialize_collections(self):
         """Initialize all required vector collections."""
@@ -74,10 +79,10 @@ class VectorService:
         metadata: Dict[str, Any] = None
     ) -> str:
         """Store job description embedding in vector database."""
-        return await self._store_vector_content(
-            content=job_description,
-            collection_name="job_descriptions",
-            metadata={**metadata, "role": role} if metadata else {"role": role}
+        return await self.content_manager.store_job_description(
+            job_description=job_description,
+            role=role,
+            metadata=metadata
         )
     
     async def find_similar_job_descriptions(
@@ -87,44 +92,11 @@ class VectorService:
         limit: int = 5
     ) -> List[Dict[str, Any]]:
         """Find similar job descriptions using semantic search."""
-        try:
-            # Generate query embedding
-            query_embedding = await self.embedding_service.generate_embedding(query)
-            
-            # Build filter
-            search_filter = None
-            if role:
-                search_filter = Filter(
-                    must=[
-                        FieldCondition(key="role", match=MatchValue(value=role))
-                    ]
-                )
-            
-            # Search
-            results = self.qdrant.get_client().search(
-                collection_name="job_descriptions",
-                query_vector=query_embedding,
-                query_filter=search_filter,
-                limit=limit
-            )
-            
-            # Format results
-            similar_jobs = []
-            for result in results:
-                similar_jobs.append({
-                    "id": result.id,
-                    "score": result.score,
-                    "text": result.payload.get("text"),
-                    "role": result.payload.get("role"),
-                    "metadata": {k: v for k, v in result.payload.items() if k not in ["text", "role"]}
-                })
-            
-            logger.info(f"Found {len(similar_jobs)} similar job descriptions")
-            return similar_jobs
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to find similar job descriptions: {e}")
-            raise
+        return await self.content_manager.find_similar_job_descriptions(
+            query=query,
+            role=role,
+            limit=limit
+        )
     
     # Question Operations
     async def store_question(
@@ -203,38 +175,10 @@ class VectorService:
         metadata: Dict[str, Any]
     ) -> str:
         """Store answer embedding in vector database."""
-        try:
-            # Generate embedding
-            embedding = await self.embedding_service.generate_embedding(answer_text)
-            
-            # Create point
-            point_id = str(uuid.uuid4())
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "text": answer_text,
-                    "user_id": metadata.get("user_id"),
-                    "question_id": metadata.get("question_id"),
-                    "session_id": metadata.get("session_id"),
-                    "score": metadata.get("score"),
-                    "created_at": metadata.get("created_at"),
-                    **metadata
-                }
-            )
-            
-            # Store in Qdrant
-            self.qdrant.get_client().upsert(
-                collection_name="answers",
-                points=[point]
-            )
-            
-            logger.info(f"✅ Stored answer (ID: {point_id})")
-            return point_id
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to store answer: {e}")
-            raise
+        return await self.content_manager.store_answer(
+            answer_text=answer_text,
+            metadata=metadata
+        )
     
     # User Pattern Operations
     async def store_user_pattern(
@@ -243,38 +187,10 @@ class VectorService:
         pattern_data: Dict[str, Any]
     ) -> str:
         """Store user pattern embedding for recommendations."""
-        try:
-            # Generate pattern text for embedding
-            pattern_text = self._generate_pattern_text(pattern_data)
-            embedding = await self.embedding_service.generate_embedding(pattern_text)
-            
-            # Create point
-            point_id = str(uuid.uuid4())
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "user_id": user_id,
-                    "skill_level": pattern_data.get("skill_level"),
-                    "performance_trend": pattern_data.get("performance_trend"),
-                    "learning_style": pattern_data.get("learning_style"),
-                    "created_at": pattern_data.get("created_at"),
-                    "pattern_data": pattern_data
-                }
-            )
-            
-            # Store in Qdrant
-            self.qdrant.get_client().upsert(
-                collection_name="user_patterns",
-                points=[point]
-            )
-            
-            logger.info(f"✅ Stored user pattern for user {user_id} (ID: {point_id})")
-            return point_id
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to store user pattern: {e}")
-            raise
+        return await self.content_manager.store_user_pattern(
+            user_id=user_id,
+            pattern_data=pattern_data
+        )
     
     async def find_similar_user_patterns(
         self, 

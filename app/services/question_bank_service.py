@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
 from app.database.models import Question, SessionQuestion, InterviewSession
 from app.utils.logger import get_logger
+from app.utils.validation_mixin import ValidationMixin
+from app.services.difficulty_rule_engine import DifficultyRuleEngine, CategoryRuleEngine
 from app.models.schemas import ParseJDResponse
 
 logger = get_logger(__name__)
@@ -35,6 +37,8 @@ class QuestionBankService:
     
     def __init__(self, db_session: Session):
         self.db = db_session
+        self.difficulty_engine = DifficultyRuleEngine()
+        self.category_engine = CategoryRuleEngine()
     
     def get_questions_for_role(self, role: str, job_description: str, count: int = 10) -> List[Question]:
         """
@@ -386,16 +390,31 @@ class QuestionBankService:
     def _find_similar_question(self, question_text: str) -> Optional[Question]:
         """Find if a similar question already exists in the database."""
         try:
-            # Simple similarity check - can be enhanced with vector similarity
-            questions = self.db.query(Question).all()
+            # Use database-level similarity search for better performance
+            words = set(question_text.lower().split())
+            if not words:
+                return None
             
-            for question in questions:
-                # Check for high similarity (simple word overlap)
+            # Create a search pattern for database query
+            search_pattern = ' '.join(f'%{word}%' for word in words)
+            
+            # Query with similarity threshold at database level
+            similar_questions = self.db.query(Question)\
+                .filter(Question.question_text.ilike(f'%{search_pattern}%'))\
+                .limit(10)\
+                .all()
+            
+            # Find best match using similarity calculation
+            best_match = None
+            best_similarity = 0.0
+            
+            for question in similar_questions:
                 similarity = self._calculate_similarity(question_text, question.question_text)
-                if similarity > 0.8:  # 80% similarity threshold
-                    return question
+                if similarity > 0.8 and similarity > best_similarity:
+                    best_match = question
+                    best_similarity = similarity
             
-            return None
+            return best_match
             
         except Exception as e:
             logger.error(f"Error finding similar question: {e}")
@@ -422,50 +441,26 @@ class QuestionBankService:
             'version': '1.0'
         }
     
+    # Data-driven difficulty rules
+    DIFFICULTY_RULES = [
+        ('seniority', {'senior': 'hard', 'junior': 'easy', 'mid': 'medium'}),
+        ('keywords', {
+            'hard': ['complex', 'advanced', 'architecture', 'design', 'optimize'],
+            'easy': ['basic', 'simple', 'explain', 'what is']
+        })
+    ]
+
     def _determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
-        """Determine question difficulty using functional approach."""
-        # Priority-based difficulty determination
-        difficulty_determiners = [
-            self._get_seniority_difficulty,
-            self._get_keyword_difficulty,
-            lambda *args: 'medium'  # Default fallback
-        ]
-        
-        for determiner in difficulty_determiners:
-            if difficulty := determiner(question_text, role_analysis):
-                return difficulty
-        
-        return 'medium'
-
-    def _get_seniority_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Get difficulty based on seniority level."""
-        seniority_map = {'senior': 'hard', 'junior': 'easy', 'mid': 'medium'}
-        return seniority_map.get(role_analysis.get('seniority_level', 'mid'))
-
-    def _get_keyword_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Get difficulty based on keywords."""
-        text_lower = question_text.lower()
-        keyword_rules = [
-            (['complex', 'advanced', 'architecture', 'design', 'optimize'], 'hard'),
-            (['basic', 'simple', 'explain', 'what is'], 'easy')
-        ]
-        
-        for keywords, difficulty in keyword_rules:
-            if any(word in text_lower for word in keywords):
-                return difficulty
-        return None
+        """Determine question difficulty using rule engine."""
+        return self.difficulty_engine.determine_difficulty(question_text, role_analysis)
     
     def _categorize_question(self, question_text: str) -> str:
-        """Categorize question using centralized rules."""
-        return self._categorize_by_keywords(question_text, self.CATEGORIZATION_RULES)
+        """Categorize question using rule engine."""
+        return self.category_engine.categorize_question(question_text)
     
     def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
         """Generic keyword-based categorization."""
-        text_lower = text.lower()
-        for category, keywords in rules.items():
-            if keywords and any(keyword in text_lower for keyword in keywords):
-                return category
-        return "technical"  # default
+        return ValidationMixin.categorize_by_keywords(text, rules)
     
     def _update_running_average(self, current_avg: Optional[float], new_value: float, count: int) -> float:
         """Calculate running average with null handling."""

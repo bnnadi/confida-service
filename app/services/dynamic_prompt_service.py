@@ -5,7 +5,7 @@ This service generates role-specific prompts using AI based on role analysis
 to create highly relevant interview questions for any industry or job function.
 """
 from typing import Dict, Any, Optional
-from app.services.role_analysis_service import RoleAnalysis, IndustryType, JobFunction, SeniorityLevel
+from app.models.role_analysis_models import RoleAnalysis, Industry, SeniorityLevel, IndustryType, JobFunction
 from app.utils.logger import get_logger
 from app.utils.service_initializer import ServiceInitializer
 import os

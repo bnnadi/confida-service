@@ -113,29 +113,33 @@ class SecurityValidator:
                 SecurityValidator._contains_path_traversal(text))
     
     @staticmethod
-    def _contains_sql_injection(text: str) -> bool:
-        """Check if text contains SQL injection patterns."""
-        text_lower = text.lower()
-        for pattern in SecurityValidator.SQL_INJECTION_PATTERNS:
-            if re.search(pattern, text_lower, re.IGNORECASE):
+    def _contains_malicious_patterns(text: str, patterns: List[str], flags: int = re.IGNORECASE) -> bool:
+        """Generic pattern matching for security validation."""
+        for pattern in patterns:
+            if re.search(pattern, text, flags):
                 return True
         return False
+    
+    @staticmethod
+    def _contains_sql_injection(text: str) -> bool:
+        """Check if text contains SQL injection patterns."""
+        return SecurityValidator._contains_malicious_patterns(
+            text.lower(), SecurityValidator.SQL_INJECTION_PATTERNS
+        )
     
     @staticmethod
     def _contains_xss(text: str) -> bool:
         """Check if text contains XSS patterns."""
-        for pattern in SecurityValidator.XSS_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
-                return True
-        return False
+        return SecurityValidator._contains_malicious_patterns(
+            text, SecurityValidator.XSS_PATTERNS, re.IGNORECASE | re.DOTALL
+        )
     
     @staticmethod
     def _contains_path_traversal(text: str) -> bool:
         """Check if text contains path traversal patterns."""
-        for pattern in SecurityValidator.PATH_TRAVERSAL_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                return True
-        return False
+        return SecurityValidator._contains_malicious_patterns(
+            text, SecurityValidator.PATH_TRAVERSAL_PATTERNS
+        )
     
     @staticmethod
     def _is_suspicious_user_agent(user_agent: str) -> bool:
