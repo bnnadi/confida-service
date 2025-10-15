@@ -20,6 +20,22 @@ logger = get_logger(__name__)
 class AsyncQuestionBankService:
     """Async service for managing the global question bank."""
     
+    # Centralized categorization rules
+    CATEGORIZATION_RULES = {
+        "technical": [
+            "code", "programming", "algorithm", "data structure", "framework", "library",
+            "database", "api", "debug", "optimize", "performance", "architecture"
+        ],
+        "behavioral": [
+            "experience", "situation", "challenge", "conflict", "team", "leadership",
+            "decision", "mistake", "learn", "improve", "motivate", "handle"
+        ],
+        "system_design": [
+            "design", "system", "scale", "distributed", "microservice", "architecture",
+            "load balancer", "cache", "database design", "high availability"
+        ]
+    }
+    
     def __init__(self, db_session: AsyncSession):
         self.db_session = db_session
         self.db_ops = AsyncDatabaseOperations(db_session)
@@ -290,33 +306,17 @@ class AsyncQuestionBankService:
         
         return keywords[:20]  # Limit to 20 keywords
     
+    def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
+        """Generic keyword-based categorization."""
+        text_lower = text.lower()
+        for category, keywords in rules.items():
+            if any(keyword in text_lower for keyword in keywords):
+                return category
+        return "technical"  # default
+    
     def _determine_category(self, question_text: str, role: str, job_description: str) -> str:
         """Determine the category of a question."""
-        text = question_text.lower()
-        
-        # Technical questions
-        if any(keyword in text for keyword in [
-            "code", "programming", "algorithm", "data structure", "framework", "library",
-            "database", "api", "debug", "optimize", "performance", "architecture"
-        ]):
-            return "technical"
-        
-        # Behavioral questions
-        if any(keyword in text for keyword in [
-            "experience", "situation", "challenge", "conflict", "team", "leadership",
-            "decision", "mistake", "learn", "improve", "motivate", "handle"
-        ]):
-            return "behavioral"
-        
-        # System design questions
-        if any(keyword in text for keyword in [
-            "design", "system", "scale", "distributed", "microservice", "architecture",
-            "load balancer", "cache", "database design", "high availability"
-        ]):
-            return "system_design"
-        
-        # Default to technical for most roles
-        return "technical"
+        return self._categorize_by_keywords(question_text, self.CATEGORIZATION_RULES)
     
     def _determine_difficulty(self, question_text: str, role: str, job_description: str) -> str:
         """Determine the difficulty level of a question."""

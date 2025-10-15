@@ -198,3 +198,26 @@ def database_operation_with_retry(max_retries: int = 3):
 def api_call_with_logging():
     """Convenience decorator for API calls that should be logged."""
     return with_logging(log_level="info", log_args=True)
+
+
+def with_database_transaction(func: Callable) -> Callable:
+    """
+    Decorator for database operations with automatic transaction handling.
+    
+    Usage:
+        @with_database_transaction
+        async def store_questions(self, questions: List[str]) -> List[Question]:
+            # Implementation without manual transaction management
+            return stored_questions
+    """
+    @functools.wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        try:
+            result = await func(self, *args, **kwargs)
+            await self.db_session.commit()
+            return result
+        except Exception as e:
+            await self.db_session.rollback()
+            logger.error(f"Database transaction failed in {func.__name__}: {e}")
+            raise
+    return wrapper

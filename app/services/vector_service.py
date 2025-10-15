@@ -29,6 +29,43 @@ class VectorService:
             logger.error(f"❌ Failed to initialize vector collections: {e}")
             raise
     
+    # Generic Vector Storage Operations
+    async def _store_vector_content(
+        self, 
+        content: str, 
+        collection_name: str, 
+        metadata: Dict[str, Any]
+    ) -> str:
+        """Generic vector storage method to reduce code duplication."""
+        try:
+            # Generate embedding
+            embedding = await self.embedding_service.generate_embedding(content)
+            
+            # Create point
+            point_id = str(uuid.uuid4())
+            point = PointStruct(
+                id=point_id,
+                vector=embedding,
+                payload={
+                    "text": content,
+                    "created_at": metadata.get("created_at"),
+                    **(metadata or {})
+                }
+            )
+            
+            # Store in Qdrant
+            self.qdrant.get_client().upsert(
+                collection_name=collection_name,
+                points=[point]
+            )
+            
+            logger.info(f"✅ Stored content in {collection_name} (ID: {point_id})")
+            return point_id
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to store content in {collection_name}: {e}")
+            raise
+    
     # Job Description Operations
     async def store_job_description(
         self, 
@@ -37,35 +74,11 @@ class VectorService:
         metadata: Dict[str, Any] = None
     ) -> str:
         """Store job description embedding in vector database."""
-        try:
-            # Generate embedding
-            embedding = await self.embedding_service.generate_embedding(job_description)
-            
-            # Create point
-            point_id = str(uuid.uuid4())
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "text": job_description,
-                    "role": role,
-                    "created_at": metadata.get("created_at") if metadata else None,
-                    **(metadata or {})
-                }
-            )
-            
-            # Store in Qdrant
-            self.qdrant.get_client().upsert(
-                collection_name="job_descriptions",
-                points=[point]
-            )
-            
-            logger.info(f"✅ Stored job description for role '{role}' (ID: {point_id})")
-            return point_id
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to store job description: {e}")
-            raise
+        return await self._store_vector_content(
+            content=job_description,
+            collection_name="job_descriptions",
+            metadata={**metadata, "role": role} if metadata else {"role": role}
+        )
     
     async def find_similar_job_descriptions(
         self, 
@@ -120,40 +133,22 @@ class VectorService:
         metadata: Dict[str, Any]
     ) -> str:
         """Store question embedding in vector database."""
-        try:
-            # Generate embedding
-            embedding = await self.embedding_service.generate_embedding(question_text)
-            
-            # Create point
-            point_id = str(uuid.uuid4())
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "text": question_text,
-                    "difficulty": metadata.get("difficulty_level", "medium"),
-                    "category": metadata.get("category", "general"),
-                    "subcategory": metadata.get("subcategory"),
-                    "role": metadata.get("compatible_roles", [])[0] if metadata.get("compatible_roles") else None,
-                    "skills": metadata.get("required_skills", []),
-                    "created_at": metadata.get("created_at"),
-                    "question_id": metadata.get("question_id"),
-                    **metadata
-                }
-            )
-            
-            # Store in Qdrant
-            self.qdrant.get_client().upsert(
-                collection_name="questions",
-                points=[point]
-            )
-            
-            logger.info(f"✅ Stored question (ID: {point_id})")
-            return point_id
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to store question: {e}")
-            raise
+        # Prepare question-specific metadata
+        question_metadata = {
+            "difficulty": metadata.get("difficulty_level", "medium"),
+            "category": metadata.get("category", "general"),
+            "subcategory": metadata.get("subcategory"),
+            "role": metadata.get("compatible_roles", [])[0] if metadata.get("compatible_roles") else None,
+            "skills": metadata.get("required_skills", []),
+            "question_id": metadata.get("question_id"),
+            **metadata
+        }
+        
+        return await self._store_vector_content(
+            content=question_text,
+            collection_name="questions",
+            metadata=question_metadata
+        )
     
     async def find_similar_questions(
         self, 

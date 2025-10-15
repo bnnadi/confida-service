@@ -18,55 +18,64 @@ settings = get_settings()
 class QdrantConfig:
     """Configuration for Qdrant vector database collections."""
     
-    # Collection configurations for different content types
-    COLLECTIONS = {
+    # Base collection template
+    BASE_COLLECTION_CONFIG = {
+        "vector_size": 1536,  # OpenAI embedding size
+        "distance": Distance.COSINE
+    }
+    
+    # Collection-specific payload schemas
+    PAYLOAD_SCHEMAS = {
         "job_descriptions": {
-            "vector_size": 1536,  # OpenAI embedding size
-            "distance": Distance.COSINE,
-            "payload_schema": {
-                "role": "keyword",
-                "company": "keyword", 
-                "level": "keyword",
-                "skills": "keyword[]",
-                "created_at": "datetime"
-            }
+            "role": "keyword",
+            "company": "keyword", 
+            "level": "keyword",
+            "skills": "keyword[]",
+            "created_at": "datetime"
         },
         "questions": {
-            "vector_size": 1536,
-            "distance": Distance.COSINE, 
-            "payload_schema": {
-                "session_id": "keyword",
-                "difficulty": "keyword",
-                "category": "keyword",
-                "subcategory": "keyword",
-                "role": "keyword",
-                "skills": "keyword[]",
-                "created_at": "datetime"
-            }
+            "session_id": "keyword",
+            "difficulty": "keyword",
+            "category": "keyword",
+            "subcategory": "keyword",
+            "role": "keyword",
+            "skills": "keyword[]",
+            "created_at": "datetime"
         },
         "answers": {
-            "vector_size": 1536,
-            "distance": Distance.COSINE,
-            "payload_schema": {
-                "user_id": "keyword",
-                "question_id": "keyword",
-                "session_id": "keyword",
-                "score": "float",
-                "created_at": "datetime"
-            }
+            "user_id": "keyword",
+            "question_id": "keyword",
+            "session_id": "keyword",
+            "score": "float",
+            "created_at": "datetime"
         },
         "user_patterns": {
-            "vector_size": 1536,
-            "distance": Distance.COSINE,
-            "payload_schema": {
-                "user_id": "keyword",
-                "skill_level": "keyword",
-                "performance_trend": "float",
-                "learning_style": "keyword",
-                "created_at": "datetime"
-            }
+            "user_id": "keyword",
+            "skill_level": "keyword",
+            "performance_trend": "float",
+            "learning_style": "keyword",
+            "created_at": "datetime"
         }
     }
+    
+    @classmethod
+    def _build_collection_config(cls, collection_name: str) -> Dict[str, Any]:
+        """Build collection configuration from template and schema."""
+        return {
+            **cls.BASE_COLLECTION_CONFIG,
+            "payload_schema": cls.PAYLOAD_SCHEMAS.get(collection_name, {})
+        }
+    
+    @classmethod
+    def get_collections(cls) -> Dict[str, Dict[str, Any]]:
+        """Get all collection configurations."""
+        return {
+            name: cls._build_collection_config(name) 
+            for name in cls.PAYLOAD_SCHEMAS.keys()
+        }
+    
+    # Backward compatibility
+    COLLECTIONS = property(get_collections)
     
     def __init__(self):
         self.qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
