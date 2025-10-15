@@ -5,10 +5,10 @@ Core logic for selecting the best questions based on role analysis and user cont
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from app.services.role_analysis_service import RoleAnalysis, RoleAnalysisService
+from app.models.role_analysis_models import RoleAnalysis
+from app.services.role_analysis_service import RoleAnalysisService
 from app.services.question_diversity_engine import QuestionDiversityEngine, Question, QuestionCategory, DifficultyLevel
 from app.services.async_question_bank_service import AsyncQuestionBankService
-from app.services.hybrid_ai_service import HybridAIService
 from app.utils.logger import get_logger
 from app.utils.metrics import metrics
 import time
@@ -43,7 +43,8 @@ class IntelligentQuestionSelector:
         self.role_analysis_service = RoleAnalysisService()
         self.diversity_engine = QuestionDiversityEngine()
         self.question_bank_service = AsyncQuestionBankService(db_session) if db_session else None
-        self.ai_service = HybridAIService()
+        # AI service will be injected when needed to avoid circular imports
+        self.ai_service = None
         
         # Selection configuration
         self.min_database_questions = 5  # Minimum questions to try from database first
@@ -326,7 +327,12 @@ class IntelligentQuestionSelector:
             ai_questions = []
             for question_type in missing_types:
                 try:
-                    # Generate questions using AI service
+                    # Generate questions using AI service (if available)
+                    if self.ai_service is None:
+                        # Import here to avoid circular imports
+                        from app.services.hybrid_ai_service import HybridAIService
+                        self.ai_service = HybridAIService()
+                    
                     ai_response = await self.ai_service.generate_interview_questions(
                         role=role_analysis.primary_role,
                         job_description=f"Industry: {role_analysis.industry.value}, "
@@ -435,7 +441,12 @@ class IntelligentQuestionSelector:
         try:
             logger.warning("Falling back to AI generation due to selection error")
             
-            # Generate questions using AI service
+            # Generate questions using AI service (if available)
+            if self.ai_service is None:
+                # Import here to avoid circular imports
+                from app.services.hybrid_ai_service import HybridAIService
+                self.ai_service = HybridAIService()
+            
             ai_response = await self.ai_service.generate_interview_questions(
                 role=role,
                 job_description=job_description,

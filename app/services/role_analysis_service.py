@@ -3,66 +3,20 @@ Enhanced role analysis service for intelligent question selection.
 Extracts skills, industry, seniority, and other role characteristics.
 """
 import re
+import asyncio
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
-from enum import Enum
 from app.utils.logger import get_logger
-from app.services.dynamic_prompt_service import DynamicPromptService
+from app.utils.validation_mixin import ValidationMixin
+from app.models.role_analysis_models import RoleAnalysis, Industry, SeniorityLevel, CompanySize
 
 logger = get_logger(__name__)
-
-class Industry(Enum):
-    TECHNOLOGY = "technology"
-    FINANCE = "finance"
-    HEALTHCARE = "healthcare"
-    EDUCATION = "education"
-    RETAIL = "retail"
-    MANUFACTURING = "manufacturing"
-    CONSULTING = "consulting"
-    MEDIA = "media"
-    GOVERNMENT = "government"
-    NONPROFIT = "nonprofit"
-    OTHER = "other"
-
-class SeniorityLevel(Enum):
-    JUNIOR = "junior"
-    MID = "mid"
-    SENIOR = "senior"
-    STAFF = "staff"
-    PRINCIPAL = "principal"
-    LEAD = "lead"
-    MANAGER = "manager"
-    DIRECTOR = "director"
-    VP = "vp"
-    C_LEVEL = "c_level"
-
-class CompanySize(Enum):
-    STARTUP = "startup"  # 1-50 employees
-    SMALL = "small"      # 51-200 employees
-    MEDIUM = "medium"    # 201-1000 employees
-    LARGE = "large"      # 1001-5000 employees
-    ENTERPRISE = "enterprise"  # 5000+ employees
-
-@dataclass
-class RoleAnalysis:
-    """Comprehensive role analysis result."""
-    primary_role: str
-    required_skills: List[str]
-    industry: Industry
-    seniority_level: SeniorityLevel
-    company_size: CompanySize
-    tech_stack: List[str]
-    soft_skills: List[str]
-    job_function: str
-    experience_years: Optional[int] = None
-    education_requirements: List[str] = None
-    certifications: List[str] = None
 
 class RoleAnalysisService:
     """Enhanced role analysis service for intelligent question selection."""
     
     def __init__(self):
-        self.dynamic_prompt_service = DynamicPromptService()
+        # DynamicPromptService will be imported when needed to avoid circular imports
+        self.dynamic_prompt_service = None
         
         # Common skill patterns
         self.technical_skills = {
@@ -130,64 +84,81 @@ class RoleAnalysisService:
         }
 
     async def analyze_role(self, role: str, job_description: str) -> RoleAnalysis:
-        """Perform comprehensive role analysis."""
+        """Perform comprehensive role analysis with parallel execution."""
         try:
             logger.info(f"Analyzing role: {role}")
             
-            # Extract skills
-            required_skills = await self._extract_skills(job_description)
-            tech_stack = await self._extract_tech_stack(job_description)
-            soft_skills = await self._extract_soft_skills(job_description)
+            # Execute all extractions in parallel
+            extraction_tasks = [
+                self._extract_skills(job_description),
+                self._extract_tech_stack(job_description),
+                self._extract_soft_skills(job_description),
+                self._detect_industry(job_description),
+                self._detect_seniority(job_description),
+                self._detect_company_size(job_description),
+                self._detect_job_function(role, job_description),
+                self._extract_experience_years(job_description),
+                self._extract_education_requirements(job_description),
+                self._extract_certifications(job_description)
+            ]
             
-            # Detect characteristics
-            industry = await self._detect_industry(job_description)
-            seniority_level = await self._detect_seniority(job_description)
-            company_size = await self._detect_company_size(job_description)
-            job_function = await self._detect_job_function(role, job_description)
-            experience_years = await self._extract_experience_years(job_description)
-            education_requirements = await self._extract_education_requirements(job_description)
-            certifications = await self._extract_certifications(job_description)
-            
-            analysis = RoleAnalysis(
-                primary_role=role,
-                required_skills=required_skills,
-                industry=industry,
-                seniority_level=seniority_level,
-                company_size=company_size,
-                tech_stack=tech_stack,
-                soft_skills=soft_skills,
-                job_function=job_function,
-                experience_years=experience_years,
-                education_requirements=education_requirements or [],
-                certifications=certifications or []
-            )
-            
-            logger.info(f"Role analysis completed: {industry.value}, {seniority_level.value}, {len(required_skills)} skills")
-            return analysis
+            results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
+            return self._build_role_analysis(role, results)
             
         except Exception as e:
             logger.error(f"Error in role analysis: {e}")
-            # Return default analysis
-            return RoleAnalysis(
-                primary_role=role,
-                required_skills=[],
-                industry=Industry.OTHER,
-                seniority_level=SeniorityLevel.MID,
-                company_size=CompanySize.MEDIUM,
-                tech_stack=[],
-                soft_skills=[],
-                job_function="software_development"
-            )
+            return self._get_default_analysis(role)
+    
+    def _build_role_analysis(self, role: str, results: List[Any]) -> RoleAnalysis:
+        """Build RoleAnalysis from parallel extraction results."""
+        # Unpack results with error handling
+        required_skills = results[0] if not isinstance(results[0], Exception) else []
+        tech_stack = results[1] if not isinstance(results[1], Exception) else []
+        soft_skills = results[2] if not isinstance(results[2], Exception) else []
+        industry = results[3] if not isinstance(results[3], Exception) else Industry.OTHER
+        seniority_level = results[4] if not isinstance(results[4], Exception) else SeniorityLevel.MID
+        company_size = results[5] if not isinstance(results[5], Exception) else CompanySize.MEDIUM
+        job_function = results[6] if not isinstance(results[6], Exception) else "software_development"
+        experience_years = results[7] if not isinstance(results[7], Exception) else 0
+        education_requirements = results[8] if not isinstance(results[8], Exception) else []
+        certifications = results[9] if not isinstance(results[9], Exception) else []
+        
+        analysis = RoleAnalysis(
+            primary_role=role,
+            required_skills=required_skills,
+            industry=industry,
+            seniority_level=seniority_level,
+            company_size=company_size,
+            tech_stack=tech_stack,
+            soft_skills=soft_skills,
+            job_function=job_function,
+            experience_years=experience_years,
+            education_requirements=education_requirements or [],
+            certifications=certifications or []
+        )
+        
+        logger.info(f"Role analysis completed: {industry.value}, {seniority_level.value}, {len(required_skills)} skills")
+        return analysis
+    
+    def _get_default_analysis(self, role: str) -> RoleAnalysis:
+        """Get default analysis when extraction fails."""
+        return RoleAnalysis(
+            primary_role=role,
+            required_skills=[],
+            industry=Industry.OTHER,
+            seniority_level=SeniorityLevel.MID,
+            company_size=CompanySize.MEDIUM,
+            tech_stack=[],
+            soft_skills=[],
+            job_function="software_development",
+            experience_years=0,
+            education_requirements=[],
+            certifications=[]
+        )
 
     def _find_matching_items(self, text: str, item_dict: Dict[Any, List[str]]) -> List[str]:
         """Generic method to find matching items in text."""
-        text_lower = text.lower()
-        matches = []
-        for category, items in item_dict.items():
-            for item in items:
-                if item in text_lower:
-                    matches.append(item)
-        return list(set(matches))
+        return ValidationMixin.find_matching_items(text, item_dict)
     
     async def _extract_skills(self, job_description: str) -> List[str]:
         """Extract required skills from job description."""

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
 from app.database.models import Question, SessionQuestion, InterviewSession
 from app.utils.logger import get_logger
+from app.utils.validation_mixin import ValidationMixin
 from app.models.schemas import ParseJDResponse
 
 logger = get_logger(__name__)
@@ -422,37 +423,31 @@ class QuestionBankService:
             'version': '1.0'
         }
     
+    # Data-driven difficulty rules
+    DIFFICULTY_RULES = [
+        ('seniority', {'senior': 'hard', 'junior': 'easy', 'mid': 'medium'}),
+        ('keywords', {
+            'hard': ['complex', 'advanced', 'architecture', 'design', 'optimize'],
+            'easy': ['basic', 'simple', 'explain', 'what is']
+        })
+    ]
+
     def _determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
-        """Determine question difficulty using functional approach."""
-        # Priority-based difficulty determination
-        difficulty_determiners = [
-            self._get_seniority_difficulty,
-            self._get_keyword_difficulty,
-            lambda *args: 'medium'  # Default fallback
-        ]
-        
-        for determiner in difficulty_determiners:
-            if difficulty := determiner(question_text, role_analysis):
+        """Determine question difficulty using data-driven approach."""
+        for rule_type, rule_data in self.DIFFICULTY_RULES:
+            if difficulty := self._apply_difficulty_rule(rule_type, rule_data, question_text, role_analysis):
                 return difficulty
-        
         return 'medium'
 
-    def _get_seniority_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Get difficulty based on seniority level."""
-        seniority_map = {'senior': 'hard', 'junior': 'easy', 'mid': 'medium'}
-        return seniority_map.get(role_analysis.get('seniority_level', 'mid'))
-
-    def _get_keyword_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Get difficulty based on keywords."""
-        text_lower = question_text.lower()
-        keyword_rules = [
-            (['complex', 'advanced', 'architecture', 'design', 'optimize'], 'hard'),
-            (['basic', 'simple', 'explain', 'what is'], 'easy')
-        ]
-        
-        for keywords, difficulty in keyword_rules:
-            if any(word in text_lower for word in keywords):
-                return difficulty
+    def _apply_difficulty_rule(self, rule_type: str, rule_data: dict, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
+        """Apply a specific difficulty rule."""
+        if rule_type == 'seniority':
+            return rule_data.get(role_analysis.get('seniority_level', 'mid'))
+        elif rule_type == 'keywords':
+            text_lower = question_text.lower()
+            for difficulty, keywords in rule_data.items():
+                if any(word in text_lower for word in keywords):
+                    return difficulty
         return None
     
     def _categorize_question(self, question_text: str) -> str:
@@ -461,11 +456,7 @@ class QuestionBankService:
     
     def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
         """Generic keyword-based categorization."""
-        text_lower = text.lower()
-        for category, keywords in rules.items():
-            if keywords and any(keyword in text_lower for keyword in keywords):
-                return category
-        return "technical"  # default
+        return ValidationMixin.categorize_by_keywords(text, rules)
     
     def _update_running_average(self, current_avg: Optional[float], new_value: float, count: int) -> float:
         """Calculate running average with null handling."""
