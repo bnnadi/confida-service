@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from datetime import datetime
 from app.logging_config import setup_logging
 from app.middleware.logging_middleware import log_requests
@@ -12,10 +13,72 @@ from app.config import settings
 # Setup logging
 logger = setup_logging()
 
+# Set custom OpenAPI schema using simplified documentation builder
+from app.utils.api_documentation import APIDocumentationBuilder
+
+def create_custom_openapi():
+    """Create custom OpenAPI schema with enhanced documentation."""
+    builder = APIDocumentationBuilder(app)
+    return builder.build_openapi_schema()
+
+app.openapi = create_custom_openapi
+
 app = FastAPI(
     title="InterviewIQ API",
-    description="AI-powered interview coaching with intelligent feedback and analysis",
-    version="1.0.0"
+    description="""
+    ## 🎯 InterviewIQ API Documentation
+    
+    A comprehensive API for AI-powered interview coaching and question generation.
+    
+    ### ✨ Key Features
+    - **AI-Powered Question Generation**: Generate interview questions based on job descriptions
+    - **Answer Analysis**: Get detailed feedback on interview answers
+    - **Session Management**: Track interview sessions and progress
+    - **File Upload Support**: Upload job descriptions and documents
+    - **Real-time Analytics**: Monitor performance and improvement trends
+    - **Vector Search**: Semantic search through question banks
+    
+    ### 🚀 Getting Started
+    1. **Authentication**: Use the `/auth` endpoints to get API tokens
+    2. **Parse Job Description**: Use `/parse-jd` to generate questions
+    3. **Analyze Answers**: Use `/analyze-answer` for feedback
+    4. **View Analytics**: Use `/analytics` endpoints for insights
+    
+    ### 📊 API Status
+    - **Version**: 1.0.0
+    - **Status**: Production Ready
+    - **Rate Limits**: 100 requests/minute per user
+    - **Authentication**: Bearer Token
+    
+    ### 🔗 Useful Links
+    - [GitHub Repository](https://github.com/your-org/interviewiq)
+    - [Support Documentation](https://docs.interviewiq.com)
+    - [Status Page](https://status.interviewiq.com)
+    """,
+    version="1.0.0",
+    contact={
+        "name": "InterviewIQ Support",
+        "url": "https://docs.interviewiq.com",
+        "email": "support@interviewiq.com"
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    servers=[
+        {
+            "url": "https://api.interviewiq.com",
+            "description": "Production server"
+        },
+        {
+            "url": "https://staging-api.interviewiq.com",
+            "description": "Staging server"
+        },
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server"
+        }
+    ]
 )
 
 # Rate limiting is now handled by the enhanced middleware
@@ -268,6 +331,13 @@ async def vector_monitoring():
     except Exception as e:
         logger.error(f"Error getting vector monitoring data: {e}")
         return {"error": str(e)}
+
+# Add documentation guides endpoint
+@app.get("/docs/guides", tags=["Documentation"])
+async def get_usage_guides():
+    """Get comprehensive usage guides and code examples."""
+    from app.utils.api_documentation import get_usage_guides
+    return get_usage_guides()
 
 if __name__ == "__main__":
     import uvicorn
