@@ -4,7 +4,7 @@ Async database operations utilities.
 This module provides common async database operations and utilities
 for working with async SQLAlchemy sessions.
 """
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, func, text
 from sqlalchemy.orm import selectinload, joinedload
@@ -23,19 +23,28 @@ class AsyncDatabaseOperations:
     def __init__(self, session: AsyncSession):
         self.session = session
     
+    async def _execute_with_transaction(self, operation: Callable, *args, **kwargs):
+        """Generic database operation with transaction handling."""
+        try:
+            result = await operation(*args, **kwargs)
+            await self.session.commit()
+            return result
+        except SQLAlchemyError as e:
+            await self.session.rollback()
+            logger.error(f"❌ Database operation failed: {e}")
+            raise
+    
     async def create(self, model: Type[T], **kwargs) -> T:
         """Create a new record asynchronously."""
-        try:
+        async def _create_operation():
             instance = model(**kwargs)
             self.session.add(instance)
-            await self.session.commit()
+            await self.session.flush()  # Get ID without committing
             await self.session.refresh(instance)
             logger.debug(f"✅ Created {model.__name__} record: {instance.id}")
             return instance
-        except SQLAlchemyError as e:
-            await self.session.rollback()
-            logger.error(f"❌ Error creating {model.__name__}: {e}")
-            raise
+        
+        return await self._execute_with_transaction(_create_operation)
     
     async def get_by_id(self, model: Type[T], record_id: Any) -> Optional[T]:
         """Get a record by ID asynchronously."""

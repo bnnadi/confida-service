@@ -28,6 +28,14 @@ logger = get_logger(__name__)
 class QuestionBankValidator:
     """Validates question bank data quality and integrity."""
     
+    # Centralized validation rules
+    VALIDATION_RULES = {
+        "text_length": {"min": 10, "max": 1000},
+        "punctuation": {"required_endings": ['?', '.', '!']},
+        "typos": {"patterns": [r'\b(teh|adn|recieve|seperate)\b']},
+        "whitespace": {"max_consecutive": 2}
+    }
+    
     def __init__(self):
         self.settings = get_settings()
         self.engine = create_engine(self.settings.DATABASE_URL)
@@ -67,35 +75,69 @@ class QuestionBankValidator:
             logger.info("✅ Validation completed!")
             return self.validation_results
     
-    def _validate_question_text(self, questions: List[Question]):
-        """Validate question text quality."""
-        logger.info("Validating question text...")
+    def _validate_with_rules(self, questions: List[Question], rule_type: str, validator_func):
+        """Generic validation method using centralized rules."""
+        rules = self.VALIDATION_RULES.get(rule_type, {})
         
         for question in questions:
-            issues = []
-            
-            # Check for empty or very short questions
-            if not question.question_text or len(question.question_text.strip()) < 10:
-                issues.append("Question text is too short or empty")
-            
-            # Check for very long questions
-            if len(question.question_text) > 1000:
-                issues.append("Question text is too long (>1000 characters)")
-            
-            # Check for proper sentence structure
-            if not question.question_text.endswith(('?', '.', '!')):
-                issues.append("Question should end with proper punctuation")
-            
-            # Check for common typos or issues
-            if re.search(r'\b(teh|adn|recieve|seperate)\b', question.question_text, re.IGNORECASE):
-                issues.append("Question contains common typos")
-            
-            # Check for excessive whitespace
-            if re.search(r'\s{3,}', question.question_text):
-                issues.append("Question contains excessive whitespace")
-            
+            issues = validator_func(question, rules)
             if issues:
-                self._add_issue("question_text", question.id, issues)
+                self._add_issue(rule_type, question.id, issues)
+    
+    def _validate_question_text(self, questions: List[Question]):
+        """Validate question text using generic validation."""
+        logger.info("Validating question text...")
+        
+        self._validate_with_rules(questions, "text_length", self._validate_text_length)
+        self._validate_with_rules(questions, "punctuation", self._validate_punctuation)
+        self._validate_with_rules(questions, "typos", self._validate_typos)
+        self._validate_with_rules(questions, "whitespace", self._validate_whitespace)
+    
+    def _validate_text_length(self, question: Question, rules: Dict[str, Any]) -> List[str]:
+        """Validate question text length."""
+        issues = []
+        text = question.question_text or ""
+        
+        if len(text.strip()) < rules.get("min", 10):
+            issues.append("Question text is too short or empty")
+        
+        if len(text) > rules.get("max", 1000):
+            issues.append(f"Question text is too long (>{rules.get('max', 1000)} characters)")
+        
+        return issues
+    
+    def _validate_punctuation(self, question: Question, rules: Dict[str, Any]) -> List[str]:
+        """Validate question punctuation."""
+        issues = []
+        text = question.question_text or ""
+        
+        if text and not text.endswith(tuple(rules.get("required_endings", ['?', '.', '!']))):
+            issues.append("Question should end with proper punctuation")
+        
+        return issues
+    
+    def _validate_typos(self, question: Question, rules: Dict[str, Any]) -> List[str]:
+        """Validate question for typos."""
+        issues = []
+        text = question.question_text or ""
+        
+        for pattern in rules.get("patterns", []):
+            if re.search(pattern, text, re.IGNORECASE):
+                issues.append("Question contains common typos")
+                break
+        
+        return issues
+    
+    def _validate_whitespace(self, question: Question, rules: Dict[str, Any]) -> List[str]:
+        """Validate question whitespace."""
+        issues = []
+        text = question.question_text or ""
+        
+        max_consecutive = rules.get("max_consecutive", 2)
+        if re.search(rf'\s{{{max_consecutive + 1},}}', text):
+            issues.append("Question contains excessive whitespace")
+        
+        return issues
     
     def _validate_metadata(self, questions: List[Question]):
         """Validate question metadata."""

@@ -59,7 +59,7 @@ class AsyncDatabaseManager:
                 # SQLite async configuration
                 self.engine = create_async_engine(
                     database_url,
-                    echo=settings.DATABASE_ECHO,
+                    echo=False,
                     poolclass=StaticPool,
                     connect_args={"check_same_thread": False}
                 )
@@ -67,16 +67,12 @@ class AsyncDatabaseManager:
                 # PostgreSQL async configuration with advanced pooling
                 self.engine = create_async_engine(
                     database_url,
-                    echo=settings.DATABASE_ECHO,
-                    poolclass=QueuePool,
+                    echo=False,
                     pool_size=settings.ASYNC_DATABASE_POOL_SIZE,
                     max_overflow=settings.ASYNC_DATABASE_MAX_OVERFLOW,
                     pool_timeout=settings.ASYNC_DATABASE_POOL_TIMEOUT,
                     pool_recycle=settings.ASYNC_DATABASE_POOL_RECYCLE,
-                    pool_pre_ping=True,
-                    # Additional async-specific optimizations
-                    pool_reset_on_return='commit',
-                    pool_events=True
+                    pool_pre_ping=True
                 )
             
             # Create async session factory
@@ -196,7 +192,10 @@ class AsyncDatabaseManager:
     async def check_connection(self) -> bool:
         """Check if database connection is working."""
         try:
-            async with self.get_session() as session:
+            if not self.session_factory:
+                return False
+            
+            async with self.session_factory() as session:
                 result = await session.execute(text("SELECT 1"))
                 result.fetchone()
             logger.debug("✅ Async database connection successful")
@@ -271,8 +270,18 @@ async_db_manager = AsyncDatabaseManager()
 # Dependency function for FastAPI
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency to get async database session."""
-    async with async_db_manager.get_session() as session:
-        yield session
+    if not async_db_manager.session_factory:
+        raise RuntimeError("Async database not initialized. Call init_async_db() first.")
+    
+    async with async_db_manager.session_factory() as session:
+        try:
+            yield session
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"❌ Database session error: {e}")
+            raise
+        finally:
+            await session.close()
 
 # Initialize database on startup
 async def init_async_db() -> None:

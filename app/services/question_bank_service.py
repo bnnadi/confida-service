@@ -19,6 +19,20 @@ logger = get_logger(__name__)
 class QuestionBankService:
     """Service for managing the global question bank and intelligent question selection."""
     
+    # Centralized categorization rules (shared with async service)
+    CATEGORIZATION_RULES = {
+        "behavioral": [
+            "experience", "tell me about", "describe", "situation", "behavioral"
+        ],
+        "system_design": [
+            "system", "architecture", "design", "scale", "distributed"
+        ],
+        "leadership": [
+            "lead", "manage", "team", "mentor", "leadership"
+        ],
+        "technical": []  # Default category
+    }
+    
     def __init__(self, db_session: Session):
         self.db = db_session
     
@@ -316,36 +330,42 @@ class QuestionBankService:
             return []
     
     def _ensure_question_diversity(self, questions: List[Question], count: int) -> List[Question]:
-        """Ensure question diversity across categories and difficulty levels."""
+        """Ensure question diversity using functional approach."""
         if len(questions) <= count:
             return questions
         
         # Group questions by category and difficulty
-        categories = ['technical', 'behavioral', 'system_design', 'leadership']
-        difficulties = ['easy', 'medium', 'hard']
+        grouped = self._group_questions_by_diversity(questions)
         
-        selected = []
-        used_questions = set()
+        # Select diverse questions first, then fill remaining slots
+        selected = self._select_diverse_questions(grouped, count)
+        remaining_needed = count - len(selected)
         
-        # First pass: select one question from each category-difficulty combination
-        for category in categories:
-            for difficulty in difficulties:
-                for question in questions:
-                    if (question.id not in used_questions and 
-                        question.category == category and 
-                        question.difficulty_level == difficulty):
-                        selected.append(question)
-                        used_questions.add(question.id)
-                        break
-        
-        # Second pass: fill remaining slots with best remaining questions
-        remaining_questions = [q for q in questions if q.id not in used_questions]
-        remaining_questions.sort(key=lambda q: (q.success_rate or 0, q.usage_count), reverse=True)
-        
-        while len(selected) < count and remaining_questions:
-            selected.append(remaining_questions.pop(0))
+        if remaining_needed > 0:
+            remaining = [q for q in questions if q not in selected]
+            remaining.sort(key=lambda q: (q.success_rate or 0, q.usage_count), reverse=True)
+            selected.extend(remaining[:remaining_needed])
         
         return selected[:count]
+    
+    def _group_questions_by_diversity(self, questions: List[Question]) -> Dict[str, List[Question]]:
+        """Group questions by category and difficulty."""
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for question in questions:
+            key = f"{question.category}_{question.difficulty_level}"
+            grouped[key].append(question)
+        return grouped
+    
+    def _select_diverse_questions(self, grouped: Dict[str, List[Question]], count: int) -> List[Question]:
+        """Select one question from each diversity group."""
+        selected = []
+        for questions in grouped.values():
+            if questions and len(selected) < count:
+                # Select best question from this group
+                best_question = max(questions, key=lambda q: (q.success_rate or 0, q.usage_count))
+                selected.append(best_question)
+        return selected
     
     def _update_usage_stats(self, questions: List[Question]):
         """Update usage statistics for selected questions."""
@@ -416,36 +436,44 @@ class QuestionBankService:
         }
     
     def _determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
-        """Determine question difficulty based on text and role analysis."""
+        """Determine question difficulty using functional approach."""
         text_lower = question_text.lower()
         
-        # Seniority-based difficulty
-        seniority = role_analysis.get('seniority_level', 'mid')
-        if seniority == 'senior':
-            return 'hard'
-        elif seniority == 'junior':
-            return 'easy'
+        # Seniority-based difficulty mapping
+        seniority_difficulty = {
+            'senior': 'hard',
+            'junior': 'easy',
+            'mid': 'medium'
+        }
         
-        # Keyword-based difficulty
-        if any(word in text_lower for word in ['complex', 'advanced', 'architecture', 'design', 'optimize']):
-            return 'hard'
-        elif any(word in text_lower for word in ['basic', 'simple', 'explain', 'what is']):
-            return 'easy'
+        # Check seniority first
+        seniority = role_analysis.get('seniority_level', 'mid')
+        if seniority in seniority_difficulty:
+            return seniority_difficulty[seniority]
+        
+        # Keyword-based difficulty rules
+        difficulty_rules = [
+            (['complex', 'advanced', 'architecture', 'design', 'optimize'], 'hard'),
+            (['basic', 'simple', 'explain', 'what is'], 'easy')
+        ]
+        
+        for keywords, difficulty in difficulty_rules:
+            if any(word in text_lower for word in keywords):
+                return difficulty
         
         return 'medium'
     
     def _categorize_question(self, question_text: str) -> str:
-        """Categorize question based on content."""
-        text_lower = question_text.lower()
-        
-        if any(word in text_lower for word in ['experience', 'tell me about', 'describe', 'situation', 'behavioral']):
-            return 'behavioral'
-        elif any(word in text_lower for word in ['system', 'architecture', 'design', 'scale', 'distributed']):
-            return 'system_design'
-        elif any(word in text_lower for word in ['lead', 'manage', 'team', 'mentor', 'leadership']):
-            return 'leadership'
-        else:
-            return 'technical'
+        """Categorize question using centralized rules."""
+        return self._categorize_by_keywords(question_text, self.CATEGORIZATION_RULES)
+    
+    def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
+        """Generic keyword-based categorization."""
+        text_lower = text.lower()
+        for category, keywords in rules.items():
+            if keywords and any(keyword in text_lower for keyword in keywords):
+                return category
+        return "technical"  # default
     
     def _get_subcategory(self, question_text: str) -> Optional[str]:
         """Get question subcategory based on content."""

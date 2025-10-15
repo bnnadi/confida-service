@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 from urllib.parse import urlparse
 from app.config import get_settings
 import logging
@@ -14,38 +14,29 @@ class ConfigValidator:
         self.settings = get_settings()
         self.validation_errors = []
         self.validation_warnings = []
+        self._validators = self._register_validators()
+    
+    def _register_validators(self) -> List[Callable]:
+        """Register all validation methods."""
+        return [
+            self._validate_ai_services,
+            self._validate_api_keys,
+            self._validate_urls,
+            self._validate_models,
+            self._validate_numeric_values,
+            self._validate_environment_specific,
+            self._validate_database_config,
+            self._validate_file_upload_config,
+            self._validate_rate_limiting_config
+        ]
     
     def validate_all(self) -> Tuple[List[str], List[str]]:
-        """Validate all configuration settings."""
+        """Validate all configuration settings using registered validators."""
         self.validation_errors = []
         self.validation_warnings = []
         
-        # Service configuration validation
-        self._validate_ai_services()
-        
-        # API key validation
-        self._validate_api_keys()
-        
-        # URL validation
-        self._validate_urls()
-        
-        # Model validation
-        self._validate_models()
-        
-        # Numeric validation
-        self._validate_numeric_values()
-        
-        # Environment-specific validation
-        self._validate_environment_specific()
-        
-        # Database validation
-        self._validate_database_config()
-        
-        # File upload validation
-        self._validate_file_upload_config()
-        
-        # Rate limiting validation
-        self._validate_rate_limiting_config()
+        for validator in self._validators:
+            validator()
         
         return self.validation_errors, self.validation_warnings
     

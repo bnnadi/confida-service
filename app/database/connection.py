@@ -21,13 +21,13 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
-        echo=settings.DATABASE_ECHO
+        echo=False
     )
 else:
     # PostgreSQL configuration for production
     engine = create_engine(
         DATABASE_URL,
-        echo=settings.DATABASE_ECHO,
+        echo=False,
         pool_pre_ping=True,
         pool_size=settings.DATABASE_POOL_SIZE,
         max_overflow=settings.DATABASE_MAX_OVERFLOW,

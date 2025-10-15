@@ -44,7 +44,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, sessions, auth, files, speech
+    from app.routers import interview, sessions, auth, files, speech, vector_search
     
     # Core routers (always enabled)
     routers = [
@@ -52,7 +52,8 @@ def load_routers():
         ("interview", interview.router),
         ("sessions", sessions.router),
         ("files", files.router),
-        ("speech", speech.router)
+        ("speech", speech.router),
+        ("vector_search", vector_search.router)
     ]
     
     # Conditional routers based on environment variables
@@ -183,6 +184,17 @@ async def health_check():
                 "error": str(e)
             }
     
+    # Add vector database health
+    try:
+        from app.services.semantic_search_service import semantic_search_service
+        vector_health = await semantic_search_service.health_check()
+        health_data["vector_database"] = vector_health
+    except Exception as e:
+        health_data["vector_database"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+    
     return health_data
 
 @app.get("/ready")
@@ -219,6 +231,24 @@ async def database_monitoring():
         }
     except Exception as e:
         logger.error(f"Error getting database monitoring data: {e}")
+        return {"error": str(e)}
+
+@app.get("/monitoring/vector")
+async def vector_monitoring():
+    """Get detailed vector database monitoring information."""
+    try:
+        from app.services.vector_service import vector_service
+        
+        health = await vector_service.health_check()
+        stats = await vector_service.get_collection_stats()
+        
+        return {
+            "health_status": health,
+            "collection_stats": stats,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting vector monitoring data: {e}")
         return {"error": str(e)}
 
 if __name__ == "__main__":
