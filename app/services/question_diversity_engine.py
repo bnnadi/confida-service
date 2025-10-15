@@ -7,34 +7,12 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from app.utils.logger import get_logger
+from app.models.question_models import Question, QuestionCategory, DifficultyLevel
+from app.services.diversity_pipeline import QuestionDiversityPipeline
 
 logger = get_logger(__name__)
 
-class QuestionCategory(Enum):
-    TECHNICAL = "technical"
-    BEHAVIORAL = "behavioral"
-    SYSTEM_DESIGN = "system_design"
-    LEADERSHIP = "leadership"
-    DATA_ANALYSIS = "data_analysis"
-    PROBLEM_SOLVING = "problem_solving"
-    COMMUNICATION = "communication"
-
-class DifficultyLevel(Enum):
-    EASY = "easy"
-    MEDIUM = "medium"
-    HARD = "hard"
-
-@dataclass
-class Question:
-    """Question model for diversity engine."""
-    id: str
-    question_text: str
-    category: QuestionCategory
-    difficulty_level: DifficultyLevel
-    tags: List[str]
-    role_relevance_score: float = 0.0
-    user_history_score: float = 0.0
-    quality_score: float = 0.0
+# Question models are now imported from app.models.question_models
 
 @dataclass
 class DiversityConfig:
@@ -54,6 +32,7 @@ class QuestionDiversityEngine:
     
     def __init__(self):
         self.diversity_config = DiversityConfig()
+        self.pipeline = QuestionDiversityPipeline()
         
         # Category weights for different role types
         self.category_weights = {
@@ -99,30 +78,17 @@ class QuestionDiversityEngine:
                              target_count: int = 10,
                              role_type: str = 'mid',
                              user_history: Optional[List[str]] = None) -> List[Question]:
-        """Ensure question diversity across categories and difficulties."""
+        """Ensure question diversity using pipeline approach."""
         try:
             logger.info(f"Ensuring diversity for {len(questions)} questions, target: {target_count}")
             
-            if not questions:
-                return []
-            
-            # Filter out recently asked questions if user history provided
-            if user_history and self.diversity_config.avoid_recent_questions:
-                questions = self._filter_recent_questions(questions, user_history)
-            
-            # Score questions based on relevance and quality
-            scored_questions = self._score_questions(questions, role_type)
-            
-            # Apply diversity algorithms
-            diverse_questions = await self._select_diverse_questions(
-                scored_questions, target_count, role_type
+            # Use the pipeline for clean, testable diversity processing
+            return self.pipeline.ensure_diversity(
+                questions=questions,
+                target_count=target_count,
+                role_type=role_type,
+                user_history=user_history
             )
-            
-            # Shuffle to avoid predictable patterns
-            random.shuffle(diverse_questions)
-            
-            logger.info(f"Selected {len(diverse_questions)} diverse questions")
-            return diverse_questions
             
         except Exception as e:
             logger.error(f"Error in diversity engine: {e}")

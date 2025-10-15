@@ -111,33 +111,33 @@ class RoleAnalysisService:
     
     def _build_role_analysis(self, role: str, results: List[Any]) -> RoleAnalysis:
         """Build RoleAnalysis from parallel extraction results."""
-        # Unpack results with error handling
-        required_skills = results[0] if not isinstance(results[0], Exception) else []
-        tech_stack = results[1] if not isinstance(results[1], Exception) else []
-        soft_skills = results[2] if not isinstance(results[2], Exception) else []
-        industry = results[3] if not isinstance(results[3], Exception) else Industry.OTHER
-        seniority_level = results[4] if not isinstance(results[4], Exception) else SeniorityLevel.MID
-        company_size = results[5] if not isinstance(results[5], Exception) else CompanySize.MEDIUM
-        job_function = results[6] if not isinstance(results[6], Exception) else "software_development"
-        experience_years = results[7] if not isinstance(results[7], Exception) else 0
-        education_requirements = results[8] if not isinstance(results[8], Exception) else []
-        certifications = results[9] if not isinstance(results[9], Exception) else []
+        # Define extraction mapping with defaults
+        extraction_mapping = [
+            ('required_skills', []),
+            ('tech_stack', []),
+            ('soft_skills', []),
+            ('industry', Industry.OTHER),
+            ('seniority_level', SeniorityLevel.MID),
+            ('company_size', CompanySize.MEDIUM),
+            ('job_function', "software_development"),
+            ('experience_years', 0),
+            ('education_requirements', []),
+            ('certifications', [])
+        ]
+        
+        # Extract results with error handling
+        extracted_data = {}
+        for i, (field_name, default_value) in enumerate(extraction_mapping):
+            extracted_data[field_name] = (
+                results[i] if not isinstance(results[i], Exception) else default_value
+            )
         
         analysis = RoleAnalysis(
             primary_role=role,
-            required_skills=required_skills,
-            industry=industry,
-            seniority_level=seniority_level,
-            company_size=company_size,
-            tech_stack=tech_stack,
-            soft_skills=soft_skills,
-            job_function=job_function,
-            experience_years=experience_years,
-            education_requirements=education_requirements or [],
-            certifications=certifications or []
+            **extracted_data
         )
         
-        logger.info(f"Role analysis completed: {industry.value}, {seniority_level.value}, {len(required_skills)} skills")
+        logger.info(f"Role analysis completed: {analysis.industry.value}, {analysis.seniority_level.value}, {len(analysis.required_skills)} skills")
         return analysis
     
     def _get_default_analysis(self, role: str) -> RoleAnalysis:

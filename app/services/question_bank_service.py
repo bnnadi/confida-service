@@ -13,6 +13,7 @@ from sqlalchemy import and_, or_, func, desc
 from app.database.models import Question, SessionQuestion, InterviewSession
 from app.utils.logger import get_logger
 from app.utils.validation_mixin import ValidationMixin
+from app.services.difficulty_rule_engine import DifficultyRuleEngine, CategoryRuleEngine
 from app.models.schemas import ParseJDResponse
 
 logger = get_logger(__name__)
@@ -36,6 +37,8 @@ class QuestionBankService:
     
     def __init__(self, db_session: Session):
         self.db = db_session
+        self.difficulty_engine = DifficultyRuleEngine()
+        self.category_engine = CategoryRuleEngine()
     
     def get_questions_for_role(self, role: str, job_description: str, count: int = 10) -> List[Question]:
         """
@@ -387,16 +390,31 @@ class QuestionBankService:
     def _find_similar_question(self, question_text: str) -> Optional[Question]:
         """Find if a similar question already exists in the database."""
         try:
-            # Simple similarity check - can be enhanced with vector similarity
-            questions = self.db.query(Question).all()
+            # Use database-level similarity search for better performance
+            words = set(question_text.lower().split())
+            if not words:
+                return None
             
-            for question in questions:
-                # Check for high similarity (simple word overlap)
+            # Create a search pattern for database query
+            search_pattern = ' '.join(f'%{word}%' for word in words)
+            
+            # Query with similarity threshold at database level
+            similar_questions = self.db.query(Question)\
+                .filter(Question.question_text.ilike(f'%{search_pattern}%'))\
+                .limit(10)\
+                .all()
+            
+            # Find best match using similarity calculation
+            best_match = None
+            best_similarity = 0.0
+            
+            for question in similar_questions:
                 similarity = self._calculate_similarity(question_text, question.question_text)
-                if similarity > 0.8:  # 80% similarity threshold
-                    return question
+                if similarity > 0.8 and similarity > best_similarity:
+                    best_match = question
+                    best_similarity = similarity
             
-            return None
+            return best_match
             
         except Exception as e:
             logger.error(f"Error finding similar question: {e}")
@@ -433,26 +451,12 @@ class QuestionBankService:
     ]
 
     def _determine_difficulty(self, question_text: str, role_analysis: Dict[str, Any]) -> str:
-        """Determine question difficulty using data-driven approach."""
-        for rule_type, rule_data in self.DIFFICULTY_RULES:
-            if difficulty := self._apply_difficulty_rule(rule_type, rule_data, question_text, role_analysis):
-                return difficulty
-        return 'medium'
-
-    def _apply_difficulty_rule(self, rule_type: str, rule_data: dict, question_text: str, role_analysis: Dict[str, Any]) -> Optional[str]:
-        """Apply a specific difficulty rule."""
-        if rule_type == 'seniority':
-            return rule_data.get(role_analysis.get('seniority_level', 'mid'))
-        elif rule_type == 'keywords':
-            text_lower = question_text.lower()
-            for difficulty, keywords in rule_data.items():
-                if any(word in text_lower for word in keywords):
-                    return difficulty
-        return None
+        """Determine question difficulty using rule engine."""
+        return self.difficulty_engine.determine_difficulty(question_text, role_analysis)
     
     def _categorize_question(self, question_text: str) -> str:
-        """Categorize question using centralized rules."""
-        return self._categorize_by_keywords(question_text, self.CATEGORIZATION_RULES)
+        """Categorize question using rule engine."""
+        return self.category_engine.categorize_question(question_text)
     
     def _categorize_by_keywords(self, text: str, rules: Dict[str, List[str]]) -> str:
         """Generic keyword-based categorization."""
