@@ -97,7 +97,7 @@ class QuestionService:
                 # Sort by combined score
                 scored_questions.sort(key=lambda x: x.get('combined_score', 0), reverse=True)
                 # Ensure diversity
-                diverse_questions = self._ensure_question_diversity(scored_questions, count)
+                diverse_questions = self._ensure_question_diversity(scored_questions, count, user_context)
             else:
                 diverse_questions = []
             
@@ -462,60 +462,34 @@ class QuestionService:
     
     def _analyze_role_requirements(self, role: str, job_description: str) -> Dict[str, Any]:
         """
-        Analyze role requirements from job description.
+        Analyze role requirements using the consolidated role analysis processor.
         
         Returns:
             Dictionary with extracted role information
         """
         try:
-            # Extract key information from job description
-            job_lower = job_description.lower()
+            # Use the consolidated role analysis processor
+            from app.services.role_analysis_processor import RoleAnalysisProcessor
             
-            # Industry detection
-            industries = {
-                'technology': ['tech', 'software', 'engineering', 'developer', 'programmer'],
-                'finance': ['finance', 'banking', 'investment', 'trading', 'fintech'],
-                'healthcare': ['healthcare', 'medical', 'pharma', 'clinical', 'health'],
-                'education': ['education', 'teaching', 'academic', 'university', 'school'],
-                'retail': ['retail', 'ecommerce', 'commerce', 'shopping', 'customer']
-            }
+            processor = RoleAnalysisProcessor()
             
-            detected_industry = 'technology'  # default
-            for industry, keywords in industries.items():
-                if any(keyword in job_lower for keyword in keywords):
-                    detected_industry = industry
-                    break
+            # Process job description for detailed analysis
+            job_summary = processor.process_job_description(job_description)
             
-            # Seniority level detection
-            seniority_keywords = {
-                'junior': ['junior', 'entry', 'graduate', 'intern', 'associate'],
-                'mid': ['mid', 'intermediate', 'experienced'],
-                'senior': ['senior', 'lead', 'principal', 'staff'],
-                'manager': ['manager', 'director', 'head', 'vp', 'vice president']
-            }
-            
-            detected_seniority = 'mid'  # default
-            for level, keywords in seniority_keywords.items():
-                if any(keyword in job_lower for keyword in keywords):
-                    detected_seniority = level
-                    break
-            
-            # Skill extraction (basic keyword matching)
-            common_skills = [
-                'python', 'javascript', 'react', 'node', 'java', 'c++', 'sql', 'aws', 'docker',
-                'kubernetes', 'git', 'agile', 'scrum', 'machine learning', 'ai', 'data science',
-                'frontend', 'backend', 'full stack', 'devops', 'cloud', 'microservices'
-            ]
-            
-            detected_skills = [skill for skill in common_skills if skill in job_lower]
+            # Perform role analysis
+            role_analysis = processor.analyze_role(role, job_description)
             
             return {
-                'industry': detected_industry,
-                'seniority_level': detected_seniority,
-                'required_skills': detected_skills,
-                'company_size': 'medium',  # default
-                'tech_stack': detected_skills,
-                'soft_skills': ['communication', 'teamwork', 'problem solving']  # default
+                'industry': role_analysis.industry.value if role_analysis.industry else 'technology',
+                'seniority_level': role_analysis.seniority_level.value if role_analysis.seniority_level else 'mid',
+                'required_skills': role_analysis.required_skills,
+                'company_size': role_analysis.company_size.value if role_analysis.company_size else 'medium',
+                'tech_stack': role_analysis.tech_stack,
+                'soft_skills': role_analysis.soft_skills,
+                'experience_years': role_analysis.experience_years,
+                'job_function': role_analysis.job_function,
+                'education_requirements': job_summary.education_requirements,
+                'certifications': job_summary.certifications
             }
             
         except Exception as e:
@@ -526,20 +500,80 @@ class QuestionService:
                 'required_skills': [],
                 'company_size': 'medium',
                 'tech_stack': [],
-                'soft_skills': ['communication', 'teamwork', 'problem solving']
+                'soft_skills': ['communication', 'teamwork', 'problem solving'],
+                'experience_years': None,
+                'job_function': 'engineering',
+                'education_requirements': [],
+                'certifications': []
             }
     
-    def _ensure_question_diversity(self, questions: List[Dict[str, Any]], target_count: int) -> List[Dict[str, Any]]:
+    def _ensure_question_diversity(self, questions: List[Dict[str, Any]], target_count: int, user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        Ensure question diversity across categories and difficulties.
+        Ensure question diversity using advanced pipeline approach.
         
         Args:
             questions: List of questions to diversify
             target_count: Target number of questions
+            user_context: Optional user context for personalization
             
         Returns:
             Diversified list of questions
         """
+        if len(questions) <= target_count:
+            return questions
+        
+        # Extract user history for filtering
+        user_history = user_context.get('previous_questions', []) if user_context else []
+        
+        # Step 1: Filter out recently asked questions
+        filtered_questions = self._filter_recent_questions(questions, user_history)
+        
+        # Step 2: Score questions for diversity
+        scored_questions = self._score_questions_for_diversity(filtered_questions, user_context)
+        
+        # Step 3: Select diverse questions by category and difficulty
+        diverse_questions = self._select_diverse_questions(scored_questions, target_count)
+        
+        # Step 4: Shuffle for randomness
+        return self._shuffle_questions(diverse_questions)
+    
+    def _filter_recent_questions(self, questions: List[Dict[str, Any]], user_history: List[str]) -> List[Dict[str, Any]]:
+        """Filter out recently asked questions."""
+        if not user_history:
+            return questions
+        
+        recent_question_ids = set(user_history[-20:])  # Last 20 questions
+        filtered = [q for q in questions if q.get('id') not in recent_question_ids]
+        
+        logger.debug(f"Filtered {len(questions) - len(filtered)} recent questions")
+        return filtered
+    
+    def _score_questions_for_diversity(self, questions: List[Dict[str, Any]], user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Score questions based on relevance, quality, and user preferences."""
+        for question in questions:
+            # Calculate composite score
+            relevance_score = question.get('role_relevance_score', 0.5)
+            quality_score = question.get('quality_score', 0.5)
+            user_preference_score = question.get('user_preference_score', 0.5)
+            
+            # Weighted composite score
+            composite_score = (
+                relevance_score * 0.5 +
+                quality_score * 0.3 +
+                user_preference_score * 0.2
+            )
+            
+            # Store score for later use
+            question['diversity_score'] = composite_score
+        
+        # Sort by score (highest first)
+        questions.sort(key=lambda q: q.get('diversity_score', 0), reverse=True)
+        
+        logger.debug(f"Scored {len(questions)} questions for diversity")
+        return questions
+    
+    def _select_diverse_questions(self, questions: List[Dict[str, Any]], target_count: int) -> List[Dict[str, Any]]:
+        """Select diverse questions based on categories and difficulties."""
         if len(questions) <= target_count:
             return questions
         
@@ -576,6 +610,13 @@ class QuestionService:
             diverse_questions.extend(remaining_questions[:remaining_slots])
         
         return diverse_questions[:target_count]
+    
+    def _shuffle_questions(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Shuffle questions for randomness while maintaining some order."""
+        import random
+        # Shuffle but keep some structure
+        random.shuffle(questions)
+        return questions
     
     def _calculate_question_scores(self, questions: List[Dict[str, Any]], role_analysis: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """

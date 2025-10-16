@@ -6,7 +6,7 @@ This module provides REST API endpoints for vector search and semantic search ca
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.semantic_search_service import semantic_search_service
-from app.services.vector_service import vector_service
+from app.services.unified_vector_service import unified_vector_service
 from app.services.embedding_service import embedding_service
 from app.models.vector_models import (
     QuestionSearchRequest, QuestionSearchResponse,
@@ -213,7 +213,7 @@ async def vector_health_check():
 async def get_collections_info():
     """Get information about vector collections."""
     try:
-        stats = await vector_service.get_collection_stats()
+        stats = await unified_vector_service.get_collection_stats()
         return {
             "collections": stats,
             "status": "success"
@@ -242,7 +242,7 @@ async def get_available_models():
 async def initialize_collections():
     """Initialize all vector collections."""
     try:
-        await vector_service.initialize_collections()
+        await unified_vector_service.initialize_collections()
         return {
             "message": "Collections initialized successfully",
             "status": "success"

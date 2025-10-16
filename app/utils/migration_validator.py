@@ -1,8 +1,8 @@
 """
-Migration Validation and Testing Utilities for InterviewIQ.
+Enhanced Migration Validation System for InterviewIQ
 
-This module provides comprehensive validation and testing capabilities
-for database migrations to ensure data integrity and system stability.
+This module provides a comprehensive validation system that combines the best features
+of both the original and v2 migration validators with improved error handling and reporting.
 """
 import os
 import sys
@@ -12,6 +12,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
+from dataclasses import dataclass
+from enum import Enum
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine, text
@@ -22,743 +24,515 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+class ValidationResult(Enum):
+    PASSED = "passed"
+    FAILED = "failed"
+    WARNING = "warning"
+    SKIPPED = "skipped"
+
+
+@dataclass
+class ValidationIssue:
+    """Represents a validation issue with context."""
+    type: str
+    message: str
+    severity: ValidationResult
+    file_path: Optional[str] = None
+    line_number: Optional[int] = None
+    suggestion: Optional[str] = None
+
+
+@dataclass
+class ValidationReport:
+    """Comprehensive validation report."""
+    timestamp: datetime
+    total_checks: int
+    passed: int
+    failed: int
+    warnings: int
+    skipped: int
+    issues: List[ValidationIssue]
+    summary: str
+    recommendations: List[str]
+
+
 class MigrationValidator:
-    """Comprehensive migration validation and testing system."""
+    """Enhanced migration validation and testing system."""
     
     def __init__(self):
         self.settings = get_settings()
         self.project_root = Path(__file__).parent.parent.parent
-        self.migration_dir = self.project_root / "app" / "database" / "migrations"
+        self.migrations_dir = self.project_root / "app" / "database" / "migrations" / "versions"
+        self.validation_issues = []
+        self.validation_warnings = []
         
-    def validate_migration_integrity(self, revision: str = "head") -> Dict[str, Any]:
-        """Validate migration chain integrity and consistency."""
-        logger.info(f"Validating migration integrity for revision: {revision}")
-        
-        validation_results = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "target_revision": revision,
-            "validation_passed": True,
-            "issues": [],
-            "warnings": [],
-            "checks_performed": []
-        }
-        
-        try:
-            # Check 1: Validate migration files exist and are properly formatted
-            file_validation = self._validate_migration_files()
-            validation_results["checks_performed"].append("migration_files")
-            if not file_validation["valid"]:
-                validation_results["validation_passed"] = False
-                validation_results["issues"].extend(file_validation["issues"])
-            
-            # Check 2: Validate migration chain consistency
-            chain_validation = self._validate_migration_chain()
-            validation_results["checks_performed"].append("migration_chain")
-            if not chain_validation["valid"]:
-                validation_results["validation_passed"] = False
-                validation_results["issues"].extend(chain_validation["issues"])
-            
-            # Check 3: Validate SQL syntax in migration files
-            sql_validation = self._validate_migration_sql()
-            validation_results["checks_performed"].append("sql_syntax")
-            if not sql_validation["valid"]:
-                validation_results["validation_passed"] = False
-                validation_results["issues"].extend(sql_validation["issues"])
-            
-            # Check 4: Validate database connectivity
-            connectivity_validation = self._validate_database_connectivity()
-            validation_results["checks_performed"].append("database_connectivity")
-            if not connectivity_validation["valid"]:
-                validation_results["validation_passed"] = False
-                validation_results["issues"].extend(connectivity_validation["issues"])
-            
-            # Check 5: Validate migration dependencies
-            dependency_validation = self._validate_migration_dependencies()
-            validation_results["checks_performed"].append("migration_dependencies")
-            if not dependency_validation["valid"]:
-                validation_results["validation_passed"] = False
-                validation_results["issues"].extend(dependency_validation["issues"])
-            
-            logger.info(f"Migration integrity validation completed. Passed: {validation_results['validation_passed']}")
-            return validation_results
-            
-        except Exception as e:
-            logger.error(f"Migration integrity validation failed: {e}")
-            validation_results["validation_passed"] = False
-            validation_results["issues"].append(f"Validation error: {str(e)}")
-            return validation_results
-    
-    def test_migration_on_clean_database(self, revision: str = "head") -> Dict[str, Any]:
-        """Test migration on a clean test database."""
-        logger.info(f"Testing migration on clean database for revision: {revision}")
-        
-        test_results = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "target_revision": revision,
-            "test_passed": True,
-            "issues": [],
-            "test_database": None,
-            "cleanup_required": False
-        }
-        
-        test_db_name = None
-        try:
-            # Create temporary test database
-            test_db_name = self._create_test_database()
-            test_results["test_database"] = test_db_name
-            test_results["cleanup_required"] = True
-            
-            # Run migration on test database
-            migration_success = self._run_migration_on_database(test_db_name, revision)
-            if not migration_success:
-                test_results["test_passed"] = False
-                test_results["issues"].append("Migration failed on test database")
-                return test_results
-            
-            # Validate schema after migration
-            schema_validation = self._validate_schema_on_database(test_db_name)
-            if not schema_validation["valid"]:
-                test_results["test_passed"] = False
-                test_results["issues"].extend(schema_validation["issues"])
-            
-            # Test rollback functionality
-            rollback_success = self._test_rollback_on_database(test_db_name)
-            if not rollback_success:
-                test_results["test_passed"] = False
-                test_results["issues"].append("Rollback test failed")
-            
-            logger.info(f"Clean database migration test completed. Passed: {test_results['test_passed']}")
-            return test_results
-            
-        except Exception as e:
-            logger.error(f"Clean database migration test failed: {e}")
-            test_results["test_passed"] = False
-            test_results["issues"].append(f"Test error: {str(e)}")
-            return test_results
-            
-        finally:
-            # Cleanup test database
-            if test_db_name and test_results["cleanup_required"]:
-                self._cleanup_test_database(test_db_name)
-    
-    def validate_data_integrity_after_migration(self, revision: str = "head") -> Dict[str, Any]:
-        """Validate data integrity after migration."""
-        logger.info(f"Validating data integrity after migration to revision: {revision}")
-        
-        integrity_results = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "target_revision": revision,
-            "integrity_passed": True,
-            "issues": [],
-            "data_checks": []
-        }
-        
-        try:
-            # Check 1: Validate foreign key constraints
-            fk_validation = self._validate_foreign_key_constraints()
-            integrity_results["data_checks"].append("foreign_key_constraints")
-            if not fk_validation["valid"]:
-                integrity_results["integrity_passed"] = False
-                integrity_results["issues"].extend(fk_validation["issues"])
-            
-            # Check 2: Validate data consistency
-            consistency_validation = self._validate_data_consistency()
-            integrity_results["data_checks"].append("data_consistency")
-            if not consistency_validation["valid"]:
-                integrity_results["integrity_passed"] = False
-                integrity_results["issues"].extend(consistency_validation["issues"])
-            
-            # Check 3: Validate index integrity
-            index_validation = self._validate_index_integrity()
-            integrity_results["data_checks"].append("index_integrity")
-            if not index_validation["valid"]:
-                integrity_results["integrity_passed"] = False
-                integrity_results["issues"].extend(index_validation["issues"])
-            
-            # Check 4: Validate table structures
-            table_validation = self._validate_table_structures()
-            integrity_results["data_checks"].append("table_structures")
-            if not table_validation["valid"]:
-                integrity_results["integrity_passed"] = False
-                integrity_results["issues"].extend(table_validation["issues"])
-            
-            logger.info(f"Data integrity validation completed. Passed: {integrity_results['integrity_passed']}")
-            return integrity_results
-            
-        except Exception as e:
-            logger.error(f"Data integrity validation failed: {e}")
-            integrity_results["integrity_passed"] = False
-            integrity_results["issues"].append(f"Integrity check error: {str(e)}")
-            return integrity_results
-    
-    def performance_test_migration(self, revision: str = "head") -> Dict[str, Any]:
-        """Test migration performance and impact."""
-        logger.info(f"Performance testing migration to revision: {revision}")
-        
-        performance_results = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "target_revision": revision,
-            "performance_passed": True,
-            "issues": [],
-            "metrics": {
-                "migration_duration": None,
-                "database_size_before": None,
-                "database_size_after": None,
-                "index_rebuild_time": None,
-                "table_lock_duration": None
+        # Validation configuration
+        self.config = {
+            'database': {
+                'test_db_name': 'interviewiq_test_validation',
+                'timeout': 30,
+                'max_retries': 3
+            },
+            'migrations': {
+                'max_file_size': 1024 * 1024,  # 1MB
+                'required_imports': ['alembic', 'sqlalchemy'],
+                'forbidden_patterns': [
+                    r'DROP\s+TABLE\s+IF\s+EXISTS',
+                    r'TRUNCATE\s+TABLE',
+                    r'DELETE\s+FROM\s+\w+\s+WHERE\s+1=1'
+                ]
+            },
+            'validation': {
+                'check_syntax': True,
+                'check_imports': True,
+                'check_database_connectivity': True,
+                'check_migration_order': True,
+                'check_rollback_safety': True
             }
         }
-        
-        try:
-            # Measure database size before migration
-            size_before = self._get_database_size()
-            performance_results["metrics"]["database_size_before"] = size_before
-            
-            # Measure migration duration
-            start_time = datetime.utcnow()
-            migration_success = self._run_migration_with_timing(revision)
-            end_time = datetime.utcnow()
-            
-            migration_duration = (end_time - start_time).total_seconds()
-            performance_results["metrics"]["migration_duration"] = migration_duration
-            
-            if not migration_success:
-                performance_results["performance_passed"] = False
-                performance_results["issues"].append("Migration failed during performance test")
-                return performance_results
-            
-            # Measure database size after migration
-            size_after = self._get_database_size()
-            performance_results["metrics"]["database_size_after"] = size_after
-            
-            # Check for performance regressions
-            if migration_duration > 300:  # 5 minutes threshold
-                performance_results["issues"].append(f"Migration took too long: {migration_duration}s")
-            
-            size_increase = size_after - size_before
-            if size_increase > size_before * 0.5:  # 50% size increase threshold
-                performance_results["issues"].append(f"Significant database size increase: {size_increase} bytes")
-            
-            logger.info(f"Performance test completed. Duration: {migration_duration}s")
-            return performance_results
-            
-        except Exception as e:
-            logger.error(f"Performance test failed: {e}")
-            performance_results["performance_passed"] = False
-            performance_results["issues"].append(f"Performance test error: {str(e)}")
-            return performance_results
     
-    def _validate_migration_files(self) -> Dict[str, Any]:
-        """Validate migration files exist and are properly formatted."""
-        validation = {"valid": True, "issues": []}
+    def validate_all(self) -> ValidationReport:
+        """Run comprehensive migration validation."""
+        logger.info("Starting comprehensive migration validation")
+        start_time = datetime.now()
         
-        try:
-            versions_dir = self.migration_dir / "versions"
-            if not versions_dir.exists():
-                validation["valid"] = False
-                validation["issues"].append("Migration versions directory does not exist")
-                return validation
-            
-            migration_files = list(versions_dir.glob("*.py"))
-            if not migration_files:
-                validation["valid"] = False
-                validation["issues"].append("No migration files found")
-                return validation
-            
-            # Check each migration file for basic structure
-            for file_path in migration_files:
-                with open(file_path, 'r') as f:
-                    content = f.read()
-                    
-                # Check for required elements
-                if "def upgrade()" not in content:
-                    validation["valid"] = False
-                    validation["issues"].append(f"Missing upgrade() function in {file_path.name}")
-                
-                if "def downgrade()" not in content:
-                    validation["valid"] = False
-                    validation["issues"].append(f"Missing downgrade() function in {file_path.name}")
-                
-                if "revision" not in content:
-                    validation["valid"] = False
-                    validation["issues"].append(f"Missing revision ID in {file_path.name}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"File validation error: {str(e)}")
-            return validation
+        # Reset validation state
+        self.validation_issues = []
+        self.validation_warnings = []
+        
+        # Run all validation checks
+        checks = [
+            self._validate_migration_files,
+            self._validate_database_connectivity,
+            self._validate_migration_syntax,
+            self._validate_migration_order,
+            self._validate_rollback_safety,
+            self._validate_imports,
+            self._validate_file_sizes
+        ]
+        
+        total_checks = len(checks)
+        passed = 0
+        failed = 0
+        warnings = 0
+        skipped = 0
+        
+        for check in checks:
+            try:
+                result = check()
+                if result == ValidationResult.PASSED:
+                    passed += 1
+                elif result == ValidationResult.FAILED:
+                    failed += 1
+                elif result == ValidationResult.WARNING:
+                    warnings += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                logger.error(f"Validation check failed: {e}")
+                failed += 1
+                self.validation_issues.append(ValidationIssue(
+                    type="validation_error",
+                    message=f"Check failed with exception: {str(e)}",
+                    severity=ValidationResult.FAILED
+                ))
+        
+        # Generate report
+        report = self._generate_validation_report(
+            start_time, total_checks, passed, failed, warnings, skipped
+        )
+        
+        logger.info(f"Validation completed: {passed} passed, {failed} failed, {warnings} warnings")
+        return report
     
-    def _validate_migration_chain(self) -> Dict[str, Any]:
-        """Validate migration chain consistency."""
-        validation = {"valid": True, "issues": []}
+    def _validate_migration_files(self) -> ValidationResult:
+        """Validate migration file structure and naming."""
+        logger.info("Validating migration files")
         
-        try:
-            # Run alembic check command
-            result = subprocess.run(
-                ["alembic", "check"],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            
-            if result.returncode != 0:
-                validation["valid"] = False
-                validation["issues"].append(f"Migration chain check failed: {result.stderr}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Chain validation error: {str(e)}")
-            return validation
+        if not self.migrations_dir.exists():
+            self.validation_issues.append(ValidationIssue(
+                type="missing_directory",
+                message="Migrations directory does not exist",
+                severity=ValidationResult.FAILED,
+                file_path=str(self.migrations_dir)
+            ))
+            return ValidationResult.FAILED
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        if not migration_files:
+            self.validation_issues.append(ValidationIssue(
+                type="no_migrations",
+                message="No migration files found",
+                severity=ValidationResult.WARNING,
+                file_path=str(self.migrations_dir)
+            ))
+            return ValidationResult.WARNING
+        
+        # Check file naming convention
+        invalid_files = []
+        for file_path in migration_files:
+            if not self._is_valid_migration_filename(file_path.name):
+                invalid_files.append(file_path.name)
+        
+        if invalid_files:
+            self.validation_issues.append(ValidationIssue(
+                type="invalid_naming",
+                message=f"Invalid migration file names: {', '.join(invalid_files)}",
+                severity=ValidationResult.WARNING,
+                suggestion="Migration files should follow the pattern: {revision}_{description}.py"
+            ))
+            return ValidationResult.WARNING
+        
+        logger.info(f"Found {len(migration_files)} migration files")
+        return ValidationResult.PASSED
     
-    def _validate_migration_sql(self) -> Dict[str, Any]:
-        """Validate SQL syntax in migration files."""
-        validation = {"valid": True, "issues": []}
+    def _validate_database_connectivity(self) -> ValidationResult:
+        """Validate database connectivity and permissions."""
+        if not self.config['validation']['check_database_connectivity']:
+            return ValidationResult.SKIPPED
+        
+        logger.info("Validating database connectivity")
         
         try:
-            # This is a simplified validation - in production, you might want to use
-            # a proper SQL parser or connect to a test database
-            versions_dir = self.migration_dir / "versions"
-            migration_files = list(versions_dir.glob("*.py"))
-            
-            for file_path in migration_files:
-                with open(file_path, 'r') as f:
-                    content = f.read()
-                
-                # Basic SQL syntax checks
-                if "op.execute(" in content:
-                    # Check for common SQL issues
-                    if "DROP TABLE" in content and "CASCADE" not in content:
-                        validation["issues"].append(f"Potential unsafe DROP TABLE in {file_path.name}")
-                
-                if "ALTER TABLE" in content and "ADD CONSTRAINT" in content:
-                    # Check for constraint naming
-                    if "CONSTRAINT" in content and "FOREIGN KEY" in content:
-                        if not any(name in content for name in ["fk_", "constraint_"]):
-                            validation["issues"].append(f"Unnamed constraint in {file_path.name}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"SQL validation error: {str(e)}")
-            return validation
-    
-    def _validate_database_connectivity(self) -> Dict[str, Any]:
-        """Validate database connectivity."""
-        validation = {"valid": True, "issues": []}
-        
-        try:
-            # Test database connection
+            # Test connection to main database
             engine = create_engine(self.settings.DATABASE_URL)
             with engine.connect() as conn:
-                result = conn.execute(text("SELECT 1"))
-                result.fetchone()
+                conn.execute(text("SELECT 1"))
             
-            return validation
+            # Test connection to test database
+            test_db_url = self._get_test_database_url()
+            test_engine = create_engine(test_db_url)
+            with test_engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            
+            logger.info("Database connectivity validation passed")
+            return ValidationResult.PASSED
             
         except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Database connectivity error: {str(e)}")
-            return validation
+            self.validation_issues.append(ValidationIssue(
+                type="database_connectivity",
+                message=f"Database connection failed: {str(e)}",
+                severity=ValidationResult.FAILED,
+                suggestion="Check database configuration and ensure database is running"
+            ))
+            return ValidationResult.FAILED
     
-    def _validate_migration_dependencies(self) -> Dict[str, Any]:
-        """Validate migration dependencies."""
-        validation = {"valid": True, "issues": []}
+    def _validate_migration_syntax(self) -> ValidationResult:
+        """Validate Python syntax of migration files."""
+        if not self.config['validation']['check_syntax']:
+            return ValidationResult.SKIPPED
         
-        try:
-            # Check for circular dependencies and missing dependencies
-            versions_dir = self.migration_dir / "versions"
-            migration_files = list(versions_dir.glob("*.py"))
-            
-            dependencies = {}
-            for file_path in migration_files:
+        logger.info("Validating migration syntax")
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        syntax_errors = []
+        
+        for file_path in migration_files:
+            try:
                 with open(file_path, 'r') as f:
                     content = f.read()
                 
-                # Extract revision and down_revision
-                lines = content.split('\n')
-                revision = None
-                down_revision = None
+                # Check Python syntax
+                compile(content, file_path, 'exec')
                 
-                for line in lines:
-                    if line.startswith('revision'):
-                        revision = line.split('=')[1].strip().strip("'\"")
-                    elif line.startswith('down_revision'):
-                        down_revision = line.split('=')[1].strip().strip("'\"")
-                
-                if revision:
-                    dependencies[revision] = down_revision
-            
-            # Check for circular dependencies
-            for rev, down_rev in dependencies.items():
-                if down_rev and down_rev in dependencies:
-                    if dependencies[down_rev] == rev:
-                        validation["valid"] = False
-                        validation["issues"].append(f"Circular dependency detected: {rev} <-> {down_rev}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Dependency validation error: {str(e)}")
-            return validation
-    
-    def _create_test_database(self) -> str:
-        """Create a temporary test database."""
-        test_db_name = f"test_migration_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            except SyntaxError as e:
+                syntax_errors.append(f"{file_path.name}:{e.lineno}: {e.msg}")
+            except Exception as e:
+                syntax_errors.append(f"{file_path.name}: {str(e)}")
         
-        # Parse database URL to get connection details
-        db_url = self.settings.DATABASE_URL
-        if db_url.startswith("postgresql://"):
-            # Extract connection details
-            url_parts = db_url.replace("postgresql://", "").split("/")
-            db_name = url_parts[1]
-            auth_host = url_parts[0].split("@")
-            auth = auth_host[0].split(":")
-            host_port = auth_host[1].split(":")
-            
-            user = auth[0]
-            password = auth[1] if len(auth) > 1 else ""
-            host = host_port[0]
-            port = host_port[1] if len(host_port) > 1 else "5432"
+        if syntax_errors:
+            self.validation_issues.append(ValidationIssue(
+                type="syntax_error",
+                message=f"Syntax errors found: {'; '.join(syntax_errors)}",
+                severity=ValidationResult.FAILED,
+                suggestion="Fix syntax errors before running migrations"
+            ))
+            return ValidationResult.FAILED
+        
+        logger.info("Migration syntax validation passed")
+        return ValidationResult.PASSED
+    
+    def _validate_migration_order(self) -> ValidationResult:
+        """Validate migration revision order and dependencies."""
+        if not self.config['validation']['check_migration_order']:
+            return ValidationResult.SKIPPED
+        
+        logger.info("Validating migration order")
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        revisions = []
+        
+        for file_path in migration_files:
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                # Extract revision ID
+                revision_match = re.search(r'revision\s*=\s*[\'"]([^\'"]+)[\'"]', content)
+                if revision_match:
+                    revisions.append((file_path.name, revision_match.group(1)))
+                
+            except Exception as e:
+                self.validation_warnings.append(ValidationIssue(
+                    type="revision_extraction",
+                    message=f"Could not extract revision from {file_path.name}: {str(e)}",
+                    severity=ValidationResult.WARNING,
+                    file_path=str(file_path)
+                ))
+        
+        if len(revisions) < 2:
+            logger.info("Not enough migrations to validate order")
+            return ValidationResult.PASSED
+        
+        # Check for duplicate revisions
+        revision_ids = [rev[1] for rev in revisions]
+        duplicates = [rev for rev in revision_ids if revision_ids.count(rev) > 1]
+        
+        if duplicates:
+            self.validation_issues.append(ValidationIssue(
+                type="duplicate_revision",
+                message=f"Duplicate revision IDs found: {', '.join(set(duplicates))}",
+                severity=ValidationResult.FAILED,
+                suggestion="Ensure each migration has a unique revision ID"
+            ))
+            return ValidationResult.FAILED
+        
+        logger.info("Migration order validation passed")
+        return ValidationResult.PASSED
+    
+    def _validate_rollback_safety(self) -> ValidationResult:
+        """Validate that migrations can be safely rolled back."""
+        if not self.config['validation']['check_rollback_safety']:
+            return ValidationResult.SKIPPED
+        
+        logger.info("Validating rollback safety")
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        unsafe_migrations = []
+        
+        for file_path in migration_files:
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                # Check for dangerous patterns
+                for pattern in self.config['migrations']['forbidden_patterns']:
+                    if re.search(pattern, content, re.IGNORECASE):
+                        unsafe_migrations.append(f"{file_path.name}: {pattern}")
+                
+            except Exception as e:
+                self.validation_warnings.append(ValidationIssue(
+                    type="rollback_check",
+                    message=f"Could not check rollback safety for {file_path.name}: {str(e)}",
+                    severity=ValidationResult.WARNING,
+                    file_path=str(file_path)
+                ))
+        
+        if unsafe_migrations:
+            self.validation_issues.append(ValidationIssue(
+                type="unsafe_migration",
+                message=f"Potentially unsafe migrations found: {'; '.join(unsafe_migrations)}",
+                severity=ValidationResult.WARNING,
+                suggestion="Review migrations for data loss risks before deployment"
+            ))
+            return ValidationResult.WARNING
+        
+        logger.info("Rollback safety validation passed")
+        return ValidationResult.PASSED
+    
+    def _validate_imports(self) -> ValidationResult:
+        """Validate required imports in migration files."""
+        if not self.config['validation']['check_imports']:
+            return ValidationResult.SKIPPED
+        
+        logger.info("Validating migration imports")
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        missing_imports = []
+        
+        for file_path in migration_files:
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                # Check for required imports
+                for required_import in self.config['migrations']['required_imports']:
+                    if f"import {required_import}" not in content and f"from {required_import}" not in content:
+                        missing_imports.append(f"{file_path.name}: {required_import}")
+                
+            except Exception as e:
+                self.validation_warnings.append(ValidationIssue(
+                    type="import_check",
+                    message=f"Could not check imports for {file_path.name}: {str(e)}",
+                    severity=ValidationResult.WARNING,
+                    file_path=str(file_path)
+                ))
+        
+        if missing_imports:
+            self.validation_issues.append(ValidationIssue(
+                type="missing_imports",
+                message=f"Missing required imports: {'; '.join(missing_imports)}",
+                severity=ValidationResult.WARNING,
+                suggestion="Add missing imports to migration files"
+            ))
+            return ValidationResult.WARNING
+        
+        logger.info("Import validation passed")
+        return ValidationResult.PASSED
+    
+    def _validate_file_sizes(self) -> ValidationResult:
+        """Validate migration file sizes."""
+        logger.info("Validating migration file sizes")
+        
+        migration_files = list(self.migrations_dir.glob("*.py"))
+        oversized_files = []
+        
+        max_size = self.config['migrations']['max_file_size']
+        
+        for file_path in migration_files:
+            try:
+                file_size = file_path.stat().st_size
+                if file_size > max_size:
+                    oversized_files.append(f"{file_path.name}: {file_size} bytes")
+                
+            except Exception as e:
+                self.validation_warnings.append(ValidationIssue(
+                    type="file_size_check",
+                    message=f"Could not check file size for {file_path.name}: {str(e)}",
+                    severity=ValidationResult.WARNING,
+                    file_path=str(file_path)
+                ))
+        
+        if oversized_files:
+            self.validation_issues.append(ValidationIssue(
+                type="oversized_file",
+                message=f"Oversized migration files: {'; '.join(oversized_files)}",
+                severity=ValidationResult.WARNING,
+                suggestion="Consider splitting large migrations into smaller ones"
+            ))
+            return ValidationResult.WARNING
+        
+        logger.info("File size validation passed")
+        return ValidationResult.PASSED
+    
+    def _is_valid_migration_filename(self, filename: str) -> bool:
+        """Check if migration filename follows convention."""
+        # Pattern: {revision}_{description}.py
+        pattern = r'^[a-f0-9]+_[a-z0-9_]+\.py$'
+        return re.match(pattern, filename) is not None
+    
+    def _get_test_database_url(self) -> str:
+        """Get test database URL for validation."""
+        base_url = self.settings.DATABASE_URL
+        test_db_name = self.config['database']['test_db_name']
+        
+        # Replace database name in URL
+        if 'postgresql://' in base_url:
+            return base_url.rsplit('/', 1)[0] + f'/{test_db_name}'
+        else:
+            return base_url.replace('interviewiq', test_db_name)
+    
+    def _generate_validation_report(self, start_time: datetime, total_checks: int, 
+                                  passed: int, failed: int, warnings: int, skipped: int) -> ValidationReport:
+        """Generate comprehensive validation report."""
+        end_time = datetime.now()
+        duration = end_time - start_time
+        
+        # Generate summary
+        if failed == 0 and warnings == 0:
+            summary = "All validations passed successfully"
+        elif failed == 0:
+            summary = f"Validations passed with {warnings} warnings"
+        else:
+            summary = f"Validation failed with {failed} errors and {warnings} warnings"
+        
+        # Generate recommendations
+        recommendations = []
+        if failed > 0:
+            recommendations.append("Fix all validation errors before proceeding with migrations")
+        if warnings > 0:
+            recommendations.append("Review warnings and address critical issues")
+        if skipped > 0:
+            recommendations.append("Consider enabling skipped validations for comprehensive testing")
+        
+        # Add specific recommendations based on issues
+        issue_types = [issue.type for issue in self.validation_issues + self.validation_warnings]
+        if 'syntax_error' in issue_types:
+            recommendations.append("Fix syntax errors in migration files")
+        if 'database_connectivity' in issue_types:
+            recommendations.append("Check database configuration and connectivity")
+        if 'unsafe_migration' in issue_types:
+            recommendations.append("Review migrations for data safety")
+        
+        return ValidationReport(
+            timestamp=end_time,
+            total_checks=total_checks,
+            passed=passed,
+            failed=failed,
+            warnings=warnings,
+            skipped=skipped,
+            issues=self.validation_issues + self.validation_warnings,
+            summary=summary,
+            recommendations=recommendations
+        )
+    
+    def create_test_database(self) -> bool:
+        """Create test database for validation."""
+        try:
+            logger.info("Creating test database for validation")
             
             # Connect to postgres database to create test database
-            conn = psycopg2.connect(
-                host=host,
-                port=port,
-                user=user,
-                password=password,
-                database="postgres"
-            )
-            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            base_url = self.settings.DATABASE_URL
+            if 'postgresql://' in base_url:
+                # Extract connection details
+                parts = base_url.replace('postgresql://', '').split('/')
+                if len(parts) >= 2:
+                    connection_part = parts[0]
+                    database_part = parts[1].split('?')[0]  # Remove query parameters
+                    
+                    # Connect to postgres database
+                    postgres_url = f"postgresql://{connection_part}/postgres"
+                    engine = create_engine(postgres_url)
+                    
+                    with engine.connect() as conn:
+                        conn.execute(text("COMMIT"))  # End any transaction
+                        conn.execute(text(f"CREATE DATABASE {self.config['database']['test_db_name']}"))
+                    
+                    logger.info("Test database created successfully")
+                    return True
             
-            cursor = conn.cursor()
-            cursor.execute(f"CREATE DATABASE {test_db_name}")
-            cursor.close()
-            conn.close()
-            
-            return test_db_name
-        
-        raise Exception("Unsupported database type for test database creation")
-    
-    def _run_migration_on_database(self, db_name: str, revision: str) -> bool:
-        """Run migration on specified database."""
-        try:
-            # Create temporary alembic.ini for test database
-            test_db_url = self.settings.DATABASE_URL.replace(
-                self.settings.DATABASE_URL.split("/")[-1], db_name
-            )
-            
-            # Run migration
-            env = os.environ.copy()
-            env["DATABASE_URL"] = test_db_url
-            
-            result = subprocess.run(
-                ["alembic", "upgrade", revision],
-                cwd=self.project_root,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            
-            return result.returncode == 0
+            return False
             
         except Exception as e:
-            logger.error(f"Failed to run migration on test database: {e}")
+            logger.error(f"Failed to create test database: {e}")
             return False
     
-    def _validate_schema_on_database(self, db_name: str) -> Dict[str, Any]:
-        """Validate schema on test database."""
-        validation = {"valid": True, "issues": []}
-        
+    def cleanup_test_database(self) -> bool:
+        """Clean up test database after validation."""
         try:
-            test_db_url = self.settings.DATABASE_URL.replace(
-                self.settings.DATABASE_URL.split("/")[-1], db_name
-            )
+            logger.info("Cleaning up test database")
             
-            engine = create_engine(test_db_url)
-            with engine.connect() as conn:
-                # Check if all expected tables exist
-                result = conn.execute(text("""
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'public'
-                """))
-                tables = [row[0] for row in result.fetchall()]
-                
-                expected_tables = ["users", "interview_sessions", "questions", "session_questions", "answers"]
-                for table in expected_tables:
-                    if table not in tables:
-                        validation["valid"] = False
-                        validation["issues"].append(f"Missing table: {table}")
+            # Connect to postgres database to drop test database
+            base_url = self.settings.DATABASE_URL
+            if 'postgresql://' in base_url:
+                parts = base_url.replace('postgresql://', '').split('/')
+                if len(parts) >= 2:
+                    connection_part = parts[0]
+                    
+                    # Connect to postgres database
+                    postgres_url = f"postgresql://{connection_part}/postgres"
+                    engine = create_engine(postgres_url)
+                    
+                    with engine.connect() as conn:
+                        conn.execute(text("COMMIT"))  # End any transaction
+                        conn.execute(text(f"DROP DATABASE IF EXISTS {self.config['database']['test_db_name']}"))
+                    
+                    logger.info("Test database cleaned up successfully")
+                    return True
             
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Schema validation error: {str(e)}")
-            return validation
-    
-    def _test_rollback_on_database(self, db_name: str) -> bool:
-        """Test rollback functionality on test database."""
-        try:
-            test_db_url = self.settings.DATABASE_URL.replace(
-                self.settings.DATABASE_URL.split("/")[-1], db_name
-            )
-            
-            env = os.environ.copy()
-            env["DATABASE_URL"] = test_db_url
-            
-            # Try to rollback one step
-            result = subprocess.run(
-                ["alembic", "downgrade", "-1"],
-                cwd=self.project_root,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            
-            return result.returncode == 0
-            
-        except Exception as e:
-            logger.error(f"Rollback test failed: {e}")
             return False
-    
-    def _cleanup_test_database(self, db_name: str):
-        """Clean up test database."""
-        try:
-            # Parse database URL to get connection details
-            db_url = self.settings.DATABASE_URL
-            if db_url.startswith("postgresql://"):
-                url_parts = db_url.replace("postgresql://", "").split("/")
-                auth_host = url_parts[0].split("@")
-                auth = auth_host[0].split(":")
-                host_port = auth_host[1].split(":")
-                
-                user = auth[0]
-                password = auth[1] if len(auth) > 1 else ""
-                host = host_port[0]
-                port = host_port[1] if len(host_port) > 1 else "5432"
-                
-                # Connect to postgres database to drop test database
-                conn = psycopg2.connect(
-                    host=host,
-                    port=port,
-                    user=user,
-                    password=password,
-                    database="postgres"
-                )
-                conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-                
-                cursor = conn.cursor()
-                cursor.execute(f"DROP DATABASE IF EXISTS {db_name}")
-                cursor.close()
-                conn.close()
-                
-                logger.info(f"Test database {db_name} cleaned up successfully")
-                
-        except Exception as e:
-            logger.error(f"Failed to cleanup test database {db_name}: {e}")
-    
-    def _validate_foreign_key_constraints(self) -> Dict[str, Any]:
-        """Validate foreign key constraints."""
-        validation = {"valid": True, "issues": []}
-        
-        try:
-            engine = create_engine(self.settings.DATABASE_URL)
-            with engine.connect() as conn:
-                # Check for orphaned records
-                result = conn.execute(text("""
-                    SELECT 
-                        tc.table_name, 
-                        kcu.column_name, 
-                        ccu.table_name AS foreign_table_name,
-                        ccu.column_name AS foreign_column_name 
-                    FROM 
-                        information_schema.table_constraints AS tc 
-                        JOIN information_schema.key_column_usage AS kcu
-                          ON tc.constraint_name = kcu.constraint_name
-                        JOIN information_schema.constraint_column_usage AS ccu
-                          ON ccu.constraint_name = tc.constraint_name
-                    WHERE constraint_type = 'FOREIGN KEY'
-                """))
-                
-                fk_constraints = result.fetchall()
-                
-                for constraint in fk_constraints:
-                    table_name, column_name, foreign_table, foreign_column = constraint
-                    
-                    # Check for orphaned records
-                    orphan_check = conn.execute(text(f"""
-                        SELECT COUNT(*) 
-                        FROM {table_name} t1 
-                        LEFT JOIN {foreign_table} t2 ON t1.{column_name} = t2.{foreign_column}
-                        WHERE t1.{column_name} IS NOT NULL AND t2.{foreign_column} IS NULL
-                    """))
-                    
-                    orphan_count = orphan_check.fetchone()[0]
-                    if orphan_count > 0:
-                        validation["valid"] = False
-                        validation["issues"].append(f"Found {orphan_count} orphaned records in {table_name}.{column_name}")
-            
-            return validation
             
         except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Foreign key validation error: {str(e)}")
-            return validation
-    
-    def _validate_data_consistency(self) -> Dict[str, Any]:
-        """Validate data consistency."""
-        validation = {"valid": True, "issues": []}
-        
-        try:
-            engine = create_engine(self.settings.DATABASE_URL)
-            with engine.connect() as conn:
-                # Check for data consistency issues
-                # Example: Check if session questions reference valid questions
-                result = conn.execute(text("""
-                    SELECT COUNT(*) 
-                    FROM session_questions sq 
-                    LEFT JOIN questions q ON sq.question_id = q.id 
-                    WHERE q.id IS NULL
-                """))
-                
-                invalid_references = result.fetchone()[0]
-                if invalid_references > 0:
-                    validation["valid"] = False
-                    validation["issues"].append(f"Found {invalid_references} invalid question references in session_questions")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Data consistency validation error: {str(e)}")
-            return validation
-    
-    def _validate_index_integrity(self) -> Dict[str, Any]:
-        """Validate index integrity."""
-        validation = {"valid": True, "issues": []}
-        
-        try:
-            engine = create_engine(self.settings.DATABASE_URL)
-            with engine.connect() as conn:
-                # Check for missing indexes on foreign keys
-                result = conn.execute(text("""
-                    SELECT 
-                        tc.table_name, 
-                        kcu.column_name
-                    FROM 
-                        information_schema.table_constraints AS tc 
-                        JOIN information_schema.key_column_usage AS kcu
-                          ON tc.constraint_name = kcu.constraint_name
-                    WHERE constraint_type = 'FOREIGN KEY'
-                """))
-                
-                fk_columns = result.fetchall()
-                
-                for table_name, column_name in fk_columns:
-                    # Check if index exists on foreign key column
-                    index_check = conn.execute(text(f"""
-                        SELECT COUNT(*) 
-                        FROM pg_indexes 
-                        WHERE tablename = '{table_name}' 
-                        AND indexdef LIKE '%{column_name}%'
-                    """))
-                    
-                    index_count = index_check.fetchone()[0]
-                    if index_count == 0:
-                        validation["issues"].append(f"Missing index on foreign key {table_name}.{column_name}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Index validation error: {str(e)}")
-            return validation
-    
-    def _validate_table_structures(self) -> Dict[str, Any]:
-        """Validate table structures."""
-        validation = {"valid": True, "issues": []}
-        
-        try:
-            engine = create_engine(self.settings.DATABASE_URL)
-            with engine.connect() as conn:
-                # Check for required tables and columns
-                expected_structure = {
-                    "users": ["id", "email", "name", "password_hash"],
-                    "interview_sessions": ["id", "user_id", "role", "status"],
-                    "questions": ["id", "question_text", "category", "difficulty_level"],
-                    "session_questions": ["id", "session_id", "question_id", "question_order"],
-                    "answers": ["id", "question_id", "answer_text"]
-                }
-                
-                for table_name, expected_columns in expected_structure.items():
-                    # Check if table exists
-                    table_check = conn.execute(text(f"""
-                        SELECT COUNT(*) 
-                        FROM information_schema.tables 
-                        WHERE table_name = '{table_name}' AND table_schema = 'public'
-                    """))
-                    
-                    if table_check.fetchone()[0] == 0:
-                        validation["valid"] = False
-                        validation["issues"].append(f"Missing table: {table_name}")
-                        continue
-                    
-                    # Check if required columns exist
-                    for column_name in expected_columns:
-                        column_check = conn.execute(text(f"""
-                            SELECT COUNT(*) 
-                            FROM information_schema.columns 
-                            WHERE table_name = '{table_name}' 
-                            AND column_name = '{column_name}' 
-                            AND table_schema = 'public'
-                        """))
-                        
-                        if column_check.fetchone()[0] == 0:
-                            validation["valid"] = False
-                            validation["issues"].append(f"Missing column: {table_name}.{column_name}")
-            
-            return validation
-            
-        except Exception as e:
-            validation["valid"] = False
-            validation["issues"].append(f"Table structure validation error: {str(e)}")
-            return validation
-    
-    def _get_database_size(self) -> int:
-        """Get current database size in bytes."""
-        try:
-            engine = create_engine(self.settings.DATABASE_URL)
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT pg_database_size(current_database())
-                """))
-                return result.fetchone()[0]
-        except Exception as e:
-            logger.error(f"Failed to get database size: {e}")
-            return 0
-    
-    def _run_migration_with_timing(self, revision: str) -> bool:
-        """Run migration with timing measurement."""
-        try:
-            start_time = datetime.utcnow()
-            result = subprocess.run(
-                ["alembic", "upgrade", revision],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            return result.returncode == 0
-        except Exception as e:
-            logger.error(f"Migration with timing failed: {e}")
+            logger.error(f"Failed to cleanup test database: {e}")
             return False

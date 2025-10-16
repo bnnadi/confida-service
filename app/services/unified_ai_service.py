@@ -11,7 +11,7 @@ from enum import Enum
 from dataclasses import dataclass
 from app.services.ollama_service import OllamaService
 from app.services.question_service import QuestionService
-from app.services.multi_agent_scoring import multi_agent_scoring_service
+from app.services.multi_agent_scoring import get_multi_agent_scoring_service
 from app.utils.logger import get_logger
 from app.exceptions import AIServiceError, ServiceUnavailableError
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse
@@ -289,7 +289,7 @@ class UnifiedAIService:
             if self.circuit_breakers["multi_agent"].can_execute():
                 try:
                     analysis = await self._execute_with_retry(
-                        multi_agent_scoring_service.analyze_response,
+                        get_multi_agent_scoring_service().analyze_response,
                         "multi_agent",
                         answer, question, job_description, role
                     )
@@ -422,7 +422,7 @@ class UnifiedAIService:
         try:
             if self.circuit_breakers["multi_agent"].can_execute():
                 await self._execute_with_retry(
-                    multi_agent_scoring_service.get_agent_status,
+                    get_multi_agent_scoring_service().get_agent_status,
                     "multi_agent"
                 )
                 health_results["multi_agent"] = {"status": "healthy", "error": None}

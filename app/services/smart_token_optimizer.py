@@ -48,11 +48,11 @@ class SmartTokenOptimizer:
         
         # Initialize job description processor for summarization
         try:
-            from app.services.job_description_processor import ImprovedJobDescriptionProcessor
-            self.job_processor = ImprovedJobDescriptionProcessor()
+            from app.services.role_analysis_processor import RoleAnalysisProcessor
+            self.job_processor = RoleAnalysisProcessor()
         except ImportError:
             self.job_processor = None
-            logger.warning("ImprovedJobDescriptionProcessor not available - summarization disabled")
+            logger.warning("RoleAnalysisProcessor not available - summarization disabled")
     
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load configuration from YAML file with fallback to defaults."""

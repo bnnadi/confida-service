@@ -16,13 +16,6 @@ logger = setup_logging()
 # Set custom OpenAPI schema using simplified documentation builder
 from app.utils.api_documentation import APIDocumentationBuilder
 
-def create_custom_openapi():
-    """Create custom OpenAPI schema with enhanced documentation."""
-    builder = APIDocumentationBuilder(app)
-    return builder.build_openapi_schema()
-
-app.openapi = create_custom_openapi
-
 app = FastAPI(
     title="InterviewIQ API",
     description="""
@@ -80,6 +73,13 @@ app = FastAPI(
         }
     ]
 )
+
+def create_custom_openapi():
+    """Create custom OpenAPI schema with enhanced documentation."""
+    builder = APIDocumentationBuilder(app)
+    return builder.build_openapi_schema()
+
+app.openapi = create_custom_openapi
 
 # Rate limiting is now handled by the enhanced middleware
 
@@ -318,10 +318,10 @@ async def database_monitoring():
 async def vector_monitoring():
     """Get detailed vector database monitoring information."""
     try:
-        from app.services.vector_service import vector_service
+        from app.services.unified_vector_service import unified_vector_service
         
-        health = await vector_service.health_check()
-        stats = await vector_service.get_collection_stats()
+        health = await unified_vector_service.health_check()
+        stats = await unified_vector_service.get_collection_stats()
         
         return {
             "health_status": health,
