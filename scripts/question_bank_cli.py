@@ -283,45 +283,16 @@ class QuestionBankCLI:
         """Clean up duplicate questions in the question bank."""
         logger.info("🧹 Starting duplicate cleanup...")
         
+        from app.utils.question_bank_utils import QuestionBankUtils
+        
         with Session(self.engine) as db:
-            # Find duplicate questions (same text)
-            duplicates = db.execute(
-                select(Question.question_text, func.count(Question.id))
-                .group_by(Question.question_text)
-                .having(func.count(Question.id) > 1)
-            ).fetchall()
-            
-            stats = {"duplicates_found": len(duplicates), "questions_removed": 0}
+            stats = QuestionBankUtils.remove_duplicate_questions(db, dry_run)
             
             if dry_run:
-                logger.info(f"🔍 DRY RUN - Found {len(duplicates)} duplicate question groups")
-                for question_text, count in duplicates:
-                    logger.info(f"  '{question_text[:50]}...' appears {count} times")
-                return stats
+                logger.info(f"🔍 DRY RUN - Found {stats['duplicates_found']} duplicate question groups")
+            else:
+                logger.info(f"✅ Cleanup completed. Removed {stats['questions_removed']} duplicate questions")
             
-            for question_text, count in duplicates:
-                # Keep the first question, remove the rest
-                questions_to_keep = db.execute(
-                    select(Question).where(Question.question_text == question_text)
-                    .order_by(Question.created_at)
-                ).scalars().all()
-                
-                # Keep the first one, remove the rest
-                for question in questions_to_keep[1:]:
-                    # Check if question is linked to any sessions
-                    session_links = db.execute(
-                        select(SessionQuestion).where(SessionQuestion.question_id == question.id)
-                    ).scalars().all()
-                    
-                    if session_links:
-                        logger.warning(f"Question {question.id} is linked to sessions, skipping removal")
-                        continue
-                    
-                    db.delete(question)
-                    stats["questions_removed"] += 1
-            
-            db.commit()
-            logger.info(f"✅ Cleanup completed. Removed {stats['questions_removed']} duplicate questions")
             return stats
     
     def export_questions(self, output_file: str, category: str = None, format: str = "json") -> bool:

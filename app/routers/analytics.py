@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db, get_db_session
-from app.services.analytics_service import AnalyticsService
+from app.services.unified_analytics_service import UnifiedAnalyticsService
 from app.services.cost_tracker import CostTracker
 from app.services.smart_token_optimizer import SmartTokenOptimizer
 from app.models.analytics_models import (
@@ -30,9 +30,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 
-def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
+def get_analytics_service(db: Session = Depends(get_db)) -> UnifiedAnalyticsService:
     """Dependency to get analytics service."""
-    return AnalyticsService(db)
+    return UnifiedAnalyticsService(db)
 
 
 @router.get("/performance/{user_id}", response_model=PerformanceMetrics)
@@ -40,7 +40,7 @@ async def get_performance_metrics(
     user_id: str,
     time_period: str = Query("30d", description="Time period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get performance metrics for a user.
@@ -81,7 +81,7 @@ async def get_trend_analysis(
     metric: str = Query("average_score", description="Metric to analyze"),
     time_period: str = Query("30d", description="Time period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get trend analysis for a user.
@@ -130,7 +130,7 @@ async def get_session_analytics(
     limit: int = Query(10, description="Number of sessions to return", ge=1, le=100),
     offset: int = Query(0, description="Number of sessions to skip", ge=0),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get session analytics for a user.
@@ -162,7 +162,7 @@ async def get_session_analytics(
 async def generate_report(
     request: ReportRequest,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Generate a comprehensive analytics report.
@@ -204,7 +204,7 @@ async def generate_report(
 async def get_analytics_summary(
     user_id: str,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get analytics summary for dashboard display.
@@ -238,7 +238,7 @@ async def get_performance_comparison(
     current_period: str = Query("30d", description="Current period: 7d, 30d, 90d, 1y"),
     previous_period: str = Query("30d", description="Previous period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get performance comparison between two periods.
@@ -286,7 +286,7 @@ async def export_report(
     start_date: Optional[datetime] = Query(None, description="Report start date"),
     end_date: Optional[datetime] = Query(None, description="Report end date"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Export analytics report in specified format.
@@ -350,7 +350,7 @@ async def export_report(
 
 @router.get("/health")
 async def analytics_health_check(
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Health check for analytics service.
@@ -383,7 +383,7 @@ async def analytics_health_check(
 async def get_dashboard_metrics(
     user_id: str,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get metrics optimized for dashboard display.

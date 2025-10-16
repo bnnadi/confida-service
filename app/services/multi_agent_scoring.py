@@ -6,9 +6,10 @@ for different aspects of interview responses, enabling detailed feedback and sco
 """
 import asyncio
 from typing import List, Dict, Any, Optional
-from app.services.agents.content_agent import ContentAnalysisAgent
-from app.services.agents.delivery_agent import DeliveryAnalysisAgent
-from app.services.agents.technical_agent import TechnicalAnalysisAgent
+# Import agents only when needed to avoid circular imports
+# from app.services.agents.content_agent import ContentAnalysisAgent
+# from app.services.agents.delivery_agent import DeliveryAnalysisAgent
+# from app.services.agents.technical_agent import TechnicalAnalysisAgent
 from app.models.scoring_models import (
     MultiAgentAnalysis, AgentScore, ScoringWeights, 
     ContentAnalysis, DeliveryAnalysis, TechnicalAnalysis
@@ -21,6 +22,11 @@ class MultiAgentScoringService:
     """Service for multi-agent answer analysis and scoring."""
     
     def __init__(self):
+        # Import agents dynamically to avoid circular imports
+        from app.services.agents.content_agent import ContentAnalysisAgent
+        from app.services.agents.delivery_agent import DeliveryAnalysisAgent
+        from app.services.agents.technical_agent import TechnicalAnalysisAgent
+        
         self.content_agent = ContentAnalysisAgent()
         self.delivery_agent = DeliveryAnalysisAgent()
         self.technical_agent = TechnicalAnalysisAgent()
@@ -266,4 +272,16 @@ class MultiAgentScoringService:
 
 
 # Global multi-agent scoring service instance
-multi_agent_scoring_service = MultiAgentScoringService()
+# Global service instance - created lazily to avoid circular imports
+_multi_agent_scoring_service = None
+
+def get_multi_agent_scoring_service():
+    """Get the global multi-agent scoring service instance."""
+    global _multi_agent_scoring_service
+    if _multi_agent_scoring_service is None:
+        _multi_agent_scoring_service = MultiAgentScoringService()
+    return _multi_agent_scoring_service
+
+# For backward compatibility - use lazy loading
+def multi_agent_scoring_service():
+    return get_multi_agent_scoring_service()

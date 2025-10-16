@@ -5,7 +5,7 @@ import time
 from typing import List, Dict, Any
 from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.prompt_templates import PromptTemplates
-from app.utils.response_parsers import ResponseParsers
+from app.utils.response_parser import ResponseParser
 from app.utils.fallback_responses import FallbackResponses
 from app.utils.http_pool import http_pool
 from app.utils.logger import get_logger
@@ -108,7 +108,8 @@ class OllamaService:
                 PromptTemplates.QUESTION_GENERATION_SYSTEM,
                 optimization_result.optimal_tokens
             )
-            questions = ResponseParsers.parse_questions_from_response(response)
+            parser = ResponseParser()
+            questions = parser.parse_questions(response)
             
             # Ensure we have some questions
             if not questions:
@@ -127,7 +128,8 @@ class OllamaService:
         
         try:
             response = self._call_ollama(prompt, PromptTemplates.ANALYSIS_SYSTEM)
-            return ResponseParsers.parse_analysis_response(response)
+            parser = ResponseParser()
+            return parser.parse_analysis(response)
                 
         except Exception as e:
             logger.error(f"Error analyzing answer with Ollama: {e}")

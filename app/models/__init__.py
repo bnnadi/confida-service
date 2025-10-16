@@ -1,8 +1,12 @@
 # Models package for Pydantic schemas
 
 # Import Pydantic schemas
-from .schemas import *
+from .schemas import (
+    ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse,
+    Score, InterviewSession, QuestionResponse, AnswerResponse, UserResponse, ScenarioInfo
+)
 
 __all__ = [
-    # Pydantic schemas are imported via * imports
+    "ParseJDRequest", "ParseJDResponse", "AnalyzeAnswerRequest", "AnalyzeAnswerResponse",
+    "Score", "InterviewSession", "QuestionResponse", "AnswerResponse", "UserResponse", "ScenarioInfo"
 ] 

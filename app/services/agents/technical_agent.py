@@ -132,23 +132,8 @@ class TechnicalAnalysisAgent(BaseAgent):
         Be objective and provide constructive feedback for technical improvement.
         """
     
-    def _parse_ai_response(self, ai_response: str) -> Dict[str, Any]:
-        """Parse AI response into structured data."""
-        try:
-            import json
-            # Try to extract JSON from the response
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            else:
-                # Fallback parsing
-                return self._fallback_parse(ai_response)
-        except Exception as e:
-            logger.warning(f"Failed to parse AI response: {e}")
-            return self._fallback_parse(ai_response)
-    
     def _fallback_parse(self, response: str) -> Dict[str, Any]:
-        """Fallback parsing when JSON parsing fails."""
+        """Technical-specific fallback parsing when JSON parsing fails."""
         return {
             "accuracy_score": 7,
             "depth_score": 7,

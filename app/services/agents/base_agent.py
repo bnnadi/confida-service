@@ -4,6 +4,8 @@ Base Agent Class
 This module provides a base class for all analysis agents to eliminate code duplication
 and provide consistent functionality across different agent types.
 """
+import json
+import re
 from typing import Dict, Any
 from abc import ABC, abstractmethod
 from app.utils.logger import get_logger
@@ -38,6 +40,30 @@ class BaseAgent(ABC):
     async def _run_health_test(self):
         """Run agent-specific health test. Override in subclasses."""
         pass
+    
+    def _parse_ai_response(self, ai_response: str) -> Dict[str, Any]:
+        """Parse AI response into structured data - shared across all agents."""
+        try:
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                # Fallback parsing
+                return self._fallback_parse(ai_response)
+        except Exception as e:
+            logger.warning(f"Failed to parse AI response: {e}")
+            return self._fallback_parse(ai_response)
+    
+    def _fallback_parse(self, response: str) -> Dict[str, Any]:
+        """Fallback parsing when JSON parsing fails - to be overridden by subclasses."""
+        return {
+            "score": 7,
+            "confidence": 0.6,
+            "strengths": ["Response provided"],
+            "weaknesses": ["Analysis parsing failed"],
+            "improvement_suggestions": ["Provide more detailed analysis"]
+        }
     
     def _create_fallback_analysis(self, response: str, question: str, base_score: float = 7.0):
         """Create fallback analysis when agent analysis fails."""

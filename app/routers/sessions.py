@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database.connection import get_db
-from app.services.session_service import SessionService
+from app.services.unified_session_service import UnifiedSessionService
 from app.database.models import InterviewSession, Question
 from app.models.schemas import (
     CreateSessionRequest, 
@@ -26,7 +26,7 @@ async def create_session(
     db: Session = Depends(get_db)
 ):
     """Create a new interview session (supports both practice and interview modes)."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     if request.mode == "practice":
         session = session_service.create_practice_session(
@@ -54,7 +54,7 @@ async def get_user_sessions(
     db: Session = Depends(get_db)
 ):
     """Get all interview sessions for a user."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     sessions = session_service.get_user_sessions(current_user["id"], limit, offset)
     return sessions
 
@@ -65,7 +65,7 @@ async def get_session(
     db: Session = Depends(get_db)
 ):
     """Get a complete session with questions and answers."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     session_data = session_service.get_session_with_questions_and_answers(session_id, current_user["id"])
     
     if not session_data:
@@ -81,7 +81,7 @@ async def add_questions_to_session(
     db: Session = Depends(get_db)
 ):
     """Add questions to an interview session."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     # Verify session belongs to user
     session = session_service.get_session(session_id, current_user["id"])
@@ -98,7 +98,7 @@ async def get_session_questions(
     db: Session = Depends(get_db)
 ):
     """Get all questions for a session."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     # Verify session belongs to user
     session = session_service.get_session(session_id, current_user["id"])
@@ -116,7 +116,7 @@ async def add_answer_to_question(
     db: Session = Depends(get_db)
 ):
     """Add an answer to a question."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
@@ -142,7 +142,7 @@ async def get_question_answers(
     db: Session = Depends(get_db)
 ):
     """Get all answers for a question."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
@@ -164,7 +164,7 @@ async def update_session_status(
     db: Session = Depends(get_db)
 ):
     """Update session status."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     session = session_service.update_session_status(session_id, status, current_user["id"])
     
     if not session:
@@ -179,7 +179,7 @@ async def delete_session(
     db: Session = Depends(get_db)
 ):
     """Delete a session and all its data."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     success = session_service.delete_session(session_id, current_user["id"])
     
     if not success:
@@ -198,7 +198,7 @@ async def preview_session(
     db: Session = Depends(get_db)
 ):
     """Preview a session without creating it."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     
     if mode == "practice":
         if not scenario_id:
@@ -236,7 +236,7 @@ async def get_scenarios(
     db: Session = Depends(get_db)
 ):
     """Get available practice scenarios."""
-    session_service = SessionService(db)
+    session_service = UnifiedSessionService(db)
     scenarios = session_service.get_available_scenarios()
     
     return ScenarioListResponse(

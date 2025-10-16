@@ -12,41 +12,37 @@ class RateLimiter:
     def check_rate_limit(self, client_id: str = "default"):
         """Simplified rate limiting with extracted cleanup logic."""
         now = time.time()
-        self._cleanup_old_requests(client_id, now)
+        # Cleanup will be done after adding the request
         
         if len(self.requests[client_id]) >= self.max_requests:
             raise RateLimitExceededError("Rate limit exceeded")
         
         self.requests[client_id].append(now)
-        self._cleanup_old_clients_if_needed(now)
+        self._cleanup_old_data(now)
     
-    def _cleanup_old_requests(self, client_id: str, now: float):
-        """Extract request cleanup logic."""
+    def _cleanup_old_data(self, now: float):
+        """Consolidated cleanup for old requests and clients."""
         cutoff_time = now - self.window_seconds
-        self.requests[client_id] = [
-            req_time for req_time in self.requests[client_id] 
-            if req_time > cutoff_time
-        ]
-    
-    def _cleanup_old_clients_if_needed(self, now: float):
-        """Extract client cleanup logic."""
-        if len(self.requests) > 1000:
-            self._cleanup_old_clients(now)
-    
-    def _cleanup_old_clients(self, now: float):
-        """Clean up old client data to prevent memory leaks."""
-        cutoff_time = now - self.window_seconds
-        clients_to_remove = []
         
-        for client_id, requests in self.requests.items():
+        # Clean up old requests for all clients
+        for client_id in list(self.requests.keys()):
+            self.requests[client_id] = [
+                req_time for req_time in self.requests[client_id] 
+                if req_time > cutoff_time
+            ]
+            
             # Remove clients with no recent requests
-            recent_requests = [req_time for req_time in requests if req_time > cutoff_time]
-            if recent_requests:
-                self.requests[client_id] = recent_requests
-            else:
-                clients_to_remove.append(client_id)
+            if not self.requests[client_id]:
+                del self.requests[client_id]
         
-        for client_id in clients_to_remove:
-            del self.requests[client_id]
+        # Additional cleanup if we have too many clients
+        if len(self.requests) > 1000:
+            # Keep only the most recent clients
+            sorted_clients = sorted(
+                self.requests.items(), 
+                key=lambda x: max(x[1]) if x[1] else 0, 
+                reverse=True
+            )
+            self.requests = dict(sorted_clients[:500])  # Keep top 500 clients
 
 rate_limiter = RateLimiter() 

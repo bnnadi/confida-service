@@ -8,8 +8,7 @@ from app.utils.validators import InputValidator, create_service_query_param
 from app.utils.database_operation_handler import DatabaseOperationHandler
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
-from app.services.session_service import SessionService
-from app.services.async_session_service import AsyncSessionService
+from app.services.unified_session_service import UnifiedSessionService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_service, get_async_ai_service, get_ai_service_dependency
 from app.config import get_settings
@@ -161,7 +160,7 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
         )
         
         # Create session and store questions in database atomically
-        session_service = AsyncSessionService(db)
+        session_service = UnifiedSessionService(db)
         session, session_questions = await session_service.create_session_with_questions_atomic(
             user_id=current_user["id"],
             role=request.role,
@@ -217,8 +216,8 @@ async def _handle_sync_parse_jd(ai_service, db, request, validated_service, curr
         )
         
         # Create session and store questions in database atomically
-        session_service = SessionService(db)
-        session, session_questions = session_service.create_session_with_questions_atomic(
+        session_service = UnifiedSessionService(db)
+        session, session_questions = await session_service.create_session_with_questions_atomic(
             user_id=current_user["id"],
             role=request.role,
             job_description=request.jobDescription,
