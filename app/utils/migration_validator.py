@@ -1,5 +1,5 @@
 """
-Enhanced Migration Validation System for InterviewIQ
+Enhanced Migration Validation System for Confida
 
 This module provides a comprehensive validation system that combines the best features
 of both the original and v2 migration validators with improved error handling and reporting.
@@ -70,7 +70,7 @@ class MigrationValidator:
         # Validation configuration
         self.config = {
             'database': {
-                'test_db_name': 'interviewiq_test_validation',
+                'test_db_name': 'confida_test_validation',
                 'timeout': 30,
                 'max_retries': 3
             },
@@ -431,7 +431,7 @@ class MigrationValidator:
         if 'postgresql://' in base_url:
             return base_url.rsplit('/', 1)[0] + f'/{test_db_name}'
         else:
-            return base_url.replace('interviewiq', test_db_name)
+            return base_url.replace('confida', test_db_name)
     
     def _generate_validation_report(self, start_time: datetime, total_checks: int, 
                                   passed: int, failed: int, warnings: int, skipped: int) -> ValidationReport:

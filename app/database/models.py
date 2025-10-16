@@ -1,5 +1,5 @@
 """
-SQLAlchemy models for InterviewIQ database schema.
+SQLAlchemy models for Confida database schema.
 """
 from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB

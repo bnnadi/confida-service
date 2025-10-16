@@ -104,7 +104,7 @@ def test_configuration():
 
 async def main():
     """Main test function."""
-    print("🚀 InterviewIQ Cache System Test")
+    print("🚀 Confida Cache System Test")
     print("=" * 60)
     
     # Test configuration

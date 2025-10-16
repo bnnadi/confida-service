@@ -1,5 +1,5 @@
 """
-Centralized logging configuration for InterviewIQ application.
+Centralized logging configuration for Confida application.
 """
 
 import logging

@@ -1,6 +1,6 @@
-# InterviewIQ Database Migration Guide
+# Confida Database Migration Guide
 
-This guide provides comprehensive documentation for managing database migrations in the InterviewIQ system using Alembic.
+This guide provides comprehensive documentation for managing database migrations in the Confida system using Alembic.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ This guide provides comprehensive documentation for managing database migrations
 
 ## Overview
 
-The InterviewIQ migration system is built on Alembic and provides:
+The Confida migration system is built on Alembic and provides:
 
 - **Automated Schema Management**: Version-controlled database schema changes
 - **Data Migration Support**: Safe data transformations and migrations

@@ -1,5 +1,5 @@
 """
-Question Service for InterviewIQ
+Question Service for Confida
 
 This is the main question generation service that replaces 11+ overcomplicated
 services with a single, clean, maintainable solution.
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 class QuestionService:
     """
-    Main question generation service for InterviewIQ.
+    Main question generation service for Confida.
     
     This service replaces 11+ overcomplicated services with a single,
     clean, maintainable solution that handles all question generation needs.

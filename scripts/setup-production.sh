@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Production Setup Script for InterviewIQ Vector Database Integration
+# Production Setup Script for Confida Vector Database Integration
 # This script helps you set up the production environment
 
 set -e
 
-echo "🚀 InterviewIQ Production Setup"
+echo "🚀 Confida Production Setup"
 echo "================================"
 
 # Check if running as root
@@ -46,10 +46,10 @@ if [ ! -f .env.prod ]; then
 # ===================================
 
 # Database Configuration
-POSTGRES_DB=interviewiq_prod
-POSTGRES_USER=interviewiq_prod
+POSTGRES_DB=confida_prod
+POSTGRES_USER=confida_prod
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
-DATABASE_URL=postgresql://interviewiq_prod:${POSTGRES_PASSWORD}@postgres-primary:5432/interviewiq_prod
+DATABASE_URL=postgresql://confida_prod:${POSTGRES_PASSWORD}@postgres-primary:5432/confida_prod
 
 # Vector Database Configuration
 QDRANT_URL=http://qdrant:6333
@@ -109,7 +109,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: interviewiq-postgres
+    container_name: confida-postgres
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -119,7 +119,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - interviewiq-network
+      - confida-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -129,14 +129,14 @@ services:
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:v1.7.0
-    container_name: interviewiq-qdrant
+    container_name: confida-qdrant
     ports:
       - "${QDRANT_PORT:-6333}:6333"
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - interviewiq-network
+      - confida-network
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
@@ -149,14 +149,14 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: interviewiq-redis
+    container_name: confida-redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     networks:
-      - interviewiq-network
+      - confida-network
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
@@ -168,7 +168,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: interviewiq-app
+    container_name: confida-app
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -194,7 +194,7 @@ services:
     volumes:
       - .:/app
     networks:
-      - interviewiq-network
+      - confida-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,14 +211,14 @@ services:
   # Nginx Load Balancer
   nginx:
     image: nginx:alpine
-    container_name: interviewiq-nginx
+    container_name: confida-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - interviewiq-network
+      - confida-network
     depends_on:
       - app
 
@@ -228,7 +228,7 @@ volumes:
   redis_data:
 
 networks:
-  interviewiq-network:
+  confida-network:
     driver: bridge
 EOF
 
@@ -361,7 +361,7 @@ fi
 
 # Build application image
 echo "📦 Building application image..."
-docker build -f Dockerfile.prod -t interviewiq:latest .
+docker build -f Dockerfile.prod -t confida:latest .
 
 # Start services
 echo "🚀 Starting services..."
@@ -415,7 +415,7 @@ if [ ! -f scripts/monitor-production.sh ]; then
 #!/bin/bash
 
 # Production Monitoring Script
-echo "📊 InterviewIQ Production Monitoring"
+echo "📊 Confida Production Monitoring"
 echo "===================================="
 
 # Check service status

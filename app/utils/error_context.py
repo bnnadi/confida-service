@@ -3,15 +3,15 @@ Error context management utility for better debugging and error handling.
 """
 
 from typing import Dict, Any, Optional
-from app.exceptions import InterviewIQException, ServiceUnavailableError
+from app.exceptions import ConfidaException, ServiceUnavailableError
 
 class ErrorContext:
     """Utility for adding context to errors."""
     
     @staticmethod
-    def add_context(error: Exception, context: Dict[str, Any]) -> InterviewIQException:
+    def add_context(error: Exception, context: Dict[str, Any]) -> ConfidaException:
         """Add context information to an error."""
-        if isinstance(error, InterviewIQException):
+        if isinstance(error, ConfidaException):
             error.context = context
         return error
     
@@ -27,9 +27,9 @@ class ErrorContext:
         return error
     
     @staticmethod
-    def create_validation_error(field: str, value: Any, reason: str) -> InterviewIQException:
+    def create_validation_error(field: str, value: Any, reason: str) -> ConfidaException:
         """Create a validation error with context."""
-        error = InterviewIQException(f"Validation failed for {field}: {reason}")
+        error = ConfidaException(f"Validation failed for {field}: {reason}")
         error.context = {
             "field": field,
             "value": str(value),

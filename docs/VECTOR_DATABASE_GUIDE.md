@@ -2,7 +2,7 @@
 
 ## 🎯 **Overview**
 
-This guide covers the comprehensive vector database integration with Qdrant, enabling semantic search capabilities for InterviewIQ. The integration provides intelligent content discovery, question recommendations, and user pattern analysis.
+This guide covers the comprehensive vector database integration with Qdrant, enabling semantic search capabilities for Confida. The integration provides intelligent content discovery, question recommendations, and user pattern analysis.
 
 ## 🏗️ **Architecture**
 
@@ -412,4 +412,4 @@ For issues and questions:
 
 ---
 
-**This vector database integration provides the foundation for intelligent, semantic search capabilities that significantly enhance the InterviewIQ platform's ability to deliver personalized, relevant content to users.**
+**This vector database integration provides the foundation for intelligent, semantic search capabilities that significantly enhance the Confida platform's ability to deliver personalized, relevant content to users.**

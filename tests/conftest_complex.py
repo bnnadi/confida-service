@@ -1,5 +1,5 @@
 """
-Comprehensive test configuration and fixtures for InterviewIQ API tests.
+Comprehensive test configuration and fixtures for Confida API tests.
 
 This module provides all necessary fixtures, mocks, and test utilities
 for unit, integration, and end-to-end testing.
@@ -34,7 +34,7 @@ from faker import Faker
 fake = Faker()
 
 # Test database configuration
-TEST_DATABASE_URL = "sqlite:///./test_interviewiq.db"
+TEST_DATABASE_URL = "sqlite:///./test_confida.db"
 
 
 class TestDataFactory:

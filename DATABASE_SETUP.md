@@ -1,10 +1,10 @@
 # Database Setup Guide
 
-This guide explains how to set up the database for the InterviewIQ service.
+This guide explains how to set up the database for the Confida service.
 
 ## Overview
 
-The InterviewIQ service uses PostgreSQL as the primary database with SQLAlchemy as the ORM and Alembic for database migrations.
+The Confida service uses PostgreSQL as the primary database with SQLAlchemy as the ORM and Alembic for database migrations.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ cp env.example .env
 Edit `.env` with your database credentials:
 
 ```env
-DATABASE_URL=postgresql://interviewiq:password@localhost:5432/interviewiq_db
+DATABASE_URL=postgresql://confida:password@localhost:5432/confida_db
 SECRET_KEY=your-super-secret-key-change-this-in-production
 ```
 
@@ -52,9 +52,9 @@ SECRET_KEY=your-super-secret-key-change-this-in-production
 
 2. **Create Database and User:**
    ```bash
-   createdb interviewiq_db
-   psql -d interviewiq_db -c "CREATE USER interviewiq WITH PASSWORD 'password';"
-   psql -d interviewiq_db -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_db TO interviewiq;"
+   createdb confida_db
+   psql -d confida_db -c "CREATE USER confida WITH PASSWORD 'password';"
+   psql -d confida_db -c "GRANT ALL PRIVILEGES ON DATABASE confida_db TO confida;"
    ```
 
 3. **Run Migrations:**
@@ -68,7 +68,7 @@ SECRET_KEY=your-super-secret-key-change-this-in-production
 For development and testing, you can use SQLite by updating your `.env`:
 
 ```env
-DATABASE_URL=sqlite:///./interviewiq.db
+DATABASE_URL=sqlite:///./confida.db
 ```
 
 Then run the setup script:

@@ -346,7 +346,7 @@ async def main():
 
 if __name__ == "__main__":
     # Set up environment
-    os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_interviewiq.db")
+    os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_confida.db")
     os.environ.setdefault("ASYNC_DATABASE_ENABLED", "true")
     os.environ.setdefault("ENVIRONMENT", "test")
     

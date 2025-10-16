@@ -23,10 +23,10 @@ def main():
         print("\n📋 Next steps:")
         print("1. Start the application: uvicorn app.main:app --reload")
         print("2. Test with demo accounts:")
-        print("   - demo@interviewiq.com / demo123456")
+        print("   - demo@confida.com / demo123456")
         print("   - john.doe@example.com / password123")
         print("   - jane.smith@example.com / password123")
-        print("   - admin@interviewiq.com / admin123456")
+        print("   - admin@confida.com / admin123456")
         
     except subprocess.CalledProcessError as e:
         print(f"❌ Error running seed data script: {e}")

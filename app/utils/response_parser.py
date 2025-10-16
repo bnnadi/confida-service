@@ -1,5 +1,5 @@
 """
-Consolidated Response Parser for InterviewIQ
+Consolidated Response Parser for Confida
 
 This module combines all response parsing functionality into a single, flexible parser
 that handles different types of AI responses with quality validation and error handling.

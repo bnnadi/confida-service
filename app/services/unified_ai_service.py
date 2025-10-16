@@ -1,5 +1,5 @@
 """
-Unified AI Service for InterviewIQ
+Unified AI Service for Confida
 
 This service provides a unified interface for all AI operations with comprehensive
 error handling, retry logic, circuit breaker patterns, and intelligent fallbacks.

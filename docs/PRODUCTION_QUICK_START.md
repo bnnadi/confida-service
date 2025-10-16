@@ -2,7 +2,7 @@
 
 ## 🚀 **Get Started in 5 Minutes**
 
-This guide will help you deploy the InterviewIQ Vector Database Integration to production quickly and safely.
+This guide will help you deploy the Confida Vector Database Integration to production quickly and safely.
 
 ## 📋 **Prerequisites**
 
@@ -159,7 +159,7 @@ docker-compose -f docker-compose.prod.yml build
 docker-compose -f docker-compose.prod.yml up -d
 
 # Backup database
-docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U interviewiq_prod interviewiq_prod > backup.sql
+docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U confida_prod confida_prod > backup.sql
 ```
 
 ### **Health Check Endpoints**
@@ -292,7 +292,7 @@ BACKUP_DIR="/backups/$(date +%Y%m%d_%H%M%S)"
 mkdir -p $BACKUP_DIR
 
 # Database backup
-docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U interviewiq_prod interviewiq_prod > $BACKUP_DIR/db.sql
+docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U confida_prod confida_prod > $BACKUP_DIR/db.sql
 
 # Qdrant backup
 curl -X POST "http://localhost:6333/collections/job_descriptions/snapshots"
@@ -308,7 +308,7 @@ chmod +x scripts/backup.sh
 
 ```bash
 # Restore database
-docker-compose -f docker-compose.prod.yml exec postgres psql -U interviewiq_prod interviewiq_prod < backup.sql
+docker-compose -f docker-compose.prod.yml exec postgres psql -U confida_prod confida_prod < backup.sql
 
 # Restore Qdrant (manual process)
 # Download snapshots from Qdrant dashboard
@@ -332,4 +332,4 @@ If you encounter issues:
 
 ---
 
-**🎉 Congratulations! You now have a production-ready InterviewIQ Vector Database Integration running with intelligent semantic search capabilities!**
+**🎉 Congratulations! You now have a production-ready Confida Vector Database Integration running with intelligent semantic search capabilities!**

@@ -1,5 +1,5 @@
 """
-Analytics API endpoints for InterviewIQ.
+Analytics API endpoints for Confida.
 
 This module provides REST API endpoints for analytics and reporting functionality,
 including performance metrics, trend analysis, and report generation.

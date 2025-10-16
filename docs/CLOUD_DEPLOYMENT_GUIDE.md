@@ -20,7 +20,7 @@ Instead of manual Docker setup, use these managed platforms that handle everythi
    - Go to [railway.app](https://railway.app)
    - Sign in with GitHub
    - Click "Deploy from GitHub repo"
-   - Select your InterviewIQ repository
+   - Select your Confida repository
 
 2. **Add Services**:
    - **PostgreSQL** (automatic)
@@ -141,7 +141,7 @@ Instead of manual Docker setup, use these managed platforms that handle everythi
 
 2. **Deploy with Cloud Build**:
    ```bash
-   gcloud run deploy interviewiq \
+   gcloud run deploy confida \
      --source . \
      --platform managed \
      --region us-central1 \

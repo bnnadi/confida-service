@@ -27,7 +27,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "InterviewIQ API",
+        "service": "Confida API",
         "version": "1.0.0",
         "monitoring_enabled": settings.MONITORING_ENABLED
     }
@@ -40,7 +40,7 @@ async def detailed_health_check(
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "InterviewIQ API",
+        "service": "Confida API",
         "version": "1.0.0",
         "checks": {}
     }

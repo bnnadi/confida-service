@@ -2,7 +2,7 @@
 Qdrant Vector Database Configuration
 
 This module provides configuration and connection management for Qdrant vector database,
-enabling semantic search capabilities for InterviewIQ.
+enabling semantic search capabilities for Confida.
 """
 import os
 from typing import Dict, Any, Optional

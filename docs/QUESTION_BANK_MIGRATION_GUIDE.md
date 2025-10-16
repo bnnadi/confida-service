@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers the comprehensive question bank migration and data seeding system implemented for InterviewIQ. The system migrates existing session-bound questions to a global question bank and provides extensive data seeding capabilities.
+This guide covers the comprehensive question bank migration and data seeding system implemented for Confida. The system migrates existing session-bound questions to a global question bank and provides extensive data seeding capabilities.
 
 ## 🎯 **What Was Implemented**
 
@@ -283,7 +283,7 @@ python scripts/question_bank_validator.py --fix --dry-run
 ### **Environment Variables**
 ```bash
 # Database connection
-DATABASE_URL=postgresql://user:pass@localhost:5432/interviewiq
+DATABASE_URL=postgresql://user:pass@localhost:5432/confida
 
 # Migration settings
 MIGRATION_DRY_RUN=false
@@ -353,7 +353,7 @@ python scripts/question_bank_cli.py cleanup
 #### **Rollback Migration**
 ```bash
 # Restore from backup
-pg_restore -d interviewiq backup_before_migration.sql
+pg_restore -d confida backup_before_migration.sql
 
 # Or reset question bank
 python scripts/question_bank_cli.py cleanup --reset

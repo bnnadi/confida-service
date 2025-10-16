@@ -1,5 +1,5 @@
 """
-Unified Session Service for InterviewIQ
+Unified Session Service for Confida
 
 This service provides both sync and async database operations for managing interview sessions,
 eliminating the need for separate SessionService and AsyncSessionService classes.

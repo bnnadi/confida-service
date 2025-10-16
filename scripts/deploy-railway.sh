@@ -3,7 +3,7 @@
 # Railway Deployment Script
 # This script helps you deploy to Railway with zero configuration
 
-echo "🚀 Railway Deployment for InterviewIQ Vector Database"
+echo "🚀 Railway Deployment for Confida Vector Database"
 echo "====================================================="
 
 # Check if Railway CLI is installed

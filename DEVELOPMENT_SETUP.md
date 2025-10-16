@@ -48,11 +48,11 @@ sudo systemctl start postgresql
 
 ```bash
 # Create development database
-createdb interviewiq_dev
+createdb confida_dev
 
 # Create user for development
-psql -d interviewiq_dev -c "CREATE USER interviewiq_dev WITH PASSWORD 'dev_password';"
-psql -d interviewiq_dev -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_dev TO interviewiq_dev;"
+psql -d confida_dev -c "CREATE USER confida_dev WITH PASSWORD 'dev_password';"
+psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_dev;"
 ```
 
 #### 3. Configure Environment
@@ -61,7 +61,7 @@ Create `.env` file:
 
 ```env
 # Development Database
-DATABASE_URL=postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev
+DATABASE_URL=postgresql://confida_dev:dev_password@localhost:5432/confida_dev
 
 # JWT Configuration
 SECRET_KEY=dev-secret-key-not-for-production
@@ -98,15 +98,15 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: interviewiq_dev
-      POSTGRES_USER: interviewiq_dev
+      POSTGRES_DB: confida_dev
+      POSTGRES_USER: confida_dev
       POSTGRES_PASSWORD: dev_password
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U interviewiq_dev -d interviewiq_dev"]
+      test: ["CMD-SHELL", "pg_isready -U confida_dev -d confida_dev"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -124,7 +124,7 @@ docker-compose -f docker-compose.dev.yml up -d
 #### 3. Configure Environment
 
 ```env
-DATABASE_URL=postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev
+DATABASE_URL=postgresql://confida_dev:dev_password@localhost:5432/confida_dev
 ```
 
 ## 🌱 **Demo Data & Seed Scripts**
@@ -143,10 +143,10 @@ The project includes a comprehensive seed data script that populates your develo
 
 | Email | Password | Role | Description |
 |-------|----------|------|-------------|
-| `demo@interviewiq.com` | `demo123456` | User | Main demo account |
+| `demo@confida.com` | `demo123456` | User | Main demo account |
 | `john.doe@example.com` | `password123` | User | Sample user 1 |
 | `jane.smith@example.com` | `password123` | User | Sample user 2 |
-| `admin@interviewiq.com` | `admin123456` | Admin | Admin account |
+| `admin@confida.com` | `admin123456` | Admin | Admin account |
 
 #### Running Seed Data
 
@@ -181,10 +181,10 @@ To reset the demo data:
 
 ```bash
 # Drop and recreate database
-dropdb interviewiq_dev
-createdb interviewiq_dev
-psql -d interviewiq_dev -c "CREATE USER interviewiq_dev WITH PASSWORD 'dev_password';"
-psql -d interviewiq_dev -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_dev TO interviewiq_dev;"
+dropdb confida_dev
+createdb confida_dev
+psql -d confida_dev -c "CREATE USER confida_dev WITH PASSWORD 'dev_password';"
+psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_dev;"
 
 # Run migrations
 alembic upgrade head
@@ -283,9 +283,9 @@ brew services start postgresql  # macOS
 sudo systemctl start postgresql  # Linux
 
 # 3. Create development database
-createdb interviewiq_dev
-psql -d interviewiq_dev -c "CREATE USER interviewiq_dev WITH PASSWORD 'dev_password';"
-psql -d interviewiq_dev -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_dev TO interviewiq_dev;"
+createdb confida_dev
+psql -d confida_dev -c "CREATE USER confida_dev WITH PASSWORD 'dev_password';"
+psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_dev;"
 
 # 4. Configure environment
 cp env.example .env
@@ -321,7 +321,7 @@ pytest
 
 ```env
 # Database
-DATABASE_URL=postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev
+DATABASE_URL=postgresql://confida_dev:dev_password@localhost:5432/confida_dev
 
 # JWT
 SECRET_KEY=dev-secret-key-not-for-production
@@ -338,7 +338,7 @@ OLLAMA_MODEL=llama2
 
 ```env
 # Database
-DATABASE_URL=sqlite:///./test_interviewiq.db
+DATABASE_URL=sqlite:///./test_confida.db
 
 # JWT
 SECRET_KEY=test-secret-key
@@ -349,7 +349,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=5
 
 ```env
 # Database
-DATABASE_URL=postgresql://interviewiq:secure_password@prod-db-host:5432/interviewiq_prod
+DATABASE_URL=postgresql://confida:secure_password@prod-db-host:5432/confida_prod
 
 # JWT
 SECRET_KEY=super-secure-production-secret-key

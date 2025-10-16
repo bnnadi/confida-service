@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Production Migration Deployment Script for InterviewIQ.
+Production Migration Deployment Script for Confida.
 
 This script provides a comprehensive production deployment system for database
 migrations with safety checks, rollback capabilities, and monitoring.
@@ -574,7 +574,7 @@ class ProductionMigrationDeployer:
 
 def main():
     """Main CLI interface for production migration deployment."""
-    parser = argparse.ArgumentParser(description="InterviewIQ Production Migration Deployer")
+    parser = argparse.ArgumentParser(description="Confida Production Migration Deployer")
     parser.add_argument("revision", nargs="?", default="head", help="Target revision (default: head)")
     parser.add_argument("--environment", default="production", help="Target environment")
     parser.add_argument("--no-backup", action="store_true", help="Skip backup creation")

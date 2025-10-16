@@ -1,5 +1,5 @@
 """
-Unified Vector Service for InterviewIQ
+Unified Vector Service for Confida
 
 This service combines high-level vector operations, storage engine functionality,
 and content management capabilities, eliminating the need for separate VectorService,

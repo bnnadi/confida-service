@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database Migration Management Script for InterviewIQ.
+Database Migration Management Script for Confida.
 
 This script provides a comprehensive interface for managing database migrations
 using Alembic. It includes validation, rollback capabilities, and production
@@ -148,7 +148,7 @@ class MigrationManager:
         """Create a database backup before migration."""
         if not backup_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = f"backup_interviewiq_{timestamp}.sql"
+            backup_path = f"backup_confida_{timestamp}.sql"
         
         logger.info(f"Creating database backup: {backup_path}")
         
@@ -371,7 +371,7 @@ class MigrationError(Exception):
 
 def main():
     """Main CLI interface for migration management."""
-    parser = argparse.ArgumentParser(description="InterviewIQ Database Migration Manager")
+    parser = argparse.ArgumentParser(description="Confida Database Migration Manager")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Upgrade command

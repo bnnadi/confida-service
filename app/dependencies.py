@@ -1,5 +1,5 @@
 """
-Dependency injection utilities for InterviewIQ application.
+Dependency injection utilities for Confida application.
 """
 
 from functools import lru_cache

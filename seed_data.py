@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Seed data script for InterviewIQ local development.
+Seed data script for Confida local development.
 This script populates the database with demo users, sample interview sessions,
 and other test data for development and testing purposes.
 """
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Sample data
 DEMO_USERS = [
     {
-        "email": "demo@interviewiq.com",
+        "email": "demo@confida.com",
         "name": "Demo User",
         "password": "demo123456",
         "is_active": True
@@ -45,7 +45,7 @@ DEMO_USERS = [
         "is_active": True
     },
     {
-        "email": "admin@interviewiq.com",
+        "email": "admin@confida.com",
         "name": "Admin User",
         "password": "admin123456",
         "is_active": True

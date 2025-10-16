@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🗄️  Setting up InterviewIQ Service Database"
+echo "🗄️  Setting up Confida Service Database"
 
 # Colors for output
 RED='\033[0;31m'
@@ -41,7 +41,7 @@ if [ "$ENVIRONMENT" = "development" ]; then
     sleep 10
     
     # Check if database is ready
-    if docker-compose exec database pg_isready -U ${POSTGRES_USER:-interviewiq} -d ${POSTGRES_DB:-interviewiq_dev}; then
+    if docker-compose exec database pg_isready -U ${POSTGRES_USER:-confida} -d ${POSTGRES_DB:-confida_dev}; then
         print_success "Database is ready!"
     else
         print_error "Database failed to start"
@@ -52,7 +52,7 @@ if [ "$ENVIRONMENT" = "development" ]; then
     print_status "Running database migrations..."
     
     # Set environment variables for development
-    export DATABASE_URL="postgresql://${POSTGRES_USER:-interviewiq}:${POSTGRES_PASSWORD:-password}@localhost:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-interviewiq_dev}"
+    export DATABASE_URL="postgresql://${POSTGRES_USER:-confida}:${POSTGRES_PASSWORD:-password}@localhost:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-confida_dev}"
     
     # Run Alembic migrations
     if command -v alembic &> /dev/null; then

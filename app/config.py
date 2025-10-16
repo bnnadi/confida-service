@@ -7,7 +7,7 @@ load_dotenv()
 
 class Settings:
     # Database Settings - PostgreSQL as default for development
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://confida_dev:dev_password@localhost:5432/confida_dev")
     DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
     DATABASE_POOL_SIZE: int = int(os.getenv("DATABASE_POOL_SIZE", "10"))
     DATABASE_MAX_OVERFLOW: int = int(os.getenv("DATABASE_MAX_OVERFLOW", "20"))
@@ -112,7 +112,7 @@ class Settings:
     ENABLE_ADMIN_ROUTES: bool = os.getenv("ENABLE_ADMIN_ROUTES", "true").lower() == "true"
     
     # CORS Configuration for HTTPS
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3001,https://127.0.0.1:3001,https://interviewiq.com").split(",")
+    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3001,https://127.0.0.1:3001,https://confida.com").split(",")
     CORS_METHODS: List[str] = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")
     CORS_HEADERS: List[str] = os.getenv("CORS_HEADERS", "Content-Type,Authorization,API-Version,X-Requested-With").split(",")
     CORS_MAX_AGE: int = int(os.getenv("CORS_MAX_AGE", "86400"))  # 24 hours

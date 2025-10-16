@@ -1,5 +1,5 @@
 """
-Unified Analytics Service for InterviewIQ
+Unified Analytics Service for Confida
 
 This service combines comprehensive analytics functionality with simplified aggregation
 capabilities, eliminating the need for separate AnalyticsService and SimplifiedAnalyticsService classes.

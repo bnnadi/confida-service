@@ -174,7 +174,7 @@ class ConfigValidator:
             if self.settings.OLLAMA_BASE_URL == "http://localhost:11434":
                 self.validation_warnings.append("Ollama URL should not be localhost in production")
             
-            if self.settings.DATABASE_URL == "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev":
+            if self.settings.DATABASE_URL == "postgresql://confida_dev:dev_password@localhost:5432/confida_dev":
                 self.validation_warnings.append("Database URL appears to be using development defaults in production")
         
         elif env == "development":

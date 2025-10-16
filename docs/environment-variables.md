@@ -1,6 +1,6 @@
 # Environment Variables Configuration
 
-This document describes the environment variables used to configure the InterviewIQ API for different environments (development, staging, production).
+This document describes the environment variables used to configure the Confida API for different environments (development, staging, production).
 
 ## 🔧 Route Control Variables
 
@@ -46,7 +46,7 @@ This document describes the environment variables used to configure the Intervie
 - **Development**: Can be `true` or `false`
 
 ### `CORS_ORIGINS`
-- **Default**: `https://localhost:3000,https://127.0.0.1:3000,https://interviewiq.com`
+- **Default**: `https://localhost:3000,https://127.0.0.1:3000,https://confida.com`
 - **Description**: Allowed CORS origins (comma-separated)
 - **Production**: Set to your actual frontend domains
 - **Development**: Can include localhost origins
@@ -106,7 +106,7 @@ This document describes the environment variables used to configure the Intervie
 ## 🗄️ Database Configuration
 
 ### `DATABASE_URL`
-- **Default**: `postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev`
+- **Default**: `postgresql://confida_dev:dev_password@localhost:5432/confida_dev`
 - **Description**: Database connection URL
 - **Production**: Set to your production database
 - **Development**: Can be localhost
@@ -133,7 +133,7 @@ ENABLE_ADMIN_ROUTES=true
 SECURITY_HEADERS_ENABLED=true
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_BACKEND=redis
-CORS_ORIGINS=https://staging.interviewiq.com
+CORS_ORIGINS=https://staging.confida.com
 ```
 
 ### Production Environment
@@ -145,7 +145,7 @@ ENABLE_ADMIN_ROUTES=true
 SECURITY_HEADERS_ENABLED=true
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_BACKEND=redis
-CORS_ORIGINS=https://interviewiq.com,https://www.interviewiq.com
+CORS_ORIGINS=https://confida.com,https://www.confida.com
 ```
 
 ## 🔍 Environment Status Check
@@ -192,7 +192,7 @@ environment:
   - ENABLE_ADMIN_ROUTES=true
   - RATE_LIMIT_ENABLED=true
   - RATE_LIMIT_BACKEND=redis
-  - CORS_ORIGINS=https://interviewiq.com
+  - CORS_ORIGINS=https://confida.com
 ```
 
 ### Kubernetes ConfigMap
@@ -200,12 +200,12 @@ environment:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: interviewiq-config
+  name: confida-config
 data:
   ENABLE_DEBUG_ROUTES: "false"
   ENABLE_SECURITY_ROUTES: "false"
   ENABLE_ADMIN_ROUTES: "true"
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_BACKEND: "redis"
-  CORS_ORIGINS: "https://interviewiq.com"
+  CORS_ORIGINS: "https://confida.com"
 ```

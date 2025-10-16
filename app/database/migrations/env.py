@@ -42,7 +42,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to get database settings: {e}")
     # Fallback to environment variable or default
-    database_url = os.getenv("DATABASE_URL", "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev")
+    database_url = os.getenv("DATABASE_URL", "postgresql://confida_dev:dev_password@localhost:5432/confida_dev")
     config.set_main_option("sqlalchemy.url", database_url)
     logger.warning(f"Using fallback database URL: {database_url.split('@')[0]}@***")
 

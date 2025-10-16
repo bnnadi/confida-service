@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the migration from synchronous to asynchronous database operations in InterviewIQ. The migration implements a dual-mode architecture that supports both synchronous and asynchronous database operations, allowing for gradual migration and zero-downtime deployment.
+This document outlines the migration from synchronous to asynchronous database operations in Confida. The migration implements a dual-mode architecture that supports both synchronous and asynchronous database operations, allowing for gradual migration and zero-downtime deployment.
 
 ## Migration Strategy
 
@@ -110,7 +110,7 @@ python -c "from app.main import app; print('✅ Application ready')"
 1. **Enable async in staging**:
    ```bash
    export ASYNC_DATABASE_ENABLED=true
-   export DATABASE_URL=postgresql+asyncpg://user:pass@staging-db:5432/interviewiq
+   export DATABASE_URL=postgresql+asyncpg://user:pass@staging-db:5432/confida
    ```
 
 2. **Run performance tests**:
@@ -352,7 +352,7 @@ If issues arise with async operations, rollback is simple:
 export ASYNC_DATABASE_ENABLED=false
 
 # Restart application
-docker-compose restart interviewiq-api
+docker-compose restart confida-api
 
 # Verify rollback
 curl http://localhost:8000/health

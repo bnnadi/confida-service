@@ -1,36 +1,36 @@
 version: '3.8'
 
-name: interviewiq-service
+name: confida-service
 services:
   database:
     image: postgres:15-alpine
-    container_name: interviewiq-database
+    container_name: confida-database
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-interviewiq_dev}
-      - POSTGRES_USER=${POSTGRES_USER:-interviewiq}
+      - POSTGRES_DB=${POSTGRES_DB:-confida_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-confida}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - interviewiq-service-network
+      - confida-service-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-interviewiq} -d ${POSTGRES_DB:-interviewiq_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-confida} -d ${POSTGRES_DB:-confida_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   qdrant:
     image: qdrant/qdrant:v1.7.0
-    container_name: interviewiq-qdrant
+    container_name: confida-qdrant
     ports:
       - "${QDRANT_PORT:-6333}:6333"
       - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - interviewiq-service-network
+      - confida-service-network
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
@@ -44,12 +44,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: interviewiq-backend
+    container_name: confida-backend
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
       - PYTHONPATH=/app
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-interviewiq}:${POSTGRES_PASSWORD:-password}@database:5432/${POSTGRES_DB:-interviewiq_dev}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-confida}:${POSTGRES_PASSWORD:-password}@database:5432/${POSTGRES_DB:-confida_dev}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -59,7 +59,7 @@ services:
     volumes:
       - .:/app
     networks:
-      - interviewiq-service-network
+      - confida-service-network
     depends_on:
       database:
         condition: service_healthy
@@ -72,5 +72,5 @@ volumes:
   qdrant_data:
 
 networks:
-  interviewiq-service-network:
+  confida-service-network:
     driver: bridge
