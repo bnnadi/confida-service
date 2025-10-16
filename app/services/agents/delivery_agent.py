@@ -8,7 +8,7 @@ import re
 from typing import Dict, Any, List
 from app.models.scoring_models import DeliveryAnalysis
 from app.utils.prompt_templates import PromptTemplates
-from app.services.ai_service import AIService
+from app.services.unified_ai_service import UnifiedAIService
 from app.services.agents.base_agent import BaseAgent
 from app.utils.logger import get_logger
 
@@ -19,7 +19,7 @@ class DeliveryAnalysisAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("Delivery Analysis Agent")
-        self.ai_service = AIService()
+        self.ai_service = UnifiedAIService()
     
     async def analyze(
         self, 
@@ -45,9 +45,11 @@ class DeliveryAnalysisAgent(BaseAgent):
             prompt = self._create_delivery_analysis_prompt(response, question, job_description)
             
             # Get AI analysis
-            ai_response = await self.ai_service.analyze_with_ai(
-                prompt=prompt,
-                system_prompt=self._get_delivery_system_prompt()
+            ai_response = await self.ai_service.analyze_answer(
+                job_description=job_description,
+                answer=response,
+                question=question,
+                role=role
             )
             
             # Parse AI response

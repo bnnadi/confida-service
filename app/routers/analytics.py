@@ -9,13 +9,19 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
-from app.database.connection import get_db
+from app.database.connection import get_db, get_db_session
 from app.services.analytics_service import AnalyticsService
+from app.services.cost_tracker import CostTracker
+from app.services.smart_token_optimizer import SmartTokenOptimizer
 from app.models.analytics_models import (
     PerformanceMetrics, SessionAnalytics, TrendAnalysis, ReportRequest, 
     ReportResponse, AnalyticsSummary, PerformanceComparison, AnalyticsFilter,
     TimePeriod, ReportType, ReportFormat
 )
+from app.database.question_database_models import (
+    QuestionGenerationLog, QuestionTemplate, QuestionMatch, QuestionFeedback
+)
+from sqlalchemy import func, desc, and_
 from app.dependencies import get_current_user_required
 from app.utils.logger import get_logger
 
@@ -414,3 +420,192 @@ async def get_dashboard_metrics(
             status_code=500,
             detail=f"Failed to get dashboard metrics: {str(e)}"
         )
+
+
+# Question Analytics Endpoints
+@router.get("/questions/generation-stats")
+async def get_question_generation_statistics(
+    days: int = Query(7, description="Number of days to analyze"),
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db_session)
+):
+    """Get comprehensive statistics about question generation methods."""
+    try:
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Get generation logs
+        logs = db.query(QuestionGenerationLog).filter(
+            and_(
+                QuestionGenerationLog.created_at >= start_date,
+                QuestionGenerationLog.created_at <= end_date
+            )
+        ).all()
+        
+        if not logs:
+            return {
+                "message": f"No generation data found for the last {days} days",
+                "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+                "total_generations": 0
+            }
+        
+        # Calculate statistics
+        total_generations = len(logs)
+        total_questions = sum(log.questions_generated for log in logs)
+        
+        # Method breakdown
+        method_stats = {}
+        for log in logs:
+            method = log.generation_method
+            if method not in method_stats:
+                method_stats[method] = {"count": 0, "questions": 0}
+            method_stats[method]["count"] += 1
+            method_stats[method]["questions"] += log.questions_generated
+        
+        # Average questions per generation
+        avg_questions = total_questions / total_generations if total_generations > 0 else 0
+        
+        return {
+            "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+            "total_generations": total_generations,
+            "total_questions": total_questions,
+            "average_questions_per_generation": round(avg_questions, 2),
+            "method_breakdown": method_stats,
+            "database_hit_rate": method_stats.get("database", {}).get("count", 0) / total_generations if total_generations > 0 else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting question generation statistics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get generation statistics: {str(e)}")
+
+
+@router.get("/questions/database-performance")
+async def get_database_performance_metrics(
+    days: int = Query(7, description="Number of days to analyze"),
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db_session)
+):
+    """Get database performance metrics for question retrieval."""
+    try:
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Get question matches (database hits)
+        matches = db.query(QuestionMatch).filter(
+            and_(
+                QuestionMatch.created_at >= start_date,
+                QuestionMatch.created_at <= end_date
+            )
+        ).all()
+        
+        if not matches:
+            return {
+                "message": f"No database performance data found for the last {days} days",
+                "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+                "total_matches": 0
+            }
+        
+        # Calculate performance metrics
+        total_matches = len(matches)
+        avg_response_time = sum(match.response_time for match in matches if match.response_time) / total_matches if total_matches > 0 else 0
+        
+        # Role breakdown
+        role_stats = {}
+        for match in matches:
+            role = match.role
+            if role not in role_stats:
+                role_stats[role] = {"count": 0, "avg_time": 0}
+            role_stats[role]["count"] += 1
+            if match.response_time:
+                role_stats[role]["avg_time"] += match.response_time
+        
+        # Calculate averages
+        for role in role_stats:
+            if role_stats[role]["count"] > 0:
+                role_stats[role]["avg_time"] = role_stats[role]["avg_time"] / role_stats[role]["count"]
+        
+        return {
+            "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+            "total_matches": total_matches,
+            "average_response_time": round(avg_response_time, 3),
+            "role_breakdown": role_stats,
+            "performance_grade": "excellent" if avg_response_time < 0.1 else "good" if avg_response_time < 0.5 else "needs_improvement"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting database performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get database performance metrics: {str(e)}")
+
+
+# Cost Analytics Endpoints
+@router.get("/costs/summary")
+async def get_cost_summary(
+    days: int = Query(7, description="Number of days to analyze"),
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """Get cost summary and optimization insights."""
+    try:
+        cost_tracker = CostTracker()
+        
+        # Get cost data for the specified period
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Calculate total costs
+        total_costs = cost_tracker.get_total_costs(start_date, end_date)
+        
+        # Get cost breakdown by service
+        service_costs = cost_tracker.get_costs_by_service(start_date, end_date)
+        
+        # Calculate optimization effectiveness
+        optimization_stats = cost_tracker.get_optimization_stats(start_date, end_date)
+        
+        return {
+            "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+            "total_costs": total_costs,
+            "service_breakdown": service_costs,
+            "optimization_stats": optimization_stats,
+            "cost_trend": "decreasing" if optimization_stats.get("cost_reduction_percentage", 0) > 0 else "stable"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting cost summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get cost summary: {str(e)}")
+
+
+@router.get("/costs/optimization-effectiveness")
+async def get_optimization_effectiveness(
+    days: int = Query(30, description="Number of days to analyze"),
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
+):
+    """Get optimization effectiveness metrics."""
+    try:
+        cost_tracker = CostTracker()
+        token_optimizer = SmartTokenOptimizer()
+        
+        # Get optimization metrics
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Calculate optimization effectiveness
+        effectiveness = cost_tracker.calculate_optimization_effectiveness(start_date, end_date)
+        
+        # Get token optimization stats
+        token_stats = token_optimizer.get_optimization_stats(start_date, end_date)
+        
+        return {
+            "period": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+            "cost_reduction_percentage": effectiveness.get("cost_reduction_percentage", 0),
+            "tokens_saved": effectiveness.get("tokens_saved", 0),
+            "api_calls_reduced": effectiveness.get("api_calls_reduced", 0),
+            "token_optimization": token_stats,
+            "optimization_grade": "excellent" if effectiveness.get("cost_reduction_percentage", 0) > 50 else "good" if effectiveness.get("cost_reduction_percentage", 0) > 20 else "needs_improvement"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting optimization effectiveness: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get optimization effectiveness: {str(e)}")
