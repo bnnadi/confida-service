@@ -39,22 +39,22 @@ async def perform_analysis_with_fallback(ai_service, request, question_text: str
     except Exception as e:
         logger.warning(f"Multi-agent analysis failed, falling back to single AI: {e}")
         
-        # Fallback to original AI analysis
-        if hasattr(ai_service, 'analyze_answer'):
-            # Async version
+        # Fallback to unified AI service
+        if ai_service:
             response = await ai_service.analyze_answer(
-                request.jobDescription, 
-                request.answer,
-                role=role,
-                job_description=request.jobDescription
+                job_description=request.jobDescription,
+                answer=request.answer,
+                question=question_text,
+                role=role
             )
         else:
-            # Sync version
-            response = ai_service.analyze_answer(
-                request.jobDescription, 
-                request.answer,
-                preferred_service=getattr(request, 'preferred_service', None)
-            )
+            # Final fallback if no AI service available
+            response = {
+                "analysis": "AI analysis service is currently unavailable. Please try again later.",
+                "score": {"clarity": 7.0, "confidence": 7.0, "technical": 7.0, "overall": 7.0},
+                "suggestions": ["Service temporarily unavailable", "Please try again in a few moments"],
+                "multi_agent_analysis": None
+            }
         
         # Convert to dict if it's a Pydantic model
         if hasattr(response, 'dict'):

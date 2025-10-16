@@ -5,7 +5,7 @@ from datetime import datetime
 from app.database.models import InterviewSession, Question, SessionQuestion, Answer, User
 from app.exceptions import AIServiceError
 from app.utils.error_context import ErrorContext
-from app.services.question_engine import QuestionEngine
+from app.services.question_service import QuestionService
 
 
 class SessionService:
@@ -13,7 +13,7 @@ class SessionService:
     
     def __init__(self, db: Session):
         self.db = db
-        self.question_engine = QuestionEngine(db)
+        self.question_service = QuestionService(db)
     
     def create_session(self, user_id: int, role: str, job_description: str) -> InterviewSession:
         """Create a new interview session (legacy method for backward compatibility)."""

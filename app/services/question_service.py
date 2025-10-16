@@ -7,8 +7,6 @@ services with a single, clean, maintainable solution.
 Replaces:
 - QuestionEngine
 - QuestionBankService  
-- HybridAIService
-- AsyncHybridAIService
 - AsyncQuestionBankService
 - AIFallbackService
 - IntelligentQuestionSelector
@@ -61,16 +59,22 @@ class QuestionService:
         self._anthropic_client = None
         self._ollama_service = None
     
-    def generate_questions(self, role: str, job_description: str, count: int = 10) -> List[Dict[str, Any]]:
+    def generate_questions(self, role: str, job_description: str, count: int = 10, user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        Generate questions using database-first approach with AI fallback.
+        Generate questions using intelligent database-first approach with AI fallback.
         
-        This single method replaces the entire complex pipeline of 11+ services.
+        This method provides intelligent question selection with:
+        - Role analysis and skill extraction
+        - Database-first approach with diversity optimization
+        - AI fallback for missing question types
+        - User personalization and history consideration
         
         Args:
             role: Job title/role
             job_description: Job description text
             count: Number of questions to generate
+            
+            user_context: Optional user context for personalization
             
         Returns:
             List of question dictionaries with id, text, type, and metadata
@@ -79,25 +83,49 @@ class QuestionService:
         logger.info(f"Generating {count} questions for role: {role}")
         
         try:
-            # Step 1: Try database first (simple query)
-            db_questions = self._get_database_questions(role, job_description, count)
+            # Step 1: Analyze role requirements
+            role_analysis = self._analyze_role_requirements(role, job_description)
+            logger.info(f"Role analysis: {role_analysis['industry']} {role_analysis['seniority_level']} with skills: {role_analysis['required_skills']}")
+            
+            # Step 2: Get database questions with intelligent selection
+            db_questions = self._get_database_questions(role, job_description, count * 2)  # Get more for selection
             logger.info(f"Found {len(db_questions)} questions in database")
             
-            # Step 2: If not enough, use AI (simple call)
+            # Step 3: Score and rank questions based on role analysis and user context
+            if db_questions:
+                scored_questions = self._calculate_question_scores(db_questions, role_analysis, user_context)
+                # Sort by combined score
+                scored_questions.sort(key=lambda x: x.get('combined_score', 0), reverse=True)
+                # Ensure diversity
+                diverse_questions = self._ensure_question_diversity(scored_questions, count)
+            else:
+                diverse_questions = []
+            
+            # Step 4: Fill gaps with AI if needed
             ai_questions = []
-            if len(db_questions) < count:
-                needed = count - len(db_questions)
+            if len(diverse_questions) < count:
+                needed = count - len(diverse_questions)
                 logger.info(f"Need {needed} more questions from AI")
                 ai_questions = self._generate_ai_questions(role, job_description, needed)
             
-            # Step 3: Combine and format results
-            all_questions = db_questions + ai_questions
+            # Step 5: Combine and format results
+            all_questions = diverse_questions + ai_questions
             formatted_questions = self._format_questions(all_questions, role, start_time)
             
-            # Step 4: Log generation metrics
-            self._log_generation_metrics(role, job_description, len(db_questions), len(ai_questions), start_time)
+            # Step 6: Add intelligent metadata
+            for i, question in enumerate(formatted_questions):
+                if i < len(diverse_questions):
+                    # Add intelligent selection metadata
+                    question['selection_method'] = 'intelligent_database'
+                    question['role_relevance_score'] = diverse_questions[i].get('role_relevance_score', 0.5)
+                    question['user_preference_score'] = diverse_questions[i].get('user_preference_score', 0.5)
+                else:
+                    question['selection_method'] = 'ai_fallback'
             
-            logger.info(f"Generated {len(formatted_questions)} questions total")
+            # Step 7: Log generation metrics
+            self._log_generation_metrics(role, job_description, len(diverse_questions), len(ai_questions), start_time)
+            
+            logger.info(f"Generated {len(formatted_questions)} questions total ({len(diverse_questions)} intelligent, {len(ai_questions)} AI)")
             return formatted_questions
             
         except Exception as e:
@@ -431,3 +459,224 @@ class QuestionService:
         except Exception as e:
             logger.error(f"Error generating questions from scenario {scenario_id}: {e}")
             return []
+    
+    def _analyze_role_requirements(self, role: str, job_description: str) -> Dict[str, Any]:
+        """
+        Analyze role requirements from job description.
+        
+        Returns:
+            Dictionary with extracted role information
+        """
+        try:
+            # Extract key information from job description
+            job_lower = job_description.lower()
+            
+            # Industry detection
+            industries = {
+                'technology': ['tech', 'software', 'engineering', 'developer', 'programmer'],
+                'finance': ['finance', 'banking', 'investment', 'trading', 'fintech'],
+                'healthcare': ['healthcare', 'medical', 'pharma', 'clinical', 'health'],
+                'education': ['education', 'teaching', 'academic', 'university', 'school'],
+                'retail': ['retail', 'ecommerce', 'commerce', 'shopping', 'customer']
+            }
+            
+            detected_industry = 'technology'  # default
+            for industry, keywords in industries.items():
+                if any(keyword in job_lower for keyword in keywords):
+                    detected_industry = industry
+                    break
+            
+            # Seniority level detection
+            seniority_keywords = {
+                'junior': ['junior', 'entry', 'graduate', 'intern', 'associate'],
+                'mid': ['mid', 'intermediate', 'experienced'],
+                'senior': ['senior', 'lead', 'principal', 'staff'],
+                'manager': ['manager', 'director', 'head', 'vp', 'vice president']
+            }
+            
+            detected_seniority = 'mid'  # default
+            for level, keywords in seniority_keywords.items():
+                if any(keyword in job_lower for keyword in keywords):
+                    detected_seniority = level
+                    break
+            
+            # Skill extraction (basic keyword matching)
+            common_skills = [
+                'python', 'javascript', 'react', 'node', 'java', 'c++', 'sql', 'aws', 'docker',
+                'kubernetes', 'git', 'agile', 'scrum', 'machine learning', 'ai', 'data science',
+                'frontend', 'backend', 'full stack', 'devops', 'cloud', 'microservices'
+            ]
+            
+            detected_skills = [skill for skill in common_skills if skill in job_lower]
+            
+            return {
+                'industry': detected_industry,
+                'seniority_level': detected_seniority,
+                'required_skills': detected_skills,
+                'company_size': 'medium',  # default
+                'tech_stack': detected_skills,
+                'soft_skills': ['communication', 'teamwork', 'problem solving']  # default
+            }
+            
+        except Exception as e:
+            logger.warning(f"Error analyzing role requirements: {e}")
+            return {
+                'industry': 'technology',
+                'seniority_level': 'mid',
+                'required_skills': [],
+                'company_size': 'medium',
+                'tech_stack': [],
+                'soft_skills': ['communication', 'teamwork', 'problem solving']
+            }
+    
+    def _ensure_question_diversity(self, questions: List[Dict[str, Any]], target_count: int) -> List[Dict[str, Any]]:
+        """
+        Ensure question diversity across categories and difficulties.
+        
+        Args:
+            questions: List of questions to diversify
+            target_count: Target number of questions
+            
+        Returns:
+            Diversified list of questions
+        """
+        if len(questions) <= target_count:
+            return questions
+        
+        # Define question categories
+        categories = ['technical', 'behavioral', 'system_design', 'leadership', 'problem_solving']
+        difficulties = ['easy', 'medium', 'hard']
+        
+        # Group questions by category and difficulty
+        categorized = {cat: [] for cat in categories}
+        for q in questions:
+            category = q.get('category', 'technical')
+            if category in categorized:
+                categorized[category].append(q)
+        
+        # Select diverse questions
+        diverse_questions = []
+        questions_per_category = max(1, target_count // len(categories))
+        
+        for category, cat_questions in categorized.items():
+            if cat_questions and len(diverse_questions) < target_count:
+                # Take up to questions_per_category from this category
+                selected = cat_questions[:questions_per_category]
+                diverse_questions.extend(selected)
+        
+        # Fill remaining slots with highest quality questions
+        remaining_slots = target_count - len(diverse_questions)
+        if remaining_slots > 0:
+            # Get questions not yet selected
+            selected_ids = {q.get('id') for q in diverse_questions}
+            remaining_questions = [q for q in questions if q.get('id') not in selected_ids]
+            
+            # Sort by quality score and take the best ones
+            remaining_questions.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
+            diverse_questions.extend(remaining_questions[:remaining_slots])
+        
+        return diverse_questions[:target_count]
+    
+    def _calculate_question_scores(self, questions: List[Dict[str, Any]], role_analysis: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Calculate relevance scores for questions based on role analysis and user context.
+        
+        Args:
+            questions: List of questions to score
+            role_analysis: Role analysis results
+            user_context: Optional user context for personalization
+            
+        Returns:
+            Questions with calculated scores
+        """
+        scored_questions = []
+        
+        for question in questions:
+            # Base quality score
+            quality_score = question.get('quality_score', 0.5)
+            
+            # Role relevance score
+            role_relevance = self._calculate_role_relevance(question, role_analysis)
+            
+            # User preference score
+            user_preference = 0.5  # default
+            if user_context:
+                user_preference = self._calculate_user_preference(question, user_context)
+            
+            # Combined score
+            combined_score = (quality_score * 0.4 + role_relevance * 0.4 + user_preference * 0.2)
+            
+            question_with_score = question.copy()
+            question_with_score.update({
+                'role_relevance_score': role_relevance,
+                'user_preference_score': user_preference,
+                'combined_score': combined_score
+            })
+            
+            scored_questions.append(question_with_score)
+        
+        return scored_questions
+    
+    def _calculate_role_relevance(self, question: Dict[str, Any], role_analysis: Dict[str, Any]) -> float:
+        """Calculate how relevant a question is to the role."""
+        try:
+            question_text = question.get('text', '').lower()
+            question_tags = question.get('tags', [])
+            
+            # Check for skill matches
+            required_skills = role_analysis.get('required_skills', [])
+            skill_matches = sum(1 for skill in required_skills if skill.lower() in question_text or skill.lower() in [tag.lower() for tag in question_tags])
+            
+            # Check for industry relevance
+            industry = role_analysis.get('industry', 'technology')
+            industry_keywords = {
+                'technology': ['software', 'code', 'programming', 'development', 'engineering'],
+                'finance': ['financial', 'banking', 'investment', 'trading', 'risk'],
+                'healthcare': ['medical', 'health', 'clinical', 'patient', 'treatment'],
+                'education': ['teaching', 'learning', 'education', 'academic', 'curriculum']
+            }
+            
+            industry_relevance = 0.5  # default
+            if industry in industry_keywords:
+                industry_matches = sum(1 for keyword in industry_keywords[industry] if keyword in question_text)
+                industry_relevance = min(1.0, industry_matches / len(industry_keywords[industry]))
+            
+            # Combine scores
+            skill_relevance = min(1.0, skill_matches / max(1, len(required_skills)))
+            role_relevance = (skill_relevance * 0.7 + industry_relevance * 0.3)
+            
+            return min(1.0, role_relevance)
+            
+        except Exception as e:
+            logger.warning(f"Error calculating role relevance: {e}")
+            return 0.5
+    
+    def _calculate_user_preference(self, question: Dict[str, Any], user_context: Dict[str, Any]) -> float:
+        """Calculate user preference score based on history and preferences."""
+        try:
+            # Check if user has seen this question before
+            previous_questions = user_context.get('previous_questions', [])
+            question_id = question.get('id', '')
+            
+            if question_id in previous_questions:
+                return 0.2  # Lower score for previously seen questions
+            
+            # Check difficulty preference
+            preferred_difficulty = user_context.get('preferred_difficulty')
+            question_difficulty = question.get('difficulty', 'medium')
+            
+            if preferred_difficulty and preferred_difficulty.lower() == question_difficulty.lower():
+                return 0.8  # Higher score for preferred difficulty
+            
+            # Check weak areas (avoid questions in weak areas unless specifically requested)
+            weak_areas = user_context.get('weak_areas', [])
+            question_tags = question.get('tags', [])
+            
+            if any(area.lower() in [tag.lower() for tag in question_tags] for area in weak_areas):
+                return 0.3  # Lower score for weak areas
+            
+            return 0.5  # Default score
+            
+        except Exception as e:
+            logger.warning(f"Error calculating user preference: {e}")
+            return 0.5

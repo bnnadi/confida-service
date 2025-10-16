@@ -7,8 +7,7 @@ from typing import Optional, AsyncGenerator
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.hybrid_ai_service import HybridAIService
-from app.services.async_hybrid_ai_service import AsyncHybridAIService
+from app.services.unified_ai_service import UnifiedAIService, AsyncUnifiedAIService
 from app.utils.logger import get_logger
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
@@ -17,20 +16,20 @@ from app.config import get_settings
 logger = get_logger(__name__)
 settings = get_settings()
 
-def get_ai_service(db: Session = Depends(get_db)) -> Optional[HybridAIService]:
+def get_ai_service(db: Session = Depends(get_db)) -> Optional[UnifiedAIService]:
     """Get AI service instance with database session for question bank integration."""
     try:
-        return HybridAIService(db_session=db)
+        return UnifiedAIService(db_session=db)
     except Exception as e:
-        logger.warning(f"Could not initialize HybridAIService: {e}")
+        logger.warning(f"Could not initialize UnifiedAIService: {e}")
         return None
 
-async def get_async_ai_service(db: AsyncSession = Depends(get_async_db)) -> Optional[AsyncHybridAIService]:
+async def get_async_ai_service(db: AsyncSession = Depends(get_async_db)) -> Optional[AsyncUnifiedAIService]:
     """Get AI service instance with async database session for question bank integration."""
     try:
-        return AsyncHybridAIService(db_session=db)
+        return AsyncUnifiedAIService(db_session=db)
     except Exception as e:
-        logger.warning(f"Could not initialize AsyncHybridAIService with async session: {e}")
+        logger.warning(f"Could not initialize AsyncUnifiedAIService with async session: {e}")
         return None
 
 def get_database_session() -> Session:

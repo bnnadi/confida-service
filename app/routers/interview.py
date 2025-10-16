@@ -142,12 +142,22 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
     logger = get_logger(__name__)
     
     try:
-        # Use simplified question service
+        # Use intelligent question service
         question_service = QuestionService(db)
+        # Extract user context for intelligent selection
+        user_context = {
+            'user_id': str(current_user["id"]),
+            'previous_questions': [],  # TODO: Get from user history
+            'preferred_difficulty': None,  # TODO: Get from user preferences
+            'weak_areas': [],  # TODO: Get from user analytics
+            'strong_areas': []  # TODO: Get from user analytics
+        }
+        
         questions = question_service.generate_questions(
             role=request.role,
             job_description=request.jobDescription,
-            count=10
+            count=10,
+            user_context=user_context
         )
         
         # Create session and store questions in database atomically
@@ -188,12 +198,22 @@ async def _handle_sync_parse_jd(ai_service, db, request, validated_service, curr
     logger = get_logger(__name__)
     
     try:
-        # Use simplified question service
+        # Use intelligent question service
         question_service = QuestionService(db)
+        # Extract user context for intelligent selection
+        user_context = {
+            'user_id': str(current_user["id"]),
+            'previous_questions': [],  # TODO: Get from user history
+            'preferred_difficulty': None,  # TODO: Get from user preferences
+            'weak_areas': [],  # TODO: Get from user analytics
+            'strong_areas': []  # TODO: Get from user analytics
+        }
+        
         questions = question_service.generate_questions(
             role=request.role,
             job_description=request.jobDescription,
-            count=10
+            count=10,
+            user_context=user_context
         )
         
         # Create session and store questions in database atomically
