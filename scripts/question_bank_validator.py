@@ -465,29 +465,12 @@ class QuestionBankValidator:
                     logger.error(f"Error fixing difficulty for question {question.id}: {e}")
                     fixes_applied["errors"] += 1
             
-            # Remove duplicate questions (keep the oldest)
-            duplicate_texts = db.execute(
-                select(Question.question_text, func.count(Question.id))
-                .group_by(Question.question_text)
-                .having(func.count(Question.id) > 1)
-            ).fetchall()
+            # Remove duplicate questions using shared utility
+            from app.utils.question_bank_utils import QuestionBankUtils
             
-            for question_text, count in duplicate_texts:
-                duplicates = db.execute(
-                    select(Question).where(Question.question_text == question_text)
-                    .order_by(Question.created_at)
-                ).scalars().all()
-                
-                # Keep the first one, remove the rest
-                for question in duplicates[1:]:
-                    try:
-                        if not dry_run:
-                            db.delete(question)
-                            db.commit()
-                        fixes_applied["questions_deleted"] += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting duplicate question {question.id}: {e}")
-                        fixes_applied["errors"] += 1
+            duplicate_stats = QuestionBankUtils.remove_duplicate_questions(db, dry_run)
+            fixes_applied["questions_deleted"] = duplicate_stats["questions_removed"]
+            fixes_applied["errors"] += duplicate_stats["errors"]
         
         return fixes_applied
 
