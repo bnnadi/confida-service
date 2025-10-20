@@ -8,7 +8,7 @@ calculation based on request complexity.
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from app.utils.logger import get_logger
 from app.config import get_settings
@@ -55,31 +55,27 @@ class SmartTokenOptimizer:
             logger.warning("RoleAnalysisProcessor not available - summarization disabled")
     
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
-        """Load configuration from YAML file with fallback to defaults."""
-        # Try provided path first
-        if config_path and Path(config_path).exists():
-            return self._load_config_file(config_path)
+        """Load configuration with simple fallback."""
+        # Try provided path or default path
+        paths_to_try = []
+        if config_path:
+            paths_to_try.append(config_path)
+        paths_to_try.append(Path(__file__).parent.parent.parent / "config" / "token_optimization.yaml")
         
-        # Try default config path
-        default_path = Path(__file__).parent.parent.parent / "config" / "token_optimization.yaml"
-        if default_path.exists():
-            return self._load_config_file(default_path)
+        for path in paths_to_try:
+            if Path(path).exists():
+                try:
+                    with open(path, 'r') as f:
+                        config = yaml.safe_load(f)
+                        logger.info(f"Loaded token optimization config from {path}")
+                        return config
+                except Exception as e:
+                    logger.warning(f"Failed to load config from {path}: {e}")
+                    continue
         
         # Fallback to defaults
         logger.warning("Using hardcoded default configuration")
         return self._get_default_config()
-    
-    def _load_config_file(self, path: str) -> Dict[str, Any]:
-        """Load configuration from a specific file."""
-        try:
-            with open(path, 'r') as f:
-                config = yaml.safe_load(f)
-                logger.info(f"Loaded token optimization config from {path}")
-                self._config_loaded_from_file = True
-                return config
-        except Exception as e:
-            logger.warning(f"Failed to load config from {path}: {e}")
-            return self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration as fallback."""
@@ -338,55 +334,30 @@ class SmartTokenOptimizer:
             return f"High complexity optimization ({service}): {optimal_tokens} tokens"
     
     def optimize_job_description(self, job_description: str, target_length: int = 300) -> Dict[str, Any]:
-        """
-        Optimize job description for token efficiency while preserving key information.
-        
-        Args:
-            job_description: Full job description text
-            target_length: Target length in words for the optimized version
-            
-        Returns:
-            Dictionary with original, optimized, and analysis data
-        """
+        """Simple job description optimization."""
         if not self.job_processor:
             return {
                 "original": job_description,
                 "optimized": job_description,
                 "compression_ratio": 1.0,
-                "optimization_applied": "none",
-                "key_info_extracted": {}
+                "optimization_applied": "none"
             }
         
         try:
-            # Process the job description
             summary = self.job_processor.process_job_description(job_description, target_length)
-            
             return {
                 "original": job_description,
                 "optimized": getattr(summary, 'summary_text', job_description),
                 "compression_ratio": getattr(summary, 'compression_ratio', 1.0),
-                "optimization_applied": f"summarized_to_{getattr(summary, 'summary_length', len(job_description))}_words",
-                "key_info_extracted": {
-                    "key_requirements": getattr(summary, 'key_requirements', []),
-                    "technical_skills": getattr(summary, 'technical_skills', []),
-                    "soft_skills": getattr(summary, 'soft_skills', []),
-                    "experience_requirements": getattr(summary, 'experience_requirements', []),
-                    "company_info": getattr(summary, 'company_info', {})
-                },
-                "original_length": getattr(summary, 'original_length', len(job_description)),
-                "optimized_length": getattr(summary, 'summary_length', len(job_description)),
-                "tokens_saved": getattr(summary, 'original_length', len(job_description)) - getattr(summary, 'summary_length', len(job_description))
+                "optimization_applied": "summarized"
             }
-            
         except Exception as e:
             logger.error(f"Error optimizing job description: {e}")
             return {
                 "original": job_description,
                 "optimized": job_description,
                 "compression_ratio": 1.0,
-                "optimization_applied": "error_fallback",
-                "key_info_extracted": {},
-                "error": str(e)
+                "optimization_applied": "error_fallback"
             }
     
     def get_optimization_stats(self) -> Dict[str, Any]:
