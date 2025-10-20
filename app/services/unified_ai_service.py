@@ -127,35 +127,20 @@ class UnifiedAIService:
         }
     
     def _classify_error(self, error: Exception) -> ErrorType:
-        """Classify error type for intelligent retry strategies."""
+        """Classify error type for retry strategies."""
         error_str = str(error).lower()
         
-        # Transient errors (network, timeout, temporary issues)
-        if any(keyword in error_str for keyword in [
-            "timeout", "connection", "network", "temporary", "rate limit", "throttle"
-        ]):
+        # Simple keyword-based classification
+        if any(kw in error_str for kw in ["timeout", "connection", "network", "rate limit"]):
             return ErrorType.TRANSIENT
-        
-        # Service unavailable errors
-        if any(keyword in error_str for keyword in [
-            "service unavailable", "503", "502", "504", "server error"
-        ]):
+        elif any(kw in error_str for kw in ["503", "502", "504", "server error"]):
             return ErrorType.SERVICE_UNAVAILABLE
-        
-        # Quota exceeded errors
-        if any(keyword in error_str for keyword in [
-            "quota", "limit exceeded", "too many requests", "429"
-        ]):
+        elif any(kw in error_str for kw in ["quota", "429", "too many requests"]):
             return ErrorType.QUOTA_EXCEEDED
-        
-        # Permanent errors (authentication, invalid request)
-        if any(keyword in error_str for keyword in [
-            "unauthorized", "forbidden", "invalid", "bad request", "400", "401", "403"
-        ]):
+        elif any(kw in error_str for kw in ["unauthorized", "forbidden", "400", "401", "403"]):
             return ErrorType.PERMANENT
-        
-        # Default to transient for unknown errors
-        return ErrorType.TRANSIENT
+        else:
+            return ErrorType.TRANSIENT
     
     def _calculate_retry_delay(self, attempt: int, config: RetryConfig) -> float:
         """Calculate retry delay with exponential backoff and jitter."""
@@ -170,72 +155,41 @@ class UnifiedAIService:
         return delay
     
     async def _execute_with_retry(self, operation, service_name: str, *args, **kwargs):
-        """Execute operation with intelligent retry logic."""
+        """Execute operation with simplified retry logic."""
         circuit_breaker = self.circuit_breakers[service_name]
         
-        # Check circuit breaker
         if not circuit_breaker.can_execute():
-            raise ServiceUnavailableError(f"Service {service_name} is currently unavailable (circuit breaker open)")
+            raise ServiceUnavailableError(f"Service {service_name} is currently unavailable")
         
-        last_error = None
+        error_type = ErrorType.TRANSIENT  # Default to transient for retries
+        retry_config = self.retry_configs[error_type]
         
-        try:
-            # Try to execute the operation
-            if asyncio.iscoroutinefunction(operation):
-                result = await operation(*args, **kwargs)
-            else:
-                result = operation(*args, **kwargs)
-            
-            # Record success
-            circuit_breaker.record_success()
-            self.service_health[service_name].consecutive_failures = 0
-            self.service_health[service_name].status = ServiceStatus.HEALTHY
-            
-            return result
-            
-        except Exception as e:
-            last_error = e
-            error_type = self._classify_error(e)
-            retry_config = self.retry_configs[error_type]
-            
-            # Record failure
-            circuit_breaker.record_failure()
-            self.service_health[service_name].consecutive_failures += 1
-            
-            logger.warning(f"Service {service_name} failed with {error_type.value} error: {e}")
-            
-            # Retry logic
-            for attempt in range(retry_config.max_retries):
-                delay = self._calculate_retry_delay(attempt, retry_config)
-                logger.info(f"Retrying {service_name} operation in {delay:.2f}s (attempt {attempt + 1}/{retry_config.max_retries})")
+        for attempt in range(retry_config.max_retries + 1):
+            try:
+                # Execute operation
+                if asyncio.iscoroutinefunction(operation):
+                    result = await operation(*args, **kwargs)
+                else:
+                    result = operation(*args, **kwargs)
                 
-                await asyncio.sleep(delay)
+                # Record success
+                circuit_breaker.record_success()
+                self.service_health[service_name].consecutive_failures = 0
+                self.service_health[service_name].status = ServiceStatus.HEALTHY
+                return result
                 
-                try:
-                    if asyncio.iscoroutinefunction(operation):
-                        result = await operation(*args, **kwargs)
-                    else:
-                        result = operation(*args, **kwargs)
-                    
-                    # Record success
-                    circuit_breaker.record_success()
-                    self.service_health[service_name].consecutive_failures = 0
-                    self.service_health[service_name].status = ServiceStatus.HEALTHY
-                    
-                    logger.info(f"Service {service_name} recovered after {attempt + 1} retries")
-                    return result
-                    
-                except Exception as retry_error:
-                    last_error = retry_error
-                    circuit_breaker.record_failure()
-                    self.service_health[service_name].consecutive_failures += 1
-                    
-                    logger.warning(f"Service {service_name} retry {attempt + 1} failed: {retry_error}")
-            
-            # All retries failed
-            self.service_health[service_name].status = ServiceStatus.UNHEALTHY
-            logger.error(f"Service {service_name} failed after {retry_config.max_retries} retries")
-            raise last_error
+            except Exception as e:
+                circuit_breaker.record_failure()
+                self.service_health[service_name].consecutive_failures += 1
+                
+                if attempt < retry_config.max_retries:
+                    delay = self._calculate_retry_delay(attempt, retry_config)
+                    logger.warning(f"Service {service_name} failed (attempt {attempt + 1}), retrying in {delay:.2f}s: {e}")
+                    await asyncio.sleep(delay)
+                else:
+                    self.service_health[service_name].status = ServiceStatus.UNHEALTHY
+                    logger.error(f"Service {service_name} failed after {retry_config.max_retries + 1} attempts")
+                    raise e
     
     async def generate_questions(self, role: str, job_description: str, count: int = 10) -> List[Dict[str, Any]]:
         """Generate questions with intelligent fallback strategy."""

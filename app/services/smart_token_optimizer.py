@@ -56,31 +56,30 @@ class SmartTokenOptimizer:
     
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load configuration from YAML file with fallback to defaults."""
+        # Try provided path first
         if config_path and Path(config_path).exists():
-            try:
-                with open(config_path, 'r') as f:
-                    config = yaml.safe_load(f)
-                    logger.info(f"Loaded token optimization config from {config_path}")
-                    self._config_loaded_from_file = True
-                    return config
-            except Exception as e:
-                logger.warning(f"Failed to load config from {config_path}: {e}")
+            return self._load_config_file(config_path)
         
         # Try default config path
         default_path = Path(__file__).parent.parent.parent / "config" / "token_optimization.yaml"
         if default_path.exists():
-            try:
-                with open(default_path, 'r') as f:
-                    config = yaml.safe_load(f)
-                    logger.info(f"Loaded token optimization config from {default_path}")
-                    self._config_loaded_from_file = True
-                    return config
-            except Exception as e:
-                logger.warning(f"Failed to load default config: {e}")
+            return self._load_config_file(default_path)
         
-        # Fallback to hardcoded defaults
+        # Fallback to defaults
         logger.warning("Using hardcoded default configuration")
         return self._get_default_config()
+    
+    def _load_config_file(self, path: str) -> Dict[str, Any]:
+        """Load configuration from a specific file."""
+        try:
+            with open(path, 'r') as f:
+                config = yaml.safe_load(f)
+                logger.info(f"Loaded token optimization config from {path}")
+                self._config_loaded_from_file = True
+                return config
+        except Exception as e:
+            logger.warning(f"Failed to load config from {path}: {e}")
+            return self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration as fallback."""
@@ -303,22 +302,14 @@ class SmartTokenOptimizer:
         """Calculate optimal token count based on complexity and service."""
         service_config = self.service_configs.get(service, self.service_configs["openai"])
         
-        # Base calculation
+        # Simplified calculation
         base_tokens = service_config["base_tokens"]
         complexity_score = complexity_analysis["total_score"]
+        question_factor = min(target_questions / 10, 1.5)
         
-        # Adjust for target questions (more questions = more tokens needed)
-        question_factor = min(target_questions / 10, 1.5)  # Cap at 1.5x for 15+ questions
-        
-        # Calculate optimal tokens
-        optimal_tokens = int(
-            base_tokens * complexity_score * question_factor * service_config["quality_factor"]
-        )
-        
-        # Apply service limits
-        optimal_tokens = min(max(optimal_tokens, base_tokens), service_config["max_tokens"])
-        
-        return optimal_tokens
+        # Single calculation with bounds checking
+        optimal_tokens = int(base_tokens * complexity_score * question_factor * service_config["quality_factor"])
+        return max(base_tokens, min(optimal_tokens, service_config["max_tokens"]))
     
     def _estimate_cost(self, tokens: int, service: str) -> float:
         """Estimate cost for token usage."""
@@ -327,15 +318,12 @@ class SmartTokenOptimizer:
     
     def _calculate_confidence_score(self, complexity_analysis: Dict[str, Any]) -> float:
         """Calculate confidence score for the optimization."""
-        # Higher confidence for more detailed analysis
-        confidence_factors = [
-            complexity_analysis["description_length"] > 50,  # Detailed description
-            complexity_analysis["technical_complexity"] > 0,  # Technical content
-            complexity_analysis["skill_count"] > 0,  # Skills mentioned
-        ]
+        # Simplified confidence based on data quality
+        has_description = complexity_analysis["description_length"] > 50
+        has_technical = complexity_analysis["technical_complexity"] > 0
+        has_skills = complexity_analysis["skill_count"] > 0
         
-        confidence = sum(confidence_factors) / len(confidence_factors)
-        return min(confidence, 1.0)
+        return min(sum([has_description, has_technical, has_skills]) / 3, 1.0)
     
     def _get_optimization_description(self, complexity_analysis: Dict[str, Any], 
                                     optimal_tokens: int, service: str) -> str:
@@ -375,19 +363,19 @@ class SmartTokenOptimizer:
             
             return {
                 "original": job_description,
-                "optimized": summary.summary_text,
-                "compression_ratio": summary.compression_ratio,
-                "optimization_applied": f"summarized_to_{summary.summary_length}_words",
+                "optimized": getattr(summary, 'summary_text', job_description),
+                "compression_ratio": getattr(summary, 'compression_ratio', 1.0),
+                "optimization_applied": f"summarized_to_{getattr(summary, 'summary_length', len(job_description))}_words",
                 "key_info_extracted": {
-                    "key_requirements": summary.key_requirements,
-                    "technical_skills": summary.technical_skills,
-                    "soft_skills": summary.soft_skills,
-                    "experience_requirements": summary.experience_requirements,
-                    "company_info": summary.company_info
+                    "key_requirements": getattr(summary, 'key_requirements', []),
+                    "technical_skills": getattr(summary, 'technical_skills', []),
+                    "soft_skills": getattr(summary, 'soft_skills', []),
+                    "experience_requirements": getattr(summary, 'experience_requirements', []),
+                    "company_info": getattr(summary, 'company_info', {})
                 },
-                "original_length": summary.original_length,
-                "optimized_length": summary.summary_length,
-                "tokens_saved": summary.original_length - summary.summary_length
+                "original_length": getattr(summary, 'original_length', len(job_description)),
+                "optimized_length": getattr(summary, 'summary_length', len(job_description)),
+                "tokens_saved": getattr(summary, 'original_length', len(job_description)) - getattr(summary, 'summary_length', len(job_description))
             }
             
         except Exception as e:
@@ -416,7 +404,7 @@ class SmartTokenOptimizer:
         # Add job processor stats if available
         if self.job_processor:
             stats["job_processor_available"] = True
-            stats["job_processor_stats"] = self.job_processor.get_processing_stats()
+            stats["job_processor_stats"] = getattr(self.job_processor, 'get_processing_stats', lambda: {})()
         else:
             stats["job_processor_available"] = False
         

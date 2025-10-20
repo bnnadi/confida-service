@@ -24,19 +24,20 @@ class DatabaseOperationHandler:
     
     async def handle_operation(self, operation_type: str, **kwargs) -> Any:
         """Handle database operation with direct method calls."""
-        # Use direct method calls instead of dictionary mapping
-        if operation_type == "parse_jd":
-            return await self._call_service_method(self._handle_parse_jd_operation, **kwargs)
-        elif operation_type == "analyze_answer":
-            return await self._call_service_method(self._handle_analyze_answer_operation, **kwargs)
-        elif operation_type == "get_services":
-            return await self._call_service_method(self._handle_get_services_operation, **kwargs)
-        elif operation_type == "list_models":
-            return await self._call_service_method(self._handle_list_models_operation, **kwargs)
-        elif operation_type == "pull_model":
-            return await self._call_service_method(self._handle_pull_model_operation, **kwargs)
-        else:
+        # Direct method mapping for better performance
+        handlers = {
+            "parse_jd": self._handle_parse_jd_operation,
+            "analyze_answer": self._handle_analyze_answer_operation,
+            "get_services": self._handle_get_services_operation,
+            "list_models": self._handle_list_models_operation,
+            "pull_model": self._handle_pull_model_operation
+        }
+        
+        handler = handlers.get(operation_type)
+        if not handler:
             raise HTTPException(status_code=400, detail=f"Unknown operation: {operation_type}")
+        
+        return await self._call_service_method(handler, **kwargs)
     
     async def _call_service_method(self, method: Callable, **kwargs) -> Any:
         """Call service method with automatic async/sync detection."""
