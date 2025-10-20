@@ -51,21 +51,6 @@ class FileService:
         safe_filename = FileValidator.generate_safe_filename(filename, file_id)
         return self.upload_dir / file_type.value / safe_filename
     
-    @lru_cache(maxsize=128)
-    def get_file_info(self, file_path: Union[str, Path]) -> Dict[str, Any]:
-        """Get file information with caching."""
-        path = Path(file_path)
-        if not path.exists():
-            return {}
-        
-        stat = path.stat()
-        return {
-            "size": stat.st_size,
-            "created": datetime.fromtimestamp(stat.st_ctime),
-            "modified": datetime.fromtimestamp(stat.st_mtime),
-            "is_file": path.is_file(),
-            "is_dir": path.is_dir()
-        }
     
     def save_file(self, file: UploadFile, file_type: FileType, file_id: str) -> Dict[str, Any]:
         """Save uploaded file to disk."""
@@ -106,27 +91,33 @@ class FileService:
                 detail=f"Failed to save file: {str(e)}"
             )
     
-    def get_file_info(self, file_id: str) -> Optional[Dict[str, Any]]:
-        """Get file information from storage."""
-        # In a real implementation, this would query a database
-        # For now, we'll scan the upload directory
+    def _find_file_by_id(self, file_id: str) -> Optional[Path]:
+        """Find file by ID across all type directories."""
         for file_type in FileType:
             type_dir = self.upload_dir / file_type.value
             if type_dir.exists():
                 for file_path in type_dir.glob(f"{file_id}*"):
                     if file_path.is_file():
-                        stat = file_path.stat()
-                        return {
-                            "file_id": file_id,
-                            "filename": file_path.name,
-                            "file_type": file_type,
-                            "file_size": stat.st_size,
-                            "mime_type": self._get_mime_type(file_path),
-                            "file_path": str(file_path),
-                            "created_at": datetime.fromtimestamp(stat.st_ctime),
-                            "status": FileStatus.COMPLETED
-                        }
+                        return file_path
         return None
+
+    def get_file_info(self, file_id: str) -> Optional[Dict[str, Any]]:
+        """Get file information from storage."""
+        file_path = self._find_file_by_id(file_id)
+        if not file_path:
+            return None
+        
+        stat = file_path.stat()
+        return {
+            "file_id": file_id,
+            "filename": file_path.name,
+            "file_type": self._get_file_type_from_path(file_path),
+            "file_size": stat.st_size,
+            "mime_type": self._get_mime_type(file_path),
+            "file_path": str(file_path),
+            "created_at": datetime.fromtimestamp(stat.st_ctime),
+            "status": FileStatus.COMPLETED
+        }
     
     def _get_mime_type(self, file_path: Path) -> str:
         """Get MIME type from file path."""
@@ -137,15 +128,11 @@ class FileService:
     def delete_file(self, file_id: str) -> bool:
         """Delete file from storage."""
         try:
-            # Find and delete file
-            for file_type in FileType:
-                type_dir = self.upload_dir / file_type.value
-                if type_dir.exists():
-                    for file_path in type_dir.glob(f"{file_id}*"):
-                        if file_path.is_file():
-                            file_path.unlink()
-                            logger.info(f"Deleted file: {file_path}")
-                            return True
+            file_path = self._find_file_by_id(file_id)
+            if file_path:
+                file_path.unlink()
+                logger.info(f"Deleted file: {file_path}")
+                return True
             return False
         except Exception as e:
             logger.error(f"Error deleting file {file_id}: {e}")

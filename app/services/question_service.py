@@ -508,115 +508,21 @@ class QuestionService:
             }
     
     def _ensure_question_diversity(self, questions: List[Dict[str, Any]], target_count: int, user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """
-        Ensure question diversity using advanced pipeline approach.
-        
-        Args:
-            questions: List of questions to diversify
-            target_count: Target number of questions
-            user_context: Optional user context for personalization
-            
-        Returns:
-            Diversified list of questions
-        """
+        """Ensure question diversity using simple category-based selection."""
         if len(questions) <= target_count:
             return questions
         
-        # Extract user history for filtering
-        user_history = user_context.get('previous_questions', []) if user_context else []
+        # Simple category-based selection
+        categories = ['technical', 'behavioral', 'system_design']
+        selected = []
+        per_category = target_count // len(categories)
         
-        # Step 1: Filter out recently asked questions
-        filtered_questions = self._filter_recent_questions(questions, user_history)
+        for category in categories:
+            cat_questions = [q for q in questions if q.get('category') == category]
+            selected.extend(cat_questions[:per_category])
         
-        # Step 2: Score questions for diversity
-        scored_questions = self._score_questions_for_diversity(filtered_questions, user_context)
-        
-        # Step 3: Select diverse questions by category and difficulty
-        diverse_questions = self._select_diverse_questions(scored_questions, target_count)
-        
-        # Step 4: Shuffle for randomness
-        return self._shuffle_questions(diverse_questions)
+        return selected[:target_count]
     
-    def _filter_recent_questions(self, questions: List[Dict[str, Any]], user_history: List[str]) -> List[Dict[str, Any]]:
-        """Filter out recently asked questions."""
-        if not user_history:
-            return questions
-        
-        recent_question_ids = set(user_history[-20:])  # Last 20 questions
-        filtered = [q for q in questions if q.get('id') not in recent_question_ids]
-        
-        logger.debug(f"Filtered {len(questions) - len(filtered)} recent questions")
-        return filtered
-    
-    def _score_questions_for_diversity(self, questions: List[Dict[str, Any]], user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """Score questions based on relevance, quality, and user preferences."""
-        for question in questions:
-            # Calculate composite score
-            relevance_score = question.get('role_relevance_score', 0.5)
-            quality_score = question.get('quality_score', 0.5)
-            user_preference_score = question.get('user_preference_score', 0.5)
-            
-            # Weighted composite score
-            composite_score = (
-                relevance_score * 0.5 +
-                quality_score * 0.3 +
-                user_preference_score * 0.2
-            )
-            
-            # Store score for later use
-            question['diversity_score'] = composite_score
-        
-        # Sort by score (highest first)
-        questions.sort(key=lambda q: q.get('diversity_score', 0), reverse=True)
-        
-        logger.debug(f"Scored {len(questions)} questions for diversity")
-        return questions
-    
-    def _select_diverse_questions(self, questions: List[Dict[str, Any]], target_count: int) -> List[Dict[str, Any]]:
-        """Select diverse questions based on categories and difficulties."""
-        if len(questions) <= target_count:
-            return questions
-        
-        # Define question categories
-        categories = ['technical', 'behavioral', 'system_design', 'leadership', 'problem_solving']
-        difficulties = ['easy', 'medium', 'hard']
-        
-        # Group questions by category and difficulty
-        categorized = {cat: [] for cat in categories}
-        for q in questions:
-            category = q.get('category', 'technical')
-            if category in categorized:
-                categorized[category].append(q)
-        
-        # Select diverse questions
-        diverse_questions = []
-        questions_per_category = max(1, target_count // len(categories))
-        
-        for category, cat_questions in categorized.items():
-            if cat_questions and len(diverse_questions) < target_count:
-                # Take up to questions_per_category from this category
-                selected = cat_questions[:questions_per_category]
-                diverse_questions.extend(selected)
-        
-        # Fill remaining slots with highest quality questions
-        remaining_slots = target_count - len(diverse_questions)
-        if remaining_slots > 0:
-            # Get questions not yet selected
-            selected_ids = {q.get('id') for q in diverse_questions}
-            remaining_questions = [q for q in questions if q.get('id') not in selected_ids]
-            
-            # Sort by quality score and take the best ones
-            remaining_questions.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
-            diverse_questions.extend(remaining_questions[:remaining_slots])
-        
-        return diverse_questions[:target_count]
-    
-    def _shuffle_questions(self, questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Shuffle questions for randomness while maintaining some order."""
-        import random
-        # Shuffle but keep some structure
-        random.shuffle(questions)
-        return questions
     
     def _calculate_question_scores(self, questions: List[Dict[str, Any]], role_analysis: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """

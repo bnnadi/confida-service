@@ -122,9 +122,6 @@ class ResponseParser:
         # Load configuration from file or use defaults
         self.config = self._load_config(config_path)
         
-        # Build strategies from configuration
-        self.strategies = self._build_strategies_from_config()
-        
         # Quality validator
         self.quality_validator = QualityValidator()
     
@@ -182,78 +179,24 @@ class ResponseParser:
             }
         }
     
-    def _build_strategies_from_config(self) -> List[ParsingStrategy]:
-        """Build parsing strategies from configuration."""
-        strategies = []
-        
-        for strategy_name, strategy_config in self.config.get('strategies', {}).items():
-            if strategy_name == 'json_parsing':
-                strategies.append(ParsingStrategy(
-                    name=strategy_name,
-                    func=self._parse_json_response,
-                    weight=strategy_config.get('weight', 1.0),
-                    required=strategy_config.get('required', True)
-                ))
-            elif strategy_name == 'yaml_parsing':
-                strategies.append(ParsingStrategy(
-                    name=strategy_name,
-                    func=self._parse_yaml_response,
-                    weight=strategy_config.get('weight', 0.9),
-                    required=strategy_config.get('required', False)
-                ))
-            elif strategy_name == 'list_parsing':
-                strategies.append(ParsingStrategy(
-                    name=strategy_name,
-                    func=self._parse_list_response,
-                    weight=strategy_config.get('weight', 0.8),
-                    required=strategy_config.get('required', False)
-                ))
-            elif strategy_name == 'simple_parsing':
-                strategies.append(ParsingStrategy(
-                    name=strategy_name,
-                    func=self._parse_simple_response,
-                    weight=strategy_config.get('weight', 0.7),
-                    required=strategy_config.get('required', False)
-                ))
-        
-        return strategies
     
     def parse_questions(self, response_text: str, min_questions: int = 1) -> List[str]:
-        """
-        Parse questions from AI response using multiple strategies.
-        
-        Args:
-            response_text: Raw AI response text
-            min_questions: Minimum number of questions required
-            
-        Returns:
-            List of parsed questions
-        """
+        """Simple parsing with fallback chain."""
         try:
-            logger.info(f"Parsing questions from response (length: {len(response_text)})")
+            # Try JSON first
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                questions = data.get('questions', [])
+                if len(questions) >= min_questions:
+                    return questions
             
-            # Try strategies in order of weight
-            sorted_strategies = sorted(self.strategies, key=lambda s: s.weight, reverse=True)
+            # Try simple list parsing
+            questions = re.findall(r'^\d+\.\s*(.+)$', response_text, re.MULTILINE)
+            if len(questions) >= min_questions:
+                return questions
             
-            for strategy in sorted_strategies:
-                try:
-                    questions = strategy.func(response_text)
-                    if questions and len(questions) >= min_questions:
-                        # Validate question quality
-                        if self.config.get('quality_validation', {}).get('enabled', True):
-                            validated_questions = self._validate_questions(questions)
-                            if len(validated_questions) >= min_questions:
-                                logger.info(f"Successfully parsed {len(validated_questions)} questions using {strategy.name}")
-                                return validated_questions
-                        else:
-                            logger.info(f"Successfully parsed {len(questions)} questions using {strategy.name}")
-                            return questions
-                except Exception as e:
-                    logger.debug(f"Strategy {strategy.name} failed: {e}")
-                    continue
-            
-            # All strategies failed, return fallback
-            logger.warning("All parsing strategies failed, returning fallback questions")
+            # Fallback
             return self._get_fallback_questions()
             
         except Exception as e:
@@ -290,109 +233,6 @@ class ResponseParser:
             logger.error(f"Error parsing analysis: {e}")
             return self._get_fallback_analysis()
     
-    def _parse_json_response(self, text: str) -> List[str]:
-        """Parse questions from JSON response."""
-        questions = []
-        
-        # Try different JSON patterns
-        json_patterns = [
-            r'```json\s*(\{.*?\})\s*```',
-            r'(\{[^{}]*"questions"[^{}]*\})',
-            r'(\{[^{}]*"items"[^{}]*\})'
-        ]
-        
-        for pattern in json_patterns:
-            matches = re.findall(pattern, text, re.DOTALL)
-            for match in matches:
-                try:
-                    data = json.loads(match)
-                    if 'questions' in data:
-                        questions.extend(data['questions'])
-                    elif 'items' in data:
-                        questions.extend(data['items'])
-                    elif isinstance(data, list):
-                        questions.extend(data)
-                except json.JSONDecodeError:
-                    continue
-        
-        return [str(q).strip() for q in questions if q]
-    
-    def _parse_yaml_response(self, text: str) -> List[str]:
-        """Parse questions from YAML response."""
-        questions = []
-        
-        yaml_patterns = [
-            r'```yaml\s*(.*?)\s*```',
-            r'```yml\s*(.*?)\s*```'
-        ]
-        
-        for pattern in yaml_patterns:
-            matches = re.findall(pattern, text, re.DOTALL)
-            for match in matches:
-                try:
-                    data = yaml.safe_load(match)
-                    if isinstance(data, dict):
-                        if 'questions' in data:
-                            questions.extend(data['questions'])
-                        elif 'items' in data:
-                            questions.extend(data['items'])
-                    elif isinstance(data, list):
-                        questions.extend(data)
-                except yaml.YAMLError:
-                    continue
-        
-        return [str(q).strip() for q in questions if q]
-    
-    def _parse_list_response(self, text: str) -> List[str]:
-        """Parse questions from numbered or bulleted lists."""
-        questions = []
-        
-        # Numbered list patterns
-        numbered_pattern = r'(?:questions?|items?):\s*\n((?:\d+\.\s*.*\n?)+)'
-        numbered_match = re.search(numbered_pattern, text, re.MULTILINE)
-        if numbered_match:
-            lines = numbered_match.group(1).strip().split('\n')
-            for line in lines:
-                question = re.sub(r'^\d+\.\s*', '', line).strip()
-                if question:
-                    questions.append(question)
-        
-        # Bullet list patterns
-        bullet_patterns = [
-            r'(?:questions?|items?):\s*((?:•\s*.*\n?)+)',
-            r'(?:questions?|items?):\s*((?:-\s*.*\n?)+)',
-            r'(?:questions?|items?):\s*((?:\*\s*.*\n?)+)'
-        ]
-        
-        for pattern in bullet_patterns:
-            bullet_match = re.search(pattern, text, re.MULTILINE)
-            if bullet_match:
-                lines = bullet_match.group(1).strip().split('\n')
-                for line in lines:
-                    question = re.sub(r'^[•\-\*]\s*', '', line).strip()
-                    if question:
-                        questions.append(question)
-        
-        return questions
-    
-    def _parse_simple_response(self, text: str) -> List[str]:
-        """Parse questions from simple text format."""
-        questions = []
-        
-        # Simple patterns
-        patterns = [
-            r'(?:question|item)\s*\d*:?\s*(.+?)(?=\n(?:question|item)|\n\n|$)',
-            r'^\d+\.\s*(.+)$'
-        ]
-        
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.MULTILINE)
-            for match in matches:
-                question = match.strip()
-                if question and len(question) > 10:  # Basic quality check
-                    questions.append(question)
-        
-        return questions
     
     def _validate_questions(self, questions: List[str]) -> List[str]:
         """Validate question quality and filter out poor questions."""
