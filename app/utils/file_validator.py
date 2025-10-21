@@ -3,7 +3,7 @@ import mimetypes
 from typing import List, Tuple, Optional, Dict, Any
 from fastapi import HTTPException, UploadFile
 from app.models.schemas import FileType, FileValidationError
-import logging
+from app.utils.logger import get_logger
 
 try:
     import magic
@@ -12,7 +12,7 @@ except ImportError:
     MAGIC_AVAILABLE = False
     magic = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class FileValidator:
     """Utility class for validating uploaded files."""

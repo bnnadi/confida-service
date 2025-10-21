@@ -3,9 +3,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
 from app.exceptions import RateLimitExceededError
 from typing import Optional
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class RateLimitingMiddleware(BaseHTTPMiddleware):
     """Enhanced rate limiting middleware with per-endpoint and per-user-type configuration."""

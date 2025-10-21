@@ -13,6 +13,8 @@ from app.services.ollama_service import OllamaService
 from app.services.question_service import QuestionService
 from app.services.multi_agent_scoring import get_multi_agent_scoring_service
 from app.utils.logger import get_logger
+from app.utils.unified_error_handling import UnifiedErrorHandlingService
+from app.utils.fallback_manager import get_fallback_response
 from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
@@ -102,12 +104,13 @@ class UnifiedAIService:
         self.db_session = db_session
         self.ollama_service = OllamaService()
         self.question_service = QuestionService(db_session) if db_session else None
+        self.error_handler = UnifiedErrorHandlingService()
         
         # Circuit breakers for each service
         self.circuit_breakers = {
-            "ollama": CircuitBreaker(failure_threshold=5, recovery_timeout=60.0),
-            "multi_agent": CircuitBreaker(failure_threshold=3, recovery_timeout=30.0),
-            "question_service": CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+            "ollama": self.error_handler.create_circuit_breaker(failure_threshold=5, recovery_timeout=60.0),
+            "multi_agent": self.error_handler.create_circuit_breaker(failure_threshold=3, recovery_timeout=30.0),
+            "question_service": self.error_handler.create_circuit_breaker(failure_threshold=3, recovery_timeout=30.0)
         }
         
         # Retry configurations for different error types
@@ -126,20 +129,19 @@ class UnifiedAIService:
         }
     
     def _classify_error(self, error: Exception) -> ErrorType:
-        """Classify error type for retry strategies."""
-        error_str = str(error).lower()
+        """Classify error type for retry strategies using unified error handler."""
+        error_type = self.error_handler.classify_error(error)
         
-        # Simple keyword-based classification
-        if any(kw in error_str for kw in ["timeout", "connection", "network", "rate limit"]):
-            return ErrorType.TRANSIENT
-        elif any(kw in error_str for kw in ["503", "502", "504", "server error"]):
-            return ErrorType.SERVICE_UNAVAILABLE
-        elif any(kw in error_str for kw in ["quota", "429", "too many requests"]):
-            return ErrorType.QUOTA_EXCEEDED
-        elif any(kw in error_str for kw in ["unauthorized", "forbidden", "400", "401", "403"]):
-            return ErrorType.PERMANENT
-        else:
-            return ErrorType.TRANSIENT
+        # Map unified error types to internal error types
+        type_mapping = {
+            "transient": ErrorType.TRANSIENT,
+            "service_unavailable": ErrorType.SERVICE_UNAVAILABLE,
+            "quota_exceeded": ErrorType.QUOTA_EXCEEDED,
+            "permanent": ErrorType.PERMANENT,
+            "unknown": ErrorType.TRANSIENT
+        }
+        
+        return type_mapping.get(error_type, ErrorType.TRANSIENT)
     
     def _calculate_retry_delay(self, attempt: int, config: RetryConfig) -> float:
         """Calculate retry delay with exponential backoff and jitter."""
@@ -275,19 +277,8 @@ class UnifiedAIService:
             return self._get_fallback_analysis()
     
     def _get_fallback_questions(self, role: str, count: int) -> List[Dict[str, Any]]:
-        """Get fallback questions when all services fail."""
-        fallback_questions = [
-            f"Tell me about your experience with {role}",
-            f"What challenges have you faced in {role} roles?",
-            f"How do you stay updated with {role} best practices?",
-            f"Describe a complex project you worked on as a {role}",
-            f"What tools and technologies do you use in {role}?",
-            f"How do you approach problem-solving in {role}?",
-            f"What is your experience with team collaboration in {role}?",
-            f"How do you handle deadlines and priorities in {role}?",
-            f"What are your career goals in {role}?",
-            f"How do you ensure quality in your {role} work?"
-        ]
+        """Get fallback questions when all services fail using centralized fallback manager."""
+        fallback_response = get_fallback_response("question_generation", role=role, count=count)
         
         return [
             {
@@ -295,27 +286,14 @@ class UnifiedAIService:
                 "text": question,
                 "type": "fallback",
                 "source": "fallback",
-                "metadata": {"service": "fallback", "reason": "all_services_failed"}
+                "metadata": fallback_response.get("metadata", {"service": "fallback", "reason": "all_services_failed"})
             }
-            for i, question in enumerate(fallback_questions[:count])
+            for i, question in enumerate(fallback_response["questions"][:count])
         ]
     
     def _get_fallback_analysis(self) -> Dict[str, Any]:
-        """Get fallback analysis when all services fail."""
-        return {
-            "analysis": "Analysis temporarily unavailable. Please try again later.",
-            "score": {
-                "clarity": 7.0,
-                "confidence": 7.0,
-                "technical": 7.0,
-                "overall": 7.0
-            },
-            "suggestions": [
-                "Analysis service is temporarily unavailable",
-                "Please try again in a few moments"
-            ],
-            "multi_agent_analysis": None
-        }
+        """Get fallback analysis when all services fail using centralized fallback manager."""
+        return get_fallback_response("answer_analysis")
     
     def _format_multi_agent_response(self, analysis) -> Dict[str, Any]:
         """Format multi-agent analysis response."""
@@ -354,7 +332,7 @@ class UnifiedAIService:
             
             health_status[service_name] = {
                 "status": health.status.value,
-                "circuit_breaker_state": circuit_breaker.state.value,
+                "circuit_breaker_state": circuit_breaker.state,
                 "consecutive_failures": health.consecutive_failures,
                 "last_check": health.last_check,
                 "can_execute": circuit_breaker.can_execute()

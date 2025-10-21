@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 from app.models.schemas import FileType, FileStatus, FileUploadResponse, FileInfoResponse, FileListResponse, FileDeleteResponse
 from app.utils.file_validator import FileValidator
 from app.config import get_settings
-import logging
+from app.utils.logger import get_logger
 from functools import lru_cache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 class FileService:

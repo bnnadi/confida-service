@@ -8,9 +8,9 @@ from typing import Optional
 from app.database.connection import get_db
 from app.services.auth_service import AuthService
 from app.models.schemas import TokenPayload, TokenType
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # HTTP Bearer token scheme
 security = HTTPBearer(auto_error=False)

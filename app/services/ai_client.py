@@ -4,13 +4,13 @@ This file should be copied to the main backend service for integration
 """
 
 import asyncio
-import logging
+from app.utils.logger import get_logger
 from typing import Dict, Any, Optional, List
 import httpx
 import os
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AIServiceClient:

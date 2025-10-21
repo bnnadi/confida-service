@@ -10,9 +10,9 @@ from app.models.schemas import (
 )
 from app.middleware.auth_middleware import get_current_user_required
 from app.utils.file_validator import FileValidator
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
