@@ -6,13 +6,9 @@ eliminating the need for separate RoleAnalysisService and JobDescriptionProcesso
 """
 import re
 import html
-import yaml
-import asyncio
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from app.utils.logger import get_logger
-from app.utils.validation_mixin import ValidationMixin
 from app.models.role_analysis_models import RoleAnalysis, Industry, SeniorityLevel, CompanySize
 
 logger = get_logger(__name__)
@@ -241,18 +237,13 @@ class RoleAnalysisProcessor:
         text_lower = text.lower()
         
         # Extract using keyword patterns
-        for category, keywords in self.tech_categories.items():
-            for keyword in keywords:
-                if keyword in text_lower:
-                    skills.append(keyword.title())
+        for keywords in self.tech_categories.values():
+            skills.extend([keyword.title() for keyword in keywords if keyword in text_lower])
         
         # Extract using regex patterns
         for pattern in self.skill_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                skills.append(match.strip())
+            skills.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         
         return list(set([skill.strip() for skill in skills if skill.strip()]))
     
@@ -264,14 +255,8 @@ class RoleAnalysisProcessor:
             'time management', 'collaboration', 'mentoring', 'presentation'
         ]
         
-        found_skills = []
         text_lower = text.lower()
-        
-        for skill in soft_skills:
-            if skill in text_lower:
-                found_skills.append(skill.title())
-        
-        return found_skills
+        return [skill.title() for skill in soft_skills if skill in text_lower]
     
     def _extract_experience_years(self, text: str) -> Optional[int]:
         """Extract experience requirements in years."""
@@ -292,10 +277,7 @@ class RoleAnalysisProcessor:
         education = []
         for pattern in self.education_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                education.append(match.strip())
+            education.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         return list(set([req.strip() for req in education if req.strip()]))
     
     def _extract_certifications(self, text: str) -> List[str]:
@@ -303,10 +285,7 @@ class RoleAnalysisProcessor:
         certifications = []
         for pattern in self.certification_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                certifications.append(match.strip())
+            certifications.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         return list(set([cert.strip() for cert in certifications if cert.strip()]))
     
     def _detect_industry(self, text: str) -> Optional[str]:

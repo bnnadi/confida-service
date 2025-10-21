@@ -6,11 +6,8 @@ that handles different types of AI responses with quality validation and error h
 """
 import json
 import re
-import yaml
 from typing import List, Optional, Dict, Any, Tuple, Callable
 from dataclasses import dataclass
-from pathlib import Path
-from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
 from app.utils.logger import get_logger
 from app.utils.validation_mixin import ValidationMixin
 
@@ -58,7 +55,7 @@ class QualityValidator:
         issues = []
         
         # Use ValidationMixin for basic quality checks
-        is_valid, basic_issues = ValidationMixin.validate_quality(
+        _, basic_issues = ValidationMixin.validate_quality(
             question, 
             cls.MIN_QUESTION_LENGTH, 
             cls.MAX_QUESTION_LENGTH,
@@ -126,52 +123,9 @@ class ResponseParser:
         self.quality_validator = QualityValidator()
     
     def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
-        """Load parsing configuration from file or use defaults."""
-        if config_path and Path(config_path).exists():
-            try:
-                with open(config_path, 'r') as f:
-                    return yaml.safe_load(f)
-            except Exception as e:
-                logger.warning(f"Failed to load config from {config_path}: {e}")
-        
-        # Default configuration
+        """Load parsing configuration - simplified version."""
+        # Simple configuration since strategy pattern was removed
         return {
-            'strategies': {
-                'json_parsing': {
-                    'weight': 1.0,
-                    'required': True,
-                    'patterns': [
-                        r'```json\s*(\{.*?\})\s*```',
-                        r'(\{[^{}]*"questions"[^{}]*\})',
-                        r'(\{[^{}]*"analysis"[^{}]*\})'
-                    ]
-                },
-                'yaml_parsing': {
-                    'weight': 0.9,
-                    'required': False,
-                    'patterns': [
-                        r'```yaml\s*(.*?)\s*```',
-                        r'```yml\s*(.*?)\s*```'
-                    ]
-                },
-                'list_parsing': {
-                    'weight': 0.8,
-                    'required': False,
-                    'patterns': [
-                        r'(?:questions?|items?):\s*\n((?:\d+\.\s*.*\n?)+)',
-                        r'(?:questions?|items?):\s*((?:•\s*.*\n?)+)',
-                        r'(?:questions?|items?):\s*((?:-\s*.*\n?)+)'
-                    ]
-                },
-                'simple_parsing': {
-                    'weight': 0.7,
-                    'required': False,
-                    'patterns': [
-                        r'(?:question|item)\s*\d*:?\s*(.+?)(?=\n(?:question|item)|\n\n|$)',
-                        r'^\d+\.\s*(.+)$'
-                    ]
-                }
-            },
             'quality_validation': {
                 'enabled': True,
                 'min_questions': 1,

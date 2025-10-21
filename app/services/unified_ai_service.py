@@ -6,15 +6,14 @@ error handling, retry logic, circuit breaker patterns, and intelligent fallbacks
 """
 import asyncio
 import time
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List
 from enum import Enum
 from dataclasses import dataclass
 from app.services.ollama_service import OllamaService
 from app.services.question_service import QuestionService
 from app.services.multi_agent_scoring import get_multi_agent_scoring_service
 from app.utils.logger import get_logger
-from app.exceptions import AIServiceError, ServiceUnavailableError
-from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse
+from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
 
@@ -249,17 +248,7 @@ class UnifiedAIService:
                     )
                     
                     # Convert to legacy format
-                    return {
-                        "analysis": f"Content: {analysis.content_agent.feedback}\n\nDelivery: {analysis.delivery_agent.feedback}\n\nTechnical: {analysis.technical_agent.feedback}",
-                        "score": {
-                            "clarity": analysis.delivery_agent.score,
-                            "confidence": analysis.content_agent.score,
-                            "technical": analysis.technical_agent.score,
-                            "overall": analysis.overall_score
-                        },
-                        "suggestions": analysis.recommendations,
-                        "multi_agent_analysis": analysis.dict()
-                    }
+                    return self._format_multi_agent_response(analysis)
                 except Exception as e:
                     logger.warning(f"Multi-agent scoring failed, falling back to Ollama: {e}")
             
@@ -273,17 +262,7 @@ class UnifiedAIService:
                     )
                     
                     # Convert to expected format
-                    return {
-                        "analysis": ollama_response.analysis,
-                        "score": {
-                            "clarity": ollama_response.score.clarity,
-                            "confidence": ollama_response.score.confidence,
-                            "technical": 7.0,  # Default technical score
-                            "overall": (ollama_response.score.clarity + ollama_response.score.confidence) / 2
-                        },
-                        "suggestions": ollama_response.improvements,
-                        "multi_agent_analysis": None
-                    }
+                    return self._format_ollama_response(ollama_response)
                 except Exception as e:
                     logger.warning(f"Ollama analysis failed: {e}")
             
@@ -335,6 +314,34 @@ class UnifiedAIService:
                 "Analysis service is temporarily unavailable",
                 "Please try again in a few moments"
             ],
+            "multi_agent_analysis": None
+        }
+    
+    def _format_multi_agent_response(self, analysis) -> Dict[str, Any]:
+        """Format multi-agent analysis response."""
+        return {
+            "analysis": f"Content: {analysis.content_agent.feedback}\n\nDelivery: {analysis.delivery_agent.feedback}\n\nTechnical: {analysis.technical_agent.feedback}",
+            "score": {
+                "clarity": analysis.delivery_agent.score,
+                "confidence": analysis.content_agent.score,
+                "technical": analysis.technical_agent.score,
+                "overall": analysis.overall_score
+            },
+            "suggestions": analysis.recommendations,
+            "multi_agent_analysis": analysis.dict()
+        }
+    
+    def _format_ollama_response(self, ollama_response) -> Dict[str, Any]:
+        """Format Ollama analysis response."""
+        return {
+            "analysis": ollama_response.analysis,
+            "score": {
+                "clarity": ollama_response.score.clarity,
+                "confidence": ollama_response.score.confidence,
+                "technical": 7.0,  # Default technical score
+                "overall": (ollama_response.score.clarity + ollama_response.score.confidence) / 2
+            },
+            "suggestions": ollama_response.improvements,
             "multi_agent_analysis": None
         }
     
