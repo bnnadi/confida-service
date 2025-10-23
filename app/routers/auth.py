@@ -8,7 +8,7 @@ from app.database.connection import get_db
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user_required, get_current_user
 from app.models.schemas import (
-    UserRegistrationRequest,
+    UserRegisterRequest,
     UserLoginRequest,
     TokenResponse,
     UserResponse,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
-    request: UserRegistrationRequest,
+    request: UserRegisterRequest,
     db: Session = Depends(get_db)
 ):
     """

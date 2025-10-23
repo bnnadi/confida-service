@@ -1,16 +1,15 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
+# SQLAlchemy imports removed as they were unused
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
-from app.utils.unified_error_handling import handle_service_errors
+# handle_service_errors import removed as it was unused
 from app.utils.validators import InputValidator, create_service_query_param
 from app.utils.database_operation_handler import DatabaseOperationHandler
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
 from app.services.unified_session_service import UnifiedSessionService
 from app.middleware.auth_middleware import get_current_user_required
-from app.dependencies import get_ai_service, get_async_ai_service, get_ai_service_dependency
+from app.dependencies import get_ai_service, get_async_ai_service
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])

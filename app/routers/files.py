@@ -5,7 +5,7 @@ from typing import Optional, List
 from app.database.connection import get_db
 from app.services.file_service import FileService
 from app.models.schemas import (
-    FileType, FileUploadRequest, FileUploadResponse, FileInfoResponse, 
+    FileType, FileUploadResponse, FileInfoResponse, 
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required

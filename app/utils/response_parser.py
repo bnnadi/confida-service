@@ -123,7 +123,7 @@ class ResponseParser:
         # Quality validator
         self.quality_validator = QualityValidator()
     
-    def _load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+    def _load_config(self, _config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load parsing configuration - simplified version."""
         # Simple configuration since strategy pattern was removed
         return {

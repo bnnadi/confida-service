@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.config import settings
 from app.utils.service_tester import ServiceTester
-from app.utils.unified_error_handling import handle_service_errors
-from app.exceptions import ServiceNotInitializedError, ConfigurationRetrievalError, StatisticsRetrievalError
+# handle_service_errors import removed as it was unused
+# Exception imports removed as they were unused
 from app.dependencies import get_ai_service
 from app.utils.logger import get_logger
 

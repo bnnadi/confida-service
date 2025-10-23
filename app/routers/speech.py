@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
-from typing import Optional, List
+from typing import List
 from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
 from app.services.speech_service import SpeechToTextService
 from app.services.file_service import FileService

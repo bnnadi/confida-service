@@ -1,17 +1,17 @@
-import os
+# os import removed as it was unused
 import uuid
 import shutil
 import hashlib
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, BinaryIO, Union
+from typing import Optional, Dict, Any, BinaryIO
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from app.models.schemas import FileType, FileStatus, FileUploadResponse, FileInfoResponse, FileListResponse, FileDeleteResponse
+from app.models.schemas import FileType, FileStatus, FileInfoResponse, FileListResponse
 from app.utils.unified_validation_service import UnifiedValidationService
 from app.config import get_settings
 from app.utils.logger import get_logger
-from functools import lru_cache
+# lru_cache import removed as it was unused
 
 logger = get_logger(__name__)
 settings = get_settings()

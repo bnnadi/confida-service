@@ -2,7 +2,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import io
 from app.exceptions import AIServiceError
-from app.utils.unified_error_handling import add_context, create_service_error
+from app.utils.unified_error_handling import create_service_error
 
 class SpeechToTextService:
     def __init__(self):
