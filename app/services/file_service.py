@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 from app.models.schemas import FileType, FileStatus, FileUploadResponse, FileInfoResponse, FileListResponse, FileDeleteResponse
-from app.utils.file_validator import FileValidator
+from app.utils.unified_validation_service import UnifiedValidationService
 from app.config import get_settings
 from app.utils.logger import get_logger
 from functools import lru_cache
@@ -27,14 +27,34 @@ class FileService:
         # Create subdirectories for different file types using pathlib
         self._create_type_directories()
         
-        # File operation factory for different file types
-        self.file_operations = FileOperationFactory()
+        # Initialize unified validation service
+        self.validation_service = UnifiedValidationService()
     
     def _create_type_directories(self):
         """Create subdirectories for different file types using pathlib."""
-        for file_type in FileType:
+        for file_type in [FileType.IMAGE, FileType.DOCUMENT, FileType.AUDIO]:
             type_dir = self.upload_dir / file_type.value
             type_dir.mkdir(exist_ok=True)
+    
+    def _generate_safe_filename(self, filename: str, file_id: str) -> str:
+        """Generate a safe filename for storage."""
+        if not filename:
+            return f"{file_id}.bin"
+        
+        # Get file extension
+        file_ext = Path(filename).suffix
+        if not file_ext:
+            file_ext = ".bin"
+        
+        # Create safe filename with file_id prefix
+        safe_name = f"{file_id}_{filename.replace(' ', '_').replace('/', '_')}"
+        return safe_name
+    
+    def _get_mime_type_from_filename(self, filename: str) -> str:
+        """Get MIME type from filename."""
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(filename)
+        return mime_type or "application/octet-stream"
     
     @staticmethod
     def generate_file_id() -> str:
@@ -48,7 +68,7 @@ class FileService:
     
     def get_file_path(self, file_id: str, file_type: FileType, filename: str) -> Path:
         """Get the full file path for a given file using pathlib operations."""
-        safe_filename = FileValidator.generate_safe_filename(filename, file_id)
+        safe_filename = self._generate_safe_filename(filename, file_id)
         return self.upload_dir / file_type.value / safe_filename
     
     
@@ -56,7 +76,11 @@ class FileService:
         """Save uploaded file to disk."""
         try:
             # Validate file
-            filename, mime_type = FileValidator.validate_file(file, file_type)
+            is_valid, errors = self.validation_service.validate_file(file, file_type)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=f"File validation failed: {', '.join(errors)}")
+            filename = file.filename
+            mime_type = self._get_mime_type_from_filename(filename)
             
             # Get file path
             file_path = self.get_file_path(file_id, file_type, filename)
@@ -93,7 +117,7 @@ class FileService:
     
     def _find_file_by_id(self, file_id: str) -> Optional[Path]:
         """Find file by ID across all type directories."""
-        for file_type in FileType:
+        for file_type in [FileType.IMAGE, FileType.DOCUMENT, FileType.AUDIO]:
             type_dir = self.upload_dir / file_type.value
             if type_dir.exists():
                 for file_path in type_dir.glob(f"{file_id}*"):

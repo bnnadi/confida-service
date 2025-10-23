@@ -9,7 +9,7 @@ from app.models.schemas import (
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required
-from app.utils.file_validator import FileValidator
+from app.utils.unified_validation_service import UnifiedValidationService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -175,18 +175,21 @@ async def validate_file(
 ):
     """Validate a file without uploading it."""
     try:
-        # Validate file
-        FileValidator.validate_file(file, file_type)
+        # Validate file using unified validation service
+        validation_service = UnifiedValidationService()
+        is_valid, errors = validation_service.validate_file(file, file_type)
         
-        # If validation passes, return empty list
-        return []
+        if is_valid:
+            return []
+        else:
+            return [FileValidationError(
+                message=f"File validation failed: {', '.join(errors)}"
+            )]
         
     except HTTPException as e:
         # Return validation error
         return [FileValidationError(
-            field="file",
-            error=e.detail,
-            value=file.filename
+            message=e.detail
         )]
 
 @router.get("/stats/storage")

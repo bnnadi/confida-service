@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
-from app.utils.endpoint_helpers import handle_service_errors
+from app.utils.unified_error_handling import handle_service_errors
 from app.utils.validators import InputValidator, create_service_query_param
 from app.utils.database_operation_handler import DatabaseOperationHandler
 from app.database.connection import get_db

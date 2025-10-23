@@ -13,7 +13,7 @@ from app.database.models import InterviewSession, Question, SessionQuestion, Ans
 from app.database.async_operations import AsyncDatabaseOperations
 from app.services.question_service import QuestionService
 from app.exceptions import AIServiceError
-from app.utils.error_context import ErrorContext
+from app.utils.unified_error_handling import add_context, create_service_error
 from app.utils.logger import get_logger
 from datetime import datetime
 
