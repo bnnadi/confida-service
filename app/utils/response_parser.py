@@ -9,7 +9,7 @@ import re
 from typing import List, Optional, Dict, Any, Tuple, Callable
 from dataclasses import dataclass
 from app.utils.logger import get_logger
-from app.utils.unified_validation_service import UnifiedValidationService
+from app.utils.validation import ValidationService
 
 logger = get_logger(__name__)
 
@@ -54,8 +54,8 @@ class QualityValidator:
         """Validate question quality and return issues if any."""
         issues = []
         
-        # Use unified validation service for basic quality checks
-        validation_service = UnifiedValidationService()
+        # Use validation service for basic quality checks
+        validation_service = ValidationService()
         _, basic_issues = validation_service.validate_quality(
             question, 
             cls.MIN_QUESTION_LENGTH, 

@@ -13,8 +13,8 @@ from app.services.ollama_service import OllamaService
 from app.services.question_service import QuestionService
 from app.services.multi_agent_scoring import get_multi_agent_scoring_service
 from app.utils.logger import get_logger
-from app.utils.unified_error_handling import UnifiedErrorHandlingService
-from app.utils.fallback_manager import get_fallback_response
+from app.utils.error_handling import ErrorHandlingService
+from app.utils.fallback import get_fallback_response
 from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
@@ -104,7 +104,7 @@ class UnifiedAIService:
         self.db_session = db_session
         self.ollama_service = OllamaService()
         self.question_service = QuestionService(db_session) if db_session else None
-        self.error_handler = UnifiedErrorHandlingService()
+        self.error_handler = ErrorHandlingService()
         
         # Circuit breakers for each service
         self.circuit_breakers = {

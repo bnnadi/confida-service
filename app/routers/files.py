@@ -9,7 +9,7 @@ from app.models.schemas import (
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required
-from app.utils.unified_validation_service import UnifiedValidationService
+from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -175,8 +175,8 @@ async def validate_file(
 ):
     """Validate a file without uploading it."""
     try:
-        # Validate file using unified validation service
-        validation_service = UnifiedValidationService()
+        # Validate file using validation service
+        validation_service = ValidationService()
         is_valid, errors = validation_service.validate_file(file, file_type)
         
         if is_valid:

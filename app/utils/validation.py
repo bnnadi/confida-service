@@ -15,8 +15,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class UnifiedValidationService:
-    """Unified validation service that consolidates all validation functionality."""
+class ValidationService:
+    """Validation service that consolidates all validation functionality."""
     
     def __init__(self):
         self.settings = get_settings()

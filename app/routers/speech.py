@@ -6,7 +6,7 @@ from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required
 from app.database.connection import get_db
 from app.models.schemas import FileType
-from app.utils.unified_validation_service import UnifiedValidationService
+from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,8 +35,8 @@ async def transcribe_audio_endpoint(
     Supports multiple audio formats and can optionally save the file for future reference.
     """
     try:
-        # Validate audio file using unified validation service
-        validation_service = UnifiedValidationService()
+        # Validate audio file using validation service
+        validation_service = ValidationService()
         is_valid, errors = validation_service.validate_file(audio_file, FileType.AUDIO)
         if not is_valid:
             raise HTTPException(

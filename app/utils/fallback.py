@@ -9,8 +9,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class FallbackManager:
-    """Centralized fallback manager for all services."""
+class FallbackService:
+    """Centralized fallback service for all services."""
     
     def __init__(self):
         self.fallback_responses = self._initialize_fallback_responses()
@@ -197,17 +197,17 @@ class FallbackManager:
         return operation in self.fallback_responses or operation in self.fallback_strategies
 
 # Global fallback manager instance
-fallback_manager = FallbackManager()
+fallback_service = FallbackService()
 
 # Convenience functions
 def get_fallback_response(operation: str, **kwargs) -> Dict[str, Any]:
     """Get fallback response for an operation."""
-    return fallback_manager.get_fallback_response(operation, **kwargs)
+    return fallback_service.get_fallback_response(operation, **kwargs)
 
 def register_fallback_strategy(operation: str, strategy: Callable) -> None:
     """Register a custom fallback strategy."""
-    fallback_manager.register_fallback_strategy(operation, strategy)
+    fallback_service.register_fallback_strategy(operation, strategy)
 
 def register_fallback_response(operation: str, response: Dict[str, Any]) -> None:
     """Register a custom fallback response."""
-    fallback_manager.register_fallback_response(operation, response)
+    fallback_service.register_fallback_response(operation, response)

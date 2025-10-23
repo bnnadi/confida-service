@@ -13,8 +13,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class UnifiedErrorHandlingService:
-    """Unified error handling service that consolidates all error handling functionality."""
+class ErrorHandlingService:
+    """Error handling service that consolidates all error handling functionality."""
     
     def __init__(self):
         self.error_contexts = {}
