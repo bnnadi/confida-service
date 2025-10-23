@@ -5,7 +5,7 @@ This service provides comprehensive semantic search capabilities leveraging
 the vector database for intelligent content discovery and recommendations.
 """
 from typing import List, Dict, Any, Optional
-from app.services.unified_vector_service import unified_vector_service
+from app.services.vector_service import unified_vector_service
 from app.services.embedding_service import embedding_service
 from app.utils.logger import get_logger
 

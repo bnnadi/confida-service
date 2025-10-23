@@ -8,7 +8,7 @@ import re
 from typing import Dict, Any, List
 from app.models.scoring_models import ContentAnalysis
 from app.utils.prompt_templates import PromptTemplates
-from app.services.unified_ai_service import UnifiedAIService
+from app.services.ai_service import UnifiedAIService
 from app.services.agents.base_agent import BaseAgent
 from app.utils.logger import get_logger
 

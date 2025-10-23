@@ -3,7 +3,7 @@ Service testing utility to eliminate repetitive testing logic.
 """
 
 from typing import Dict, Any
-from app.services.unified_ai_service import UnifiedAIService
+from app.services.ai_service import UnifiedAIService
 
 
 class ServiceTester:

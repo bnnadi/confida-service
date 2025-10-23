@@ -7,7 +7,7 @@ from app.utils.validators import InputValidator, create_service_query_param
 from app.utils.database_operation_handler import DatabaseOperationHandler
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
-from app.services.unified_session_service import UnifiedSessionService
+from app.services.session_service import UnifiedSessionService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_service, get_async_ai_service
 from app.config import get_settings

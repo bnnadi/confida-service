@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.utils.logger import get_logger
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
-from app.services.unified_ai_service import UnifiedAIService, AsyncUnifiedAIService
+from app.services.ai_service import UnifiedAIService, AsyncUnifiedAIService
 from app.dependencies import get_ai_service, get_async_ai_service
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
