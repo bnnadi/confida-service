@@ -4,7 +4,7 @@ from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
 from app.services.speech_service import SpeechToTextService
 from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger

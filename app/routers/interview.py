@@ -4,9 +4,8 @@ from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
 # handle_service_errors import removed as it was unused
 from app.utils.validators import InputValidator, create_service_query_param
-from app.utils.database_operation_handler import DatabaseOperationHandler
-from app.database.connection import get_db
-from app.database.async_connection import get_async_db
+# DatabaseOperationHandler removed - using unified database service
+from app.services.database_service import get_db, get_async_db
 from app.services.session_service import UnifiedSessionService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_service, get_async_ai_service

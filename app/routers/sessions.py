@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.services.session_service import UnifiedSessionService
 from app.database.models import InterviewSession, Question
 from app.models.schemas import (

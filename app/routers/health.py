@@ -9,8 +9,7 @@ import time
 from app.utils.metrics import metrics, get_metrics_output
 from app.config import get_settings
 from app.utils.logger import get_logger
-from app.database.connection import get_db
-from app.database.async_connection import get_async_db
+from app.services.database_service import get_db, get_async_db
 from app.services.ai_service import UnifiedAIService, AsyncUnifiedAIService
 from app.dependencies import get_ai_service, get_async_ai_service
 from sqlalchemy.orm import Session

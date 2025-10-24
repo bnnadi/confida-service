@@ -3,7 +3,7 @@ Startup validation and initialization utilities.
 """
 
 from app.config import settings
-from app.dependencies import get_ai_service
+from app.services.service_factory import get_ai_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,17 +40,15 @@ def check_service_health(service_name: str, is_configured: bool) -> str:
             return "healthy" if models is not None else "error: no models available"
         elif service_name == "openai":
             # Test OpenAI connectivity
-            from app.dependencies import get_ai_service
             ai_service = get_ai_service()
-            if ai_service and ai_service.openai_client:
+            if ai_service and hasattr(ai_service, 'openai_client') and ai_service.openai_client:
                 # Simple test call
                 return "healthy"
             return "error: client not initialized"
         elif service_name == "anthropic":
             # Test Anthropic connectivity
-            from app.dependencies import get_ai_service
             ai_service = get_ai_service()
-            if ai_service and ai_service.anthropic_client:
+            if ai_service and hasattr(ai_service, 'anthropic_client') and ai_service.anthropic_client:
                 return "healthy"
             return "error: client not initialized"
         return "healthy"

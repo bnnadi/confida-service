@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, desc
 from app.database.models import InterviewSession, SessionQuestion
-from app.database.async_operations import AsyncDatabaseOperations
+# AsyncDatabaseOperations functionality now in unified database service
 from app.services.question_service import QuestionService
 from app.exceptions import AIServiceError
 # Error handling imports removed as they were unused
