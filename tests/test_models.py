@@ -4,7 +4,7 @@ Tests for database models.
 import pytest
 from sqlalchemy.orm import Session
 from app.models.schemas import UserResponse
-from app.models.interview import InterviewSession, Question, Answer
+from app.database.models import User, InterviewSession, Question, Answer
 
 
 def test_user_model_creation(db_session: Session):
