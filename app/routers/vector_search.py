@@ -6,7 +6,7 @@ This module provides REST API endpoints for vector search and semantic search ca
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.services.semantic_search_service import semantic_search_service
-from app.services.unified_vector_service import unified_vector_service
+from app.services.vector_service import unified_vector_service
 from app.services.embedding_service import embedding_service
 from app.models.vector_models import (
     QuestionSearchRequest, QuestionSearchResponse,

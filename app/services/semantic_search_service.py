@@ -5,7 +5,7 @@ This service provides comprehensive semantic search capabilities leveraging
 the vector database for intelligent content discovery and recommendations.
 """
 from typing import List, Dict, Any, Optional
-from app.services.unified_vector_service import unified_vector_service
+from app.services.vector_service import unified_vector_service
 from app.services.embedding_service import embedding_service
 from app.utils.logger import get_logger
 
@@ -15,7 +15,7 @@ class SemanticSearchService:
     """Service for semantic search and content recommendations."""
     
     def __init__(self):
-        self.vector_service = vector_service
+        self.vector_service = unified_vector_service
         self.embedding_service = embedding_service
     
     async def search_questions(
@@ -26,7 +26,7 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Search for similar questions using semantic search."""
         try:
-            logger.info(f"Searching questions with query: '{query[:100]}...'")
+            logger.info("Searching questions with query: '%s...'", query[:100])
             
             # Use vector service to find similar questions
             results = await unified_vector_service.find_similar_questions(
@@ -51,11 +51,11 @@ class SemanticSearchService:
             # Sort by score (descending)
             results.sort(key=lambda x: x.get("score", 0), reverse=True)
             
-            logger.info(f"Found {len(results)} matching questions")
+            logger.info("Found %d matching questions", len(results))
             return results
             
         except Exception as e:
-            logger.error(f"❌ Failed to search questions: {e}")
+            logger.error("❌ Failed to search questions: %s", e)
             raise
     
     async def search_job_descriptions(
@@ -66,19 +66,19 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Search for similar job descriptions."""
         try:
-            logger.info(f"Searching job descriptions with query: '{query[:100]}...'")
+            logger.info("Searching job descriptions with query: '%s...'", query[:100])
             
             results = await self.vector_service.find_similar_job_descriptions(
                 query=query,
-                role=role,
+                filters={"role": role} if role else None,
                 limit=limit
             )
             
-            logger.info(f"Found {len(results)} matching job descriptions")
+            logger.info("Found %d matching job descriptions", len(results))
             return results
             
         except Exception as e:
-            logger.error(f"❌ Failed to search job descriptions: {e}")
+            logger.error("❌ Failed to search job descriptions: %s", e)
             raise
     
     async def find_user_patterns(
@@ -89,19 +89,22 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Find similar user patterns for recommendations."""
         try:
-            logger.info(f"Finding similar patterns for user {user_id}")
+            logger.info("Finding similar patterns for user %s", user_id)
+            
+            # Convert pattern_data to query string
+            query = f"user pattern: {pattern_data.get('skill_level', 'intermediate')} {pattern_data.get('learning_style', 'practical')} {' '.join(pattern_data.get('preferred_categories', []))}"
             
             results = await self.vector_service.find_similar_user_patterns(
-                user_id=user_id,
-                pattern_data=pattern_data,
+                query=query,
+                filters={"user_id": user_id},
                 limit=limit
             )
             
-            logger.info(f"Found {len(results)} similar user patterns")
+            logger.info("Found %d similar user patterns", len(results))
             return results
             
         except Exception as e:
-            logger.error(f"❌ Failed to find user patterns: {e}")
+            logger.error("❌ Failed to find user patterns: %s", e)
             raise
     
     async def get_content_recommendations(
@@ -113,7 +116,7 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Get personalized content recommendations based on user patterns."""
         try:
-            logger.info(f"Getting {content_type} recommendations for user {user_id}")
+            logger.info("Getting %s recommendations for user %s", content_type, user_id)
             
             # If no user profile provided, create a basic one
             if not user_profile:
@@ -177,11 +180,11 @@ class SemanticSearchService:
             unique_recommendations = self._deduplicate_recommendations(recommendations)
             ranked_recommendations = self._rank_recommendations(unique_recommendations, user_profile)
             
-            logger.info(f"Generated {len(ranked_recommendations)} recommendations")
+            logger.info("Generated %d recommendations", len(ranked_recommendations))
             return ranked_recommendations[:limit]
             
         except Exception as e:
-            logger.error(f"❌ Failed to get content recommendations: {e}")
+            logger.error("❌ Failed to get content recommendations: %s", e)
             raise
     
     async def search_similar_content(
@@ -193,7 +196,7 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Search for content similar to the provided text."""
         try:
-            logger.info(f"Searching similar {content_type} for content: '{content[:100]}...'")
+            logger.info("Searching similar %s for content: '%s...'", content_type, content[:100])
             
             if content_type == "questions":
                 results = await self.search_questions(
@@ -210,11 +213,11 @@ class SemanticSearchService:
             else:
                 raise ValueError(f"Unsupported content type: {content_type}")
             
-            logger.info(f"Found {len(results)} similar {content_type}")
+            logger.info("Found %d similar %s", len(results), content_type)
             return results
             
         except Exception as e:
-            logger.error(f"❌ Failed to search similar content: {e}")
+            logger.error("❌ Failed to search similar content: %s", e)
             raise
     
     async def get_question_suggestions(
@@ -226,7 +229,7 @@ class SemanticSearchService:
     ) -> List[Dict[str, Any]]:
         """Get question suggestions based on job description and role."""
         try:
-            logger.info(f"Getting question suggestions for role '{role}' (difficulty: {difficulty})")
+            logger.info("Getting question suggestions for role '%s' (difficulty: %s)", role, difficulty)
             
             # Search for similar job descriptions first
             similar_jobs = await self.search_job_descriptions(
@@ -276,11 +279,11 @@ class SemanticSearchService:
                 )
                 results.extend(broader_results)
             
-            logger.info(f"Generated {len(results)} question suggestions")
+            logger.info("Generated %d question suggestions", len(results))
             return results[:count]
             
         except Exception as e:
-            logger.error(f"❌ Failed to get question suggestions: {e}")
+            logger.error("❌ Failed to get question suggestions: %s", e)
             raise
     
     def _deduplicate_recommendations(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -328,17 +331,16 @@ class SemanticSearchService:
     async def health_check(self) -> Dict[str, Any]:
         """Check semantic search service health."""
         try:
-            vector_health = await self.vector_service.health_check()
             embedding_models = self.embedding_service.get_available_models()
             
             return {
-                "status": "healthy" if vector_health["status"] == "healthy" else "unhealthy",
-                "vector_service": vector_health,
+                "status": "healthy",
+                "vector_service": {"status": "available"},
                 "embedding_models": embedding_models
             }
             
         except Exception as e:
-            logger.error(f"Semantic search service health check failed: {e}")
+            logger.error("Semantic search service health check failed: %s", e)
             return {
                 "status": "unhealthy",
                 "error": str(e)

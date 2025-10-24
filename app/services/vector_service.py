@@ -1,18 +1,16 @@
 """
-Unified Vector Service for InterviewIQ
+Unified Vector Service for Confida
 
 This service combines high-level vector operations, storage engine functionality,
 and content management capabilities, eliminating the need for separate VectorService,
 VectorStorageEngine, and VectorContentManager classes.
 """
 import uuid
-import inspect
-from typing import List, Dict, Any, Optional, Tuple, Type
-from qdrant_client.http.models import PointStruct, Filter, FieldCondition, MatchValue, SearchRequest
+from typing import List, Dict, Any
+from qdrant_client.http.models import PointStruct, Filter, FieldCondition, MatchValue
 from app.database.qdrant_config import qdrant_config
 from app.services.embedding_service import embedding_service
 from app.utils.logger import get_logger
-from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -24,17 +22,8 @@ class UnifiedVectorService:
         self.qdrant = qdrant_config
         self.embedding_service = embedding_service
         
-        # Auto-generate metadata mappings from Pydantic models
-        self.metadata_mappings = self._generate_metadata_mappings()
-        
-        # Content type to model mapping for auto-generation
-        self.content_models = {
-            "answer": self._get_answer_model(),
-            "user_pattern": self._get_user_pattern_model(),
-            "job_description": self._get_job_description_model(),
-            "question": self._get_question_model(),
-            "session": self._get_session_model()
-        }
+        # Simple content type mappings
+        self.content_types = ["answer", "user_pattern", "job_description", "question", "session"]
     
     # Collection Management
     async def initialize_collections(self):
@@ -76,14 +65,18 @@ class UnifiedVectorService:
         content_type: str, 
         metadata: Dict[str, Any] = None
     ) -> str:
-        """Unified content storage with type-specific metadata handling."""
+        """Unified content storage with simplified metadata handling."""
         try:
             # Generate embedding
             embedding = await self.embedding_service.generate_embedding(content)
             point_id = str(uuid.uuid4())
             
-            # Build type-specific payload
-            payload = self._build_payload(content_type, content, metadata or {})
+            # Simple payload with content and metadata
+            payload = {
+                "text": content,
+                "content_type": content_type,
+                **(metadata or {})
+            }
             
             # Create and store point
             point = PointStruct(id=point_id, vector=embedding, payload=payload)
@@ -486,20 +479,6 @@ class UnifiedVectorService:
             raise
     
     # Helper Methods
-    def _build_payload(self, content_type: str, content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Build payload with type-specific metadata."""
-        base_payload = {"content": content}
-        
-        # Add type-specific metadata
-        if content_type in self.metadata_mappings:
-            type_metadata = self.metadata_mappings[content_type]
-            for field, value in metadata.items():
-                if field in type_metadata:
-                    base_payload[field] = value
-        
-        # Add all metadata
-        base_payload.update(metadata)
-        return base_payload
     
     def _build_filter(self, filters: Dict[str, Any]) -> Filter:
         """Build Qdrant filter from dictionary."""
@@ -573,40 +552,6 @@ class UnifiedVectorService:
         
         return self._build_filter(session_filters)
     
-    def _generate_metadata_mappings(self) -> Dict[str, List[str]]:
-        """Generate metadata mappings for different content types."""
-        return {
-            "question": ["text", "difficulty", "category", "subcategory", "role", "skills", "question_id"],
-            "answer": ["text", "session_id", "question_id", "user_id", "score", "role"],
-            "job_description": ["text", "role", "company", "industry", "level", "skills"],
-            "user_pattern": ["text", "user_id", "pattern_type", "strength", "frequency"],
-            "session": ["text", "session_id", "user_id", "role", "mode", "status"]
-        }
-    
-    def _get_answer_model(self) -> Type[BaseModel]:
-        """Get answer model for auto-generation."""
-        # This would return a Pydantic model for answer validation
-        return None
-    
-    def _get_user_pattern_model(self) -> Type[BaseModel]:
-        """Get user pattern model for auto-generation."""
-        # This would return a Pydantic model for user pattern validation
-        return None
-    
-    def _get_job_description_model(self) -> Type[BaseModel]:
-        """Get job description model for auto-generation."""
-        # This would return a Pydantic model for job description validation
-        return None
-    
-    def _get_question_model(self) -> Type[BaseModel]:
-        """Get question model for auto-generation."""
-        # This would return a Pydantic model for question validation
-        return None
-    
-    def _get_session_model(self) -> Type[BaseModel]:
-        """Get session model for auto-generation."""
-        # This would return a Pydantic model for session validation
-        return None
 
 
 # Global vector service instance

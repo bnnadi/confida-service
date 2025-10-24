@@ -126,7 +126,7 @@ class AnalysisHistory(BaseModel):
     user_feedback: Optional[Dict[str, Any]] = Field(default=None, description="User feedback on the analysis")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Analysis timestamp")
 
-class PerformanceMetrics(BaseModel):
+class MultiAgentPerformanceMetrics(BaseModel):
     """Performance metrics for the multi-agent system."""
     total_analyses: int = Field(default=0, ge=0, description="Total number of analyses performed")
     average_processing_time: float = Field(default=0.0, ge=0.0, description="Average processing time in seconds")

@@ -5,14 +5,14 @@ from typing import Optional, List
 from app.database.connection import get_db
 from app.services.file_service import FileService
 from app.models.schemas import (
-    FileType, FileUploadRequest, FileUploadResponse, FileInfoResponse, 
+    FileType, FileUploadResponse, FileInfoResponse, 
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required
-from app.utils.file_validator import FileValidator
-import logging
+from app.utils.validation import ValidationService
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
@@ -175,18 +175,21 @@ async def validate_file(
 ):
     """Validate a file without uploading it."""
     try:
-        # Validate file
-        FileValidator.validate_file(file, file_type)
+        # Validate file using validation service
+        validation_service = ValidationService()
+        is_valid, errors = validation_service.validate_file(file, file_type)
         
-        # If validation passes, return empty list
-        return []
+        if is_valid:
+            return []
+        else:
+            return [FileValidationError(
+                message=f"File validation failed: {', '.join(errors)}"
+            )]
         
     except HTTPException as e:
         # Return validation error
         return [FileValidationError(
-            field="file",
-            error=e.detail,
-            value=file.filename
+            message=e.detail
         )]
 
 @router.get("/stats/storage")

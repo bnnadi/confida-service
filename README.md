@@ -1,4 +1,4 @@
-# InterviewIQ Backend
+# Confida Backend
 
 AI-powered interview coaching backend with intelligent question generation and answer analysis.
 

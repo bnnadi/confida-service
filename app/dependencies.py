@@ -1,5 +1,5 @@
 """
-Dependency injection utilities for InterviewIQ application.
+Dependency injection utilities for Confida application.
 """
 
 from functools import lru_cache
@@ -7,7 +7,7 @@ from typing import Optional, AsyncGenerator
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.unified_ai_service import UnifiedAIService, AsyncUnifiedAIService
+from app.services.ai_service import UnifiedAIService, AsyncUnifiedAIService
 from app.utils.logger import get_logger
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers the implementation of asynchronous database operations in InterviewIQ, including connection pooling, monitoring, and performance optimization.
+This guide covers the implementation of asynchronous database operations in Confida, including connection pooling, monitoring, and performance optimization.
 
 ## Features
 

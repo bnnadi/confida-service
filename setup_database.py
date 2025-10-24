@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database setup script for InterviewIQ.
+Database setup script for Confida.
 This script will create the database and run initial migrations.
 """
 
@@ -57,10 +57,10 @@ def run_migrations():
 
 def main():
     """Main setup function."""
-    print("🚀 Setting up InterviewIQ database...")
+    print("🚀 Setting up Confida database...")
     print("📋 Default configuration: PostgreSQL for development")
-    print("   Database: interviewiq_dev")
-    print("   User: interviewiq_dev")
+    print("   Database: confida_dev")
+    print("   User: confida_dev")
     print("   Password: dev_password")
     print()
     

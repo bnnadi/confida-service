@@ -10,7 +10,7 @@ Instead of manual Docker setup, use these modern cloud platforms that handle eve
 
 ### **One-Click Deploy Button**
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/deploy?template=https://github.com/your-username/interviewiq-service)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/deploy?template=https://github.com/your-username/confida-service)
 
 ### **Manual Deploy Steps:**
 
@@ -42,7 +42,7 @@ Instead of manual Docker setup, use these modern cloud platforms that handle eve
 
 ### **One-Click Deploy Button**
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/your-username/interviewiq-service)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/your-username/confida-service)
 
 ### **Manual Deploy Steps:**
 
@@ -93,7 +93,7 @@ fly deploy
 gcloud services enable run.googleapis.com
 
 # Deploy
-gcloud run deploy interviewiq \
+gcloud run deploy confida \
   --source . \
   --platform managed \
   --region us-central1 \

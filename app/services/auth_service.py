@@ -11,9 +11,9 @@ from fastapi import HTTPException, status
 from app.database.models import User
 from app.models.schemas import TokenPayload, TokenType, UserRole
 from app.config import get_settings
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 # JWT settings

@@ -4,9 +4,9 @@ from app.exceptions import RateLimitExceededError
 from app.middleware.rate_limiter import RateLimiter
 from app.middleware.redis_rate_limiter import RedisRateLimiter
 from typing import Dict, Any, Optional
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class EnhancedRateLimiter:
     """Enhanced rate limiter with per-endpoint and per-user-type configuration."""

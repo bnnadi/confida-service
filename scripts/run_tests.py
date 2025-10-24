@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test runner script for InterviewIQ.
+Test runner script for Confida.
 
 This script provides a comprehensive test runner with various options
 for running different types of tests and generating reports.
@@ -263,7 +263,7 @@ def setup_test_environment() -> None:
     print("🔧 Setting up test environment...")
     
     # Set environment variables
-    os.environ["DATABASE_URL"] = "sqlite:///./test_interviewiq.db"
+    os.environ["DATABASE_URL"] = "sqlite:///./test_confida.db"
     os.environ["REDIS_URL"] = "redis://localhost:6379"
     os.environ["SECRET_KEY"] = "test-secret-key"
     os.environ["ENVIRONMENT"] = "test"
@@ -280,7 +280,7 @@ def cleanup_test_environment() -> None:
     print("🧹 Cleaning up test environment...")
     
     # Remove test database
-    test_db_path = Path("test_interviewiq.db")
+    test_db_path = Path("test_confida.db")
     if test_db_path.exists():
         test_db_path.unlink()
         print("✅ Test database cleaned up!")
@@ -300,7 +300,7 @@ def cleanup_test_environment() -> None:
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description="InterviewIQ Test Runner")
+    parser = argparse.ArgumentParser(description="Confida Test Runner")
     parser.add_argument("--type", choices=["unit", "integration", "e2e", "all", "performance", "security"], 
                        default="all", help="Type of tests to run")
     parser.add_argument("--marker", help="Run tests with specific marker")

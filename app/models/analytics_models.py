@@ -1,5 +1,5 @@
 """
-Analytics data models for InterviewIQ.
+Analytics data models for Confida.
 
 This module defines Pydantic models for analytics and reporting functionality,
 including performance metrics, trend analysis, and report generation.

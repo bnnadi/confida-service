@@ -1,20 +1,21 @@
 """
-Unified AI Service for InterviewIQ
+Unified AI Service for Confida
 
 This service provides a unified interface for all AI operations with comprehensive
 error handling, retry logic, circuit breaker patterns, and intelligent fallbacks.
 """
 import asyncio
 import time
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List
 from enum import Enum
 from dataclasses import dataclass
 from app.services.ollama_service import OllamaService
 from app.services.question_service import QuestionService
 from app.services.multi_agent_scoring import get_multi_agent_scoring_service
 from app.utils.logger import get_logger
-from app.exceptions import AIServiceError, ServiceUnavailableError
-from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse
+from app.utils.error_handling import ErrorHandlingService
+from app.utils.fallback import get_fallback_response
+from app.exceptions import ServiceUnavailableError
 
 logger = get_logger(__name__)
 
@@ -103,12 +104,13 @@ class UnifiedAIService:
         self.db_session = db_session
         self.ollama_service = OllamaService()
         self.question_service = QuestionService(db_session) if db_session else None
+        self.error_handler = ErrorHandlingService()
         
         # Circuit breakers for each service
         self.circuit_breakers = {
-            "ollama": CircuitBreaker(failure_threshold=5, recovery_timeout=60.0),
-            "multi_agent": CircuitBreaker(failure_threshold=3, recovery_timeout=30.0),
-            "question_service": CircuitBreaker(failure_threshold=3, recovery_timeout=30.0)
+            "ollama": self.error_handler.create_circuit_breaker(failure_threshold=5, recovery_timeout=60.0),
+            "multi_agent": self.error_handler.create_circuit_breaker(failure_threshold=3, recovery_timeout=30.0),
+            "question_service": self.error_handler.create_circuit_breaker(failure_threshold=3, recovery_timeout=30.0)
         }
         
         # Retry configurations for different error types
@@ -127,35 +129,19 @@ class UnifiedAIService:
         }
     
     def _classify_error(self, error: Exception) -> ErrorType:
-        """Classify error type for intelligent retry strategies."""
-        error_str = str(error).lower()
+        """Classify error type for retry strategies using unified error handler."""
+        error_type = self.error_handler.classify_error(error)
         
-        # Transient errors (network, timeout, temporary issues)
-        if any(keyword in error_str for keyword in [
-            "timeout", "connection", "network", "temporary", "rate limit", "throttle"
-        ]):
-            return ErrorType.TRANSIENT
+        # Map unified error types to internal error types
+        type_mapping = {
+            "transient": ErrorType.TRANSIENT,
+            "service_unavailable": ErrorType.SERVICE_UNAVAILABLE,
+            "quota_exceeded": ErrorType.QUOTA_EXCEEDED,
+            "permanent": ErrorType.PERMANENT,
+            "unknown": ErrorType.TRANSIENT
+        }
         
-        # Service unavailable errors
-        if any(keyword in error_str for keyword in [
-            "service unavailable", "503", "502", "504", "server error"
-        ]):
-            return ErrorType.SERVICE_UNAVAILABLE
-        
-        # Quota exceeded errors
-        if any(keyword in error_str for keyword in [
-            "quota", "limit exceeded", "too many requests", "429"
-        ]):
-            return ErrorType.QUOTA_EXCEEDED
-        
-        # Permanent errors (authentication, invalid request)
-        if any(keyword in error_str for keyword in [
-            "unauthorized", "forbidden", "invalid", "bad request", "400", "401", "403"
-        ]):
-            return ErrorType.PERMANENT
-        
-        # Default to transient for unknown errors
-        return ErrorType.TRANSIENT
+        return type_mapping.get(error_type, ErrorType.TRANSIENT)
     
     def _calculate_retry_delay(self, attempt: int, config: RetryConfig) -> float:
         """Calculate retry delay with exponential backoff and jitter."""
@@ -170,72 +156,41 @@ class UnifiedAIService:
         return delay
     
     async def _execute_with_retry(self, operation, service_name: str, *args, **kwargs):
-        """Execute operation with intelligent retry logic."""
+        """Execute operation with simplified retry logic."""
         circuit_breaker = self.circuit_breakers[service_name]
         
-        # Check circuit breaker
         if not circuit_breaker.can_execute():
-            raise ServiceUnavailableError(f"Service {service_name} is currently unavailable (circuit breaker open)")
+            raise ServiceUnavailableError(f"Service {service_name} is currently unavailable")
         
-        last_error = None
+        error_type = ErrorType.TRANSIENT  # Default to transient for retries
+        retry_config = self.retry_configs[error_type]
         
-        try:
-            # Try to execute the operation
-            if asyncio.iscoroutinefunction(operation):
-                result = await operation(*args, **kwargs)
-            else:
-                result = operation(*args, **kwargs)
-            
-            # Record success
-            circuit_breaker.record_success()
-            self.service_health[service_name].consecutive_failures = 0
-            self.service_health[service_name].status = ServiceStatus.HEALTHY
-            
-            return result
-            
-        except Exception as e:
-            last_error = e
-            error_type = self._classify_error(e)
-            retry_config = self.retry_configs[error_type]
-            
-            # Record failure
-            circuit_breaker.record_failure()
-            self.service_health[service_name].consecutive_failures += 1
-            
-            logger.warning(f"Service {service_name} failed with {error_type.value} error: {e}")
-            
-            # Retry logic
-            for attempt in range(retry_config.max_retries):
-                delay = self._calculate_retry_delay(attempt, retry_config)
-                logger.info(f"Retrying {service_name} operation in {delay:.2f}s (attempt {attempt + 1}/{retry_config.max_retries})")
+        for attempt in range(retry_config.max_retries + 1):
+            try:
+                # Execute operation
+                if asyncio.iscoroutinefunction(operation):
+                    result = await operation(*args, **kwargs)
+                else:
+                    result = operation(*args, **kwargs)
                 
-                await asyncio.sleep(delay)
+                # Record success
+                circuit_breaker.record_success()
+                self.service_health[service_name].consecutive_failures = 0
+                self.service_health[service_name].status = ServiceStatus.HEALTHY
+                return result
                 
-                try:
-                    if asyncio.iscoroutinefunction(operation):
-                        result = await operation(*args, **kwargs)
-                    else:
-                        result = operation(*args, **kwargs)
-                    
-                    # Record success
-                    circuit_breaker.record_success()
-                    self.service_health[service_name].consecutive_failures = 0
-                    self.service_health[service_name].status = ServiceStatus.HEALTHY
-                    
-                    logger.info(f"Service {service_name} recovered after {attempt + 1} retries")
-                    return result
-                    
-                except Exception as retry_error:
-                    last_error = retry_error
-                    circuit_breaker.record_failure()
-                    self.service_health[service_name].consecutive_failures += 1
-                    
-                    logger.warning(f"Service {service_name} retry {attempt + 1} failed: {retry_error}")
-            
-            # All retries failed
-            self.service_health[service_name].status = ServiceStatus.UNHEALTHY
-            logger.error(f"Service {service_name} failed after {retry_config.max_retries} retries")
-            raise last_error
+            except Exception as e:
+                circuit_breaker.record_failure()
+                self.service_health[service_name].consecutive_failures += 1
+                
+                if attempt < retry_config.max_retries:
+                    delay = self._calculate_retry_delay(attempt, retry_config)
+                    logger.warning(f"Service {service_name} failed (attempt {attempt + 1}), retrying in {delay:.2f}s: {e}")
+                    await asyncio.sleep(delay)
+                else:
+                    self.service_health[service_name].status = ServiceStatus.UNHEALTHY
+                    logger.error(f"Service {service_name} failed after {retry_config.max_retries + 1} attempts")
+                    raise e
     
     async def generate_questions(self, role: str, job_description: str, count: int = 10) -> List[Dict[str, Any]]:
         """Generate questions with intelligent fallback strategy."""
@@ -295,17 +250,7 @@ class UnifiedAIService:
                     )
                     
                     # Convert to legacy format
-                    return {
-                        "analysis": f"Content: {analysis.content_agent.feedback}\n\nDelivery: {analysis.delivery_agent.feedback}\n\nTechnical: {analysis.technical_agent.feedback}",
-                        "score": {
-                            "clarity": analysis.delivery_agent.score,
-                            "confidence": analysis.content_agent.score,
-                            "technical": analysis.technical_agent.score,
-                            "overall": analysis.overall_score
-                        },
-                        "suggestions": analysis.recommendations,
-                        "multi_agent_analysis": analysis.dict()
-                    }
+                    return self._format_multi_agent_response(analysis)
                 except Exception as e:
                     logger.warning(f"Multi-agent scoring failed, falling back to Ollama: {e}")
             
@@ -319,17 +264,7 @@ class UnifiedAIService:
                     )
                     
                     # Convert to expected format
-                    return {
-                        "analysis": ollama_response.analysis,
-                        "score": {
-                            "clarity": ollama_response.score.clarity,
-                            "confidence": ollama_response.score.confidence,
-                            "technical": 7.0,  # Default technical score
-                            "overall": (ollama_response.score.clarity + ollama_response.score.confidence) / 2
-                        },
-                        "suggestions": ollama_response.improvements,
-                        "multi_agent_analysis": None
-                    }
+                    return self._format_ollama_response(ollama_response)
                 except Exception as e:
                     logger.warning(f"Ollama analysis failed: {e}")
             
@@ -342,19 +277,8 @@ class UnifiedAIService:
             return self._get_fallback_analysis()
     
     def _get_fallback_questions(self, role: str, count: int) -> List[Dict[str, Any]]:
-        """Get fallback questions when all services fail."""
-        fallback_questions = [
-            f"Tell me about your experience with {role}",
-            f"What challenges have you faced in {role} roles?",
-            f"How do you stay updated with {role} best practices?",
-            f"Describe a complex project you worked on as a {role}",
-            f"What tools and technologies do you use in {role}?",
-            f"How do you approach problem-solving in {role}?",
-            f"What is your experience with team collaboration in {role}?",
-            f"How do you handle deadlines and priorities in {role}?",
-            f"What are your career goals in {role}?",
-            f"How do you ensure quality in your {role} work?"
-        ]
+        """Get fallback questions when all services fail using centralized fallback manager."""
+        fallback_response = get_fallback_response("question_generation", role=role, count=count)
         
         return [
             {
@@ -362,25 +286,40 @@ class UnifiedAIService:
                 "text": question,
                 "type": "fallback",
                 "source": "fallback",
-                "metadata": {"service": "fallback", "reason": "all_services_failed"}
+                "metadata": fallback_response.get("metadata", {"service": "fallback", "reason": "all_services_failed"})
             }
-            for i, question in enumerate(fallback_questions[:count])
+            for i, question in enumerate(fallback_response["questions"][:count])
         ]
     
     def _get_fallback_analysis(self) -> Dict[str, Any]:
-        """Get fallback analysis when all services fail."""
+        """Get fallback analysis when all services fail using centralized fallback manager."""
+        return get_fallback_response("answer_analysis")
+    
+    def _format_multi_agent_response(self, analysis) -> Dict[str, Any]:
+        """Format multi-agent analysis response."""
         return {
-            "analysis": "Analysis temporarily unavailable. Please try again later.",
+            "analysis": f"Content: {analysis.content_agent.feedback}\n\nDelivery: {analysis.delivery_agent.feedback}\n\nTechnical: {analysis.technical_agent.feedback}",
             "score": {
-                "clarity": 7.0,
-                "confidence": 7.0,
-                "technical": 7.0,
-                "overall": 7.0
+                "clarity": analysis.delivery_agent.score,
+                "confidence": analysis.content_agent.score,
+                "technical": analysis.technical_agent.score,
+                "overall": analysis.overall_score
             },
-            "suggestions": [
-                "Analysis service is temporarily unavailable",
-                "Please try again in a few moments"
-            ],
+            "suggestions": analysis.recommendations,
+            "multi_agent_analysis": analysis.dict()
+        }
+    
+    def _format_ollama_response(self, ollama_response) -> Dict[str, Any]:
+        """Format Ollama analysis response."""
+        return {
+            "analysis": ollama_response.analysis,
+            "score": {
+                "clarity": ollama_response.score.clarity,
+                "confidence": ollama_response.score.confidence,
+                "technical": 7.0,  # Default technical score
+                "overall": (ollama_response.score.clarity + ollama_response.score.confidence) / 2
+            },
+            "suggestions": ollama_response.improvements,
             "multi_agent_analysis": None
         }
     
@@ -393,7 +332,7 @@ class UnifiedAIService:
             
             health_status[service_name] = {
                 "status": health.status.value,
-                "circuit_breaker_state": circuit_breaker.state.value,
+                "circuit_breaker_state": circuit_breaker.state,
                 "consecutive_failures": health.consecutive_failures,
                 "last_check": health.last_check,
                 "can_execute": circuit_breaker.can_execute()

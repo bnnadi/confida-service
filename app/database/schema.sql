@@ -1,5 +1,5 @@
--- InterviewIQ Database Schema
--- PostgreSQL database schema for InterviewIQ application
+-- Confida Database Schema
+-- PostgreSQL database schema for Confida application
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

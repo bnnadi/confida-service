@@ -1,19 +1,19 @@
 """
-Unified Session Service for InterviewIQ
+Unified Session Service for Confida
 
 This service provides both sync and async database operations for managing interview sessions,
 eliminating the need for separate SessionService and AsyncSessionService classes.
 """
 import uuid
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Optional, Union
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, desc
-from app.database.models import InterviewSession, Question, SessionQuestion, Answer, User
+from app.database.models import InterviewSession, SessionQuestion
 from app.database.async_operations import AsyncDatabaseOperations
 from app.services.question_service import QuestionService
 from app.exceptions import AIServiceError
-from app.utils.error_context import ErrorContext
+# Error handling imports removed as they were unused
 from app.utils.logger import get_logger
 from datetime import datetime
 

@@ -1,4 +1,4 @@
-# 🌱 Seed Data for InterviewIQ
+# 🌱 Seed Data for Confida
 
 This directory contains scripts to populate your development database with demo data for testing and development purposes.
 
@@ -15,10 +15,10 @@ python run_seed.py
 ## What Gets Created
 
 ### 👥 Demo Users (4 accounts)
-- **demo@interviewiq.com** / `demo123456` - Main demo account
+- **demo@confida.com** / `demo123456` - Main demo account
 - **john.doe@example.com** / `password123` - Sample user 1  
 - **jane.smith@example.com** / `password123` - Sample user 2
-- **admin@interviewiq.com** / `admin123456` - Admin account
+- **admin@confida.com** / `admin123456` - Admin account
 
 ### 🎯 Interview Sessions (4 complete scenarios)
 1. **Senior Software Engineer** - Technical architecture and coding questions
@@ -37,7 +37,7 @@ python run_seed.py
 
 Make sure you have:
 1. ✅ PostgreSQL running locally
-2. ✅ Database created (`interviewiq_dev`)
+2. ✅ Database created (`confida_dev`)
 3. ✅ Migrations applied (`alembic upgrade head`)
 4. ✅ Environment variables configured (`.env` file)
 
@@ -52,10 +52,10 @@ python seed_data.py
 ### Reset and Reseed
 ```bash
 # Drop and recreate database
-dropdb interviewiq_dev
-createdb interviewiq_dev
-psql -d interviewiq_dev -c "CREATE USER interviewiq_dev WITH PASSWORD 'dev_password';"
-psql -d interviewiq_dev -c "GRANT ALL PRIVILEGES ON DATABASE interviewiq_dev TO interviewiq_dev;"
+dropdb confida_dev
+createdb confida_dev
+psql -d confida_dev -c "CREATE USER confida_dev WITH PASSWORD 'dev_password';"
+psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_dev;"
 
 # Run migrations
 alembic upgrade head
@@ -72,7 +72,7 @@ uvicorn app.main:app --reload
 # Test login with demo accounts
 curl -X POST "http://localhost:8000/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email": "demo@interviewiq.com", "password": "demo123456"}'
+  -d '{"email": "demo@confida.com", "password": "demo123456"}'
 ```
 
 ## File Structure
@@ -106,7 +106,7 @@ You can modify the seed data by editing the constants in `seed_data.py`:
 
 2. **User Already Exists**
    ```
-   User demo@interviewiq.com already exists, skipping...
+   User demo@confida.com already exists, skipping...
    ```
    - This is normal - the script skips existing users
    - To reset, drop and recreate the database

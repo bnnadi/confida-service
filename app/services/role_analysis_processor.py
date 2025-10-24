@@ -6,13 +6,9 @@ eliminating the need for separate RoleAnalysisService and JobDescriptionProcesso
 """
 import re
 import html
-import yaml
-import asyncio
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from app.utils.logger import get_logger
-from app.utils.validation_mixin import ValidationMixin
 from app.models.role_analysis_models import RoleAnalysis, Industry, SeniorityLevel, CompanySize
 
 logger = get_logger(__name__)
@@ -43,41 +39,37 @@ class RoleAnalysisProcessor:
         # DynamicPromptService will be imported when needed to avoid circular imports
         self.dynamic_prompt_service = None
         
-        # Centralized extraction patterns for unified processing
-        self.extraction_patterns = {
-            'required_skills': {
-                'patterns': [
-                    r'(?:proficient in|experience with|knowledge of|skills in)\s+([\w\s+]+)',
-                    r'(?:required|must have|should have)\s+([\w\s+]+)\s+(?:experience|knowledge|skills)'
-                ],
-                'keywords': {
-                    'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'php', 'ruby'],
-                    'databases': ['sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'cassandra'],
-                    'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform'],
-                    'frameworks': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express'],
-                    'tools': ['git', 'jenkins', 'ci/cd', 'agile', 'scrum', 'jira', 'confluence']
-                }
-            },
-            'experience_years': {
-                'patterns': [
-                    r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)',
-                    r'(?:minimum|at least|minimum of)\s*(\d+)\s*(?:years?|yrs?)',
-                    r'(\d+)\s*-\s*(\d+)\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)'
-                ]
-            },
-            'education': {
-                'patterns': [
-                    r'(?:bachelor|master|phd|doctorate|degree)\s*(?:in|of)?\s*([\w\s]+)',
-                    r'(?:bs|ms|phd|mba)\s*(?:in|of)?\s*([\w\s]+)',
-                    r'(?:computer science|engineering|mathematics|statistics)'
-                ]
-            },
-            'certifications': {
-                'patterns': [
-                    r'(?:certified|certification)\s*(?:in|for)?\s*([\w\s]+)',
-                    r'(?:aws|azure|gcp|pmp|scrum|agile)\s*(?:certified|certification)'
-                ]
-            }
+        # Simplified extraction patterns
+        self.skill_patterns = [
+            r'proficient in\s+([\w\s+]+)',
+            r'experience with\s+([\w\s+]+)',
+            r'knowledge of\s+([\w\s+]+)',
+            r'skills in\s+([\w\s+]+)'
+        ]
+        
+        self.experience_patterns = [
+            r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)',
+            r'(?:minimum|at least)\s*(\d+)\s*(?:years?|yrs?)',
+            r'(\d+)\s*-\s*(\d+)\s*(?:years?|yrs?)'
+        ]
+        
+        self.education_patterns = [
+            r'(?:bachelor|master|phd|doctorate|degree)\s*(?:in|of)?\s*([\w\s]+)',
+            r'(?:bs|ms|phd|mba)\s*(?:in|of)?\s*([\w\s]+)'
+        ]
+        
+        self.certification_patterns = [
+            r'(?:certified|certification)\s*(?:in|for)?\s*([\w\s]+)',
+            r'(?:aws|azure|gcp|pmp|scrum|agile)\s*(?:certified|certification)'
+        ]
+        
+        # Technical skill categories
+        self.tech_categories = {
+            'programming': ['python', 'java', 'javascript', 'typescript', 'c++', 'c#', 'go', 'rust', 'php', 'ruby'],
+            'databases': ['sql', 'postgresql', 'mysql', 'mongodb', 'redis', 'elasticsearch', 'cassandra'],
+            'cloud': ['aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform'],
+            'frameworks': ['react', 'angular', 'vue', 'django', 'flask', 'spring', 'express'],
+            'tools': ['git', 'jenkins', 'ci/cd', 'agile', 'scrum', 'jira', 'confluence']
         }
         
         # Industry detection patterns
@@ -245,20 +237,14 @@ class RoleAnalysisProcessor:
         text_lower = text.lower()
         
         # Extract using keyword patterns
-        for category, keywords in self.extraction_patterns['required_skills']['keywords'].items():
-            for keyword in keywords:
-                if keyword in text_lower:
-                    skills.append(keyword.title())
+        for keywords in self.tech_categories.values():
+            skills.extend([keyword.title() for keyword in keywords if keyword in text_lower])
         
         # Extract using regex patterns
-        for pattern in self.extraction_patterns['required_skills']['patterns']:
+        for pattern in self.skill_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                skills.append(match.strip())
+            skills.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         
-        # Remove duplicates and clean up
         return list(set([skill.strip() for skill in skills if skill.strip()]))
     
     def _extract_soft_skills(self, text: str) -> List[str]:
@@ -269,54 +255,37 @@ class RoleAnalysisProcessor:
             'time management', 'collaboration', 'mentoring', 'presentation'
         ]
         
-        found_skills = []
         text_lower = text.lower()
-        
-        for skill in soft_skills:
-            if skill in text_lower:
-                found_skills.append(skill.title())
-        
-        return found_skills
+        return [skill.title() for skill in soft_skills if skill in text_lower]
     
     def _extract_experience_years(self, text: str) -> Optional[int]:
         """Extract experience requirements in years."""
-        for pattern in self.extraction_patterns['experience_years']['patterns']:
+        for pattern in self.experience_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
                 if isinstance(matches[0], tuple):
                     # Range format (e.g., "3-5 years")
                     min_years = int(matches[0][0])
                     max_years = int(matches[0][1])
-                    return (min_years + max_years) // 2  # Return average
+                    return (min_years + max_years) // 2
                 else:
                     return int(matches[0])
-        
         return None
     
     def _extract_education_requirements(self, text: str) -> List[str]:
         """Extract education requirements."""
         education = []
-        
-        for pattern in self.extraction_patterns['education']['patterns']:
+        for pattern in self.education_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                education.append(match.strip())
-        
+            education.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         return list(set([req.strip() for req in education if req.strip()]))
     
     def _extract_certifications(self, text: str) -> List[str]:
         """Extract certification requirements."""
         certifications = []
-        
-        for pattern in self.extraction_patterns['certifications']['patterns']:
+        for pattern in self.certification_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = ' '.join(match)
-                certifications.append(match.strip())
-        
+            certifications.extend([match if isinstance(match, str) else ' '.join(match) for match in matches])
         return list(set([cert.strip() for cert in certifications if cert.strip()]))
     
     def _detect_industry(self, text: str) -> Optional[str]:
@@ -469,7 +438,7 @@ class RoleAnalysisProcessor:
         job_function = results[7] if len(results) > 7 else 'engineering'
         
         return RoleAnalysis(
-            role=role,
+            primary_role=role,
             industry=Industry(industry) if industry else Industry.TECHNOLOGY,
             seniority_level=SeniorityLevel(seniority) if seniority else SeniorityLevel.MID,
             company_size=CompanySize(company_size) if company_size else CompanySize.MEDIUM,
@@ -483,7 +452,7 @@ class RoleAnalysisProcessor:
     def _get_default_analysis(self, role: str) -> RoleAnalysis:
         """Get default analysis when processing fails."""
         return RoleAnalysis(
-            role=role,
+            primary_role=role,
             industry=Industry.TECHNOLOGY,
             seniority_level=SeniorityLevel.MID,
             company_size=CompanySize.MEDIUM,

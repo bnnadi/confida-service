@@ -19,7 +19,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
-          POSTGRES_DB: test_interviewiq
+          POSTGRES_DB: test_confida
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -62,7 +62,7 @@ jobs:
 
     - name: Set up environment variables
       run: |
-        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_interviewiq" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_confida" >> $GITHUB_ENV
         echo "REDIS_URL=redis://localhost:6379" >> $GITHUB_ENV
         echo "SECRET_KEY=test-secret-key-for-github-actions" >> $GITHUB_ENV
         echo "ENVIRONMENT=test" >> $GITHUB_ENV

@@ -3,18 +3,10 @@ Question models for diversity engine and other services.
 Separated to avoid circular imports.
 """
 
-from typing import List, Optional
+from typing import List
 from dataclasses import dataclass
 from enum import Enum
-
-class QuestionCategory(Enum):
-    TECHNICAL = "technical"
-    BEHAVIORAL = "behavioral"
-    SYSTEM_DESIGN = "system_design"
-    LEADERSHIP = "leadership"
-    DATA_ANALYSIS = "data_analysis"
-    PROBLEM_SOLVING = "problem_solving"
-    COMMUNICATION = "communication"
+from .intelligent_question_models import QuestionCategory
 
 class DifficultyLevel(Enum):
     EASY = "easy"

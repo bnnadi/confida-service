@@ -17,9 +17,9 @@ logger = setup_logging()
 from app.utils.api_documentation import APIDocumentationBuilder
 
 app = FastAPI(
-    title="InterviewIQ API",
+    title="Confida API",
     description="""
-    ## 🎯 InterviewIQ API Documentation
+    ## 🎯 Confida API Documentation
     
     A comprehensive API for AI-powered interview coaching and question generation.
     
@@ -44,15 +44,15 @@ app = FastAPI(
     - **Authentication**: Bearer Token
     
     ### 🔗 Useful Links
-    - [GitHub Repository](https://github.com/your-org/interviewiq)
-    - [Support Documentation](https://docs.interviewiq.com)
-    - [Status Page](https://status.interviewiq.com)
+    - [GitHub Repository](https://github.com/your-org/confida)
+    - [Support Documentation](https://docs.confida.com)
+    - [Status Page](https://status.confida.com)
     """,
     version="1.0.0",
     contact={
-        "name": "InterviewIQ Support",
-        "url": "https://docs.interviewiq.com",
-        "email": "support@interviewiq.com"
+        "name": "Confida Support",
+        "url": "https://docs.confida.com",
+        "email": "support@confida.com"
     },
     license_info={
         "name": "MIT License",
@@ -60,11 +60,11 @@ app = FastAPI(
     },
     servers=[
         {
-            "url": "https://api.interviewiq.com",
+            "url": "https://api.confida.com",
             "description": "Production server"
         },
         {
-            "url": "https://staging-api.interviewiq.com",
+            "url": "https://staging-api.confida.com",
             "description": "Staging server"
         },
         {
@@ -233,7 +233,7 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     return {
-        "message": "InterviewIQ API",
+        "message": "Confida API",
         "version": "1.0.0",
         "docs": "/docs",
         "features": "AI-powered interview coaching with hybrid AI services"

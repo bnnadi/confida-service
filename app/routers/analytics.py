@@ -1,5 +1,5 @@
 """
-Analytics API endpoints for InterviewIQ.
+Analytics API endpoints for Confida.
 
 This module provides REST API endpoints for analytics and reporting functionality,
 including performance metrics, trend analysis, and report generation.
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db, get_db_session
-from app.services.unified_analytics_service import UnifiedAnalyticsService
+from app.services.analytics_service import UnifiedAnalyticsService
 from app.services.cost_tracker import CostTracker
 from app.services.smart_token_optimizer import SmartTokenOptimizer
 from app.models.analytics_models import (

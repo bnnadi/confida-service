@@ -1,12 +1,12 @@
 version: '3.8'
 
-name: interviewiq-service-prod
+name: confida-service-prod
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: interviewiq-backend-prod
+    container_name: confida-backend-prod
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -17,7 +17,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     networks:
-      - interviewiq-service-network
+      - confida-service-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -27,5 +27,5 @@ services:
       start_period: 60s
 
 networks:
-  interviewiq-service-network:
+  confida-service-network:
     driver: bridge

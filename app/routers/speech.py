@@ -1,15 +1,15 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
-from typing import Optional, List
+from typing import List
 from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
 from app.services.speech_service import SpeechToTextService
 from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required
 from app.database.connection import get_db
 from app.models.schemas import FileType
-from app.utils.file_validator import FileValidator
-import logging
+from app.utils.validation import ValidationService
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
 
@@ -35,8 +35,16 @@ async def transcribe_audio_endpoint(
     Supports multiple audio formats and can optionally save the file for future reference.
     """
     try:
-        # Validate audio file
-        filename, mime_type = FileValidator.validate_file(audio_file, FileType.AUDIO)
+        # Validate audio file using validation service
+        validation_service = ValidationService()
+        is_valid, errors = validation_service.validate_file(audio_file, FileType.AUDIO)
+        if not is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File validation failed: {', '.join(errors)}"
+            )
+        filename = audio_file.filename
+        mime_type = "audio/wav"  # Default for speech recognition
         
         # Read audio data
         audio_data = await audio_file.read()

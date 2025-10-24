@@ -1,5 +1,5 @@
 """
-Test configuration for InterviewIQ tests.
+Test configuration for Confida tests.
 
 This module provides test-specific database models that work with SQLite
 for testing purposes.
@@ -16,7 +16,7 @@ from datetime import datetime
 TestBase = declarative_base()
 
 # Test database configuration
-TEST_DATABASE_URL = "sqlite:///./test_interviewiq.db"
+TEST_DATABASE_URL = "sqlite:///./test_confida.db"
 
 class TestUser(TestBase):
     """Test user model compatible with SQLite."""

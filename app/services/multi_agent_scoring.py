@@ -7,9 +7,6 @@ for different aspects of interview responses, enabling detailed feedback and sco
 import asyncio
 from typing import List, Dict, Any, Optional
 # Import agents only when needed to avoid circular imports
-# from app.services.agents.content_agent import ContentAnalysisAgent
-# from app.services.agents.delivery_agent import DeliveryAnalysisAgent
-# from app.services.agents.technical_agent import TechnicalAnalysisAgent
 from app.models.scoring_models import (
     MultiAgentAnalysis, AgentScore, ScoringWeights, 
     ContentAnalysis, DeliveryAnalysis, TechnicalAnalysis
@@ -59,49 +56,38 @@ class MultiAgentScoringService:
             # Use custom weights or defaults
             scoring_weights = weights or self.default_weights
             
-            # Run all agents in parallel for efficiency
-            content_task = asyncio.create_task(
-                self.content_agent.analyze(response, question, job_description, role)
-            )
-            delivery_task = asyncio.create_task(
-                self.delivery_agent.analyze(response, question, job_description)
-            )
-            technical_task = asyncio.create_task(
+            # Run agents in parallel
+            tasks = [
+                self.content_agent.analyze(response, question, job_description, role),
+                self.delivery_agent.analyze(response, question, job_description),
                 self.technical_agent.analyze(response, question, job_description, role)
+            ]
+            
+            content_analysis, delivery_analysis, technical_analysis = await asyncio.gather(*tasks)
+            
+            # Simple score calculation
+            overall_score = (
+                content_analysis.score * scoring_weights.content_weight +
+                delivery_analysis.score * scoring_weights.delivery_weight +
+                technical_analysis.score * scoring_weights.technical_weight
             )
             
-            # Wait for all agents to complete
-            content_analysis, delivery_analysis, technical_analysis = await asyncio.gather(
-                content_task, delivery_task, technical_task
-            )
-            
-            # Aggregate scores using weighted combination
-            overall_score = self._calculate_overall_score(
-                content_analysis, delivery_analysis, technical_analysis, scoring_weights
-            )
-            
-            # Generate comprehensive recommendations
-            recommendations = self._generate_recommendations(
-                content_analysis, delivery_analysis, technical_analysis
-            )
-            
-            # Identify strengths and improvement areas
-            strengths, improvements = self._identify_strengths_and_improvements(
-                content_analysis, delivery_analysis, technical_analysis
-            )
+            # Generate recommendations and analysis
+            recommendations = self._get_top_recommendations(content_analysis, delivery_analysis, technical_analysis)
+            strengths = self._get_strengths(content_analysis, delivery_analysis, technical_analysis)
+            improvements = self._get_improvements(content_analysis, delivery_analysis, technical_analysis)
             
             # Create multi-agent analysis result
             analysis = MultiAgentAnalysis(
                 content_agent=self._create_agent_score(content_analysis),
                 delivery_agent=self._create_agent_score(delivery_analysis),
                 technical_agent=self._create_agent_score(technical_analysis),
-                overall_score=overall_score,
+                overall_score=round(overall_score, 2),
                 recommendations=recommendations,
                 strengths=strengths,
                 areas_for_improvement=improvements,
                 analysis_metadata={
                     "role": role,
-                    "question_type": self._classify_question_type(question),
                     "response_length": len(response),
                     "weights_used": scoring_weights.dict()
                 }
@@ -115,75 +101,41 @@ class MultiAgentScoringService:
             # Return fallback analysis
             return self._create_fallback_analysis(response, question, job_description, role)
     
-    def _calculate_overall_score(
-        self,
-        content_analysis: ContentAnalysis,
-        delivery_analysis: DeliveryAnalysis,
-        technical_analysis: TechnicalAnalysis,
-        weights: ScoringWeights
-    ) -> float:
-        """Calculate weighted overall score from individual agent scores."""
-        weighted_score = (
-            content_analysis.score * weights.content_weight +
-            delivery_analysis.score * weights.delivery_weight +
-            technical_analysis.score * weights.technical_weight
-        )
-        
-        # Normalize to 0-10 scale
-        return round(weighted_score, 2)
-    
-    def _generate_recommendations(
-        self,
-        content_analysis: ContentAnalysis,
-        delivery_analysis: DeliveryAnalysis,
-        technical_analysis: TechnicalAnalysis
-    ) -> List[str]:
-        """Generate comprehensive recommendations based on all agent analyses."""
+    def _get_top_recommendations(self, content_analysis, delivery_analysis, technical_analysis) -> List[str]:
+        """Get top recommendations from all agents."""
         recommendations = []
         
-        # Content-based recommendations
         if content_analysis.score < 7.0:
             recommendations.extend(content_analysis.recommendations)
-        
-        # Delivery-based recommendations
         if delivery_analysis.score < 7.0:
             recommendations.extend(delivery_analysis.recommendations)
-        
-        # Technical-based recommendations
         if technical_analysis.score < 7.0:
             recommendations.extend(technical_analysis.recommendations)
         
-        # Remove duplicates and limit to top recommendations
-        unique_recommendations = list(dict.fromkeys(recommendations))
-        return unique_recommendations[:5]  # Top 5 recommendations
+        return list(dict.fromkeys(recommendations))[:5]
     
-    def _identify_strengths_and_improvements(
-        self,
-        content_analysis: ContentAnalysis,
-        delivery_analysis: DeliveryAnalysis,
-        technical_analysis: TechnicalAnalysis
-    ) -> tuple[List[str], List[str]]:
-        """Identify strengths and areas for improvement."""
+    def _get_strengths(self, content_analysis, delivery_analysis, technical_analysis) -> List[str]:
+        """Get strengths from high-scoring agents."""
         strengths = []
-        improvements = []
-        
-        # Identify strengths (scores >= 8.0)
         if content_analysis.score >= 8.0:
             strengths.append("Strong content relevance and completeness")
         if delivery_analysis.score >= 8.0:
             strengths.append("Clear and confident communication")
         if technical_analysis.score >= 8.0:
             strengths.append("Excellent technical knowledge")
-        
-        # Identify improvement areas (scores < 6.0)
+        return strengths
+    
+    def _get_improvements(self, content_analysis, delivery_analysis, technical_analysis) -> List[str]:
+        """Get improvement areas from low-scoring agents."""
+        improvements = []
         if content_analysis.score < 6.0:
             improvements.append("Content relevance and structure")
         if delivery_analysis.score < 6.0:
             improvements.append("Communication clarity and confidence")
         if technical_analysis.score < 6.0:
-            improvements.append("Technical depth and accuracy")
-        
-        return strengths, improvements
+            improvements.append("Technical knowledge and depth")
+        return improvements
+    
     
     def _classify_question_type(self, question: str) -> str:
         """Classify the type of question for specialized analysis."""

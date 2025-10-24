@@ -1,6 +1,6 @@
-# InterviewIQ Testing Guide
+# Confida Testing Guide
 
-This guide provides comprehensive documentation for the InterviewIQ testing suite, including how to run tests, understand test coverage, and contribute to the testing framework.
+This guide provides comprehensive documentation for the Confida testing suite, including how to run tests, understand test coverage, and contribute to the testing framework.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This guide provides comprehensive documentation for the InterviewIQ testing suit
 
 ## Overview
 
-The InterviewIQ testing suite provides comprehensive coverage of the application with multiple test types:
+The Confida testing suite provides comprehensive coverage of the application with multiple test types:
 
 - **Unit Tests**: Test individual components in isolation
 - **Integration Tests**: Test component interactions and API endpoints
@@ -469,7 +469,7 @@ async def test_async_function():
 ```bash
 # Error: Database connection failed
 # Solution: Check DATABASE_URL environment variable
-export DATABASE_URL="sqlite:///./test_interviewiq.db"
+export DATABASE_URL="sqlite:///./test_confida.db"
 
 # Error: Migration failed
 # Solution: Run database migrations

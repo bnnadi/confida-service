@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.config import settings
 from app.utils.service_tester import ServiceTester
-from app.utils.endpoint_helpers import handle_service_errors
-from app.exceptions import ServiceNotInitializedError, ConfigurationRetrievalError, StatisticsRetrievalError
+# handle_service_errors import removed as it was unused
+# Exception imports removed as they were unused
 from app.dependencies import get_ai_service
-import logging
+from app.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 

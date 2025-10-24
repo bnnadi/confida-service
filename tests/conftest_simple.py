@@ -1,5 +1,5 @@
 """
-Simple test configuration for InterviewIQ tests.
+Simple test configuration for Confida tests.
 
 This module provides basic test configuration without complex database models
 for testing the testing infrastructure.
@@ -13,7 +13,7 @@ from pathlib import Path
 def setup_test_environment():
     """Set up basic test environment."""
     # Set environment variables
-    os.environ["DATABASE_URL"] = "sqlite:///./test_interviewiq.db"
+    os.environ["DATABASE_URL"] = "sqlite:///./test_confida.db"
     os.environ["REDIS_URL"] = "redis://localhost:6379"
     os.environ["SECRET_KEY"] = "test-secret-key"
     os.environ["ENVIRONMENT"] = "test"
@@ -25,7 +25,7 @@ def setup_test_environment():
     yield
     
     # Cleanup
-    test_db_path = Path("test_interviewiq.db")
+    test_db_path = Path("test_confida.db")
     if test_db_path.exists():
         test_db_path.unlink()
 

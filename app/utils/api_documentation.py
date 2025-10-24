@@ -1,5 +1,5 @@
 """
-API Documentation Utilities for InterviewIQ.
+API Documentation Utilities for Confida.
 
 This module provides simplified, maintainable utilities for API documentation
 including examples, error responses, and usage guides.
@@ -337,14 +337,14 @@ def get_usage_guides() -> Dict[str, str]:
 
 ## 1. Authentication
 ```bash
-curl -X POST "https://api.interviewiq.com/auth/login" \\
+curl -X POST "https://api.confida.com/auth/login" \\
   -H "Content-Type: application/json" \\
   -d '{"username": "your_username", "password": "your_password"}'
 ```
 
 ## 2. Generate Interview Questions
 ```bash
-curl -X POST "https://api.interviewiq.com/parse-jd" \\
+curl -X POST "https://api.confida.com/parse-jd" \\
   -H "Authorization: Bearer YOUR_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -355,7 +355,7 @@ curl -X POST "https://api.interviewiq.com/parse-jd" \\
 
 ## 3. Analyze Interview Answer
 ```bash
-curl -X POST "https://api.interviewiq.com/analyze-answer" \\
+curl -X POST "https://api.confida.com/analyze-answer" \\
   -H "Authorization: Bearer YOUR_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -372,8 +372,8 @@ curl -X POST "https://api.interviewiq.com/analyze-answer" \\
 ```python
 import requests
 
-class InterviewIQClient:
-    def __init__(self, api_key, base_url="https://api.interviewiq.com"):
+class ConfidaClient:
+    def __init__(self, api_key, base_url="https://api.confida.com"):
         self.api_key = api_key
         self.base_url = base_url
         self.headers = {"Authorization": f"Bearer {api_key}"}
@@ -399,7 +399,7 @@ class InterviewIQClient:
         return response.json()
 
 # Usage
-client = InterviewIQClient("your_api_key")
+client = ConfidaClient("your_api_key")
 questions = client.generate_questions("Software Engineer", "Job description...")
 feedback = client.analyze_answer("Job description...", "Question?", "My answer...")
 ```
@@ -409,8 +409,8 @@ feedback = client.analyze_answer("Job description...", "Question?", "My answer..
 # 🟨 JavaScript SDK Example
 
 ```javascript
-class InterviewIQClient {
-    constructor(apiKey, baseUrl = 'https://api.interviewiq.com') {
+class ConfidaClient {
+    constructor(apiKey, baseUrl = 'https://api.confida.com') {
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.headers = {
@@ -443,7 +443,7 @@ class InterviewIQClient {
 }
 
 // Usage
-const client = new InterviewIQClient('your_api_key');
+const client = new ConfidaClient('your_api_key');
 const questions = await client.generateQuestions('Software Engineer', 'Job description...');
 const feedback = await client.analyzeAnswer('Job description...', 'Question?', 'My answer...');
 ```

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
@@ -7,13 +7,15 @@ class ParseJDRequest(BaseModel):
     role: str = Field(..., min_length=1, max_length=200, description="The job role/title")
     jobDescription: str = Field(..., min_length=10, max_length=10000, description="The full job description")
     
-    @validator('role')
+    @field_validator('role')
+    @classmethod
     def validate_role(cls, v):
         if not v or not v.strip():
             raise ValueError('Role cannot be empty')
         return v.strip()
     
-    @validator('jobDescription')
+    @field_validator('jobDescription')
+    @classmethod
     def validate_job_description(cls, v):
         if not v or not v.strip():
             raise ValueError('Job description cannot be empty')
@@ -26,7 +28,8 @@ class AnalyzeAnswerRequest(BaseModel):
     question: str = Field(..., min_length=5, max_length=1000, description="The interview question")
     answer: str = Field(..., min_length=1, max_length=5000, description="The candidate's answer")
     
-    @validator('jobDescription', 'question', 'answer')
+    @field_validator('jobDescription', 'question', 'answer')
+    @classmethod
     def validate_text_fields(cls, v):
         if not v or not v.strip():
             raise ValueError('Field cannot be empty')
@@ -104,37 +107,42 @@ class CreateSessionRequest(BaseModel):
     job_title: Optional[str] = Field(None, description="Job title for interview mode")
     job_description: Optional[str] = Field(None, description="Job description for interview mode")
     
-    @validator('mode')
+    @field_validator('mode')
+    @classmethod
     def validate_mode(cls, v):
         if v not in ['practice', 'interview']:
             raise ValueError('Mode must be either "practice" or "interview"')
         return v
     
-    @validator('role')
+    @field_validator('role')
+    @classmethod
     def validate_role(cls, v):
         if not v or not v.strip():
             raise ValueError('Role cannot be empty')
         return v.strip()
     
-    @validator('scenario_id')
-    def validate_scenario_id(cls, v, values):
-        if values.get('mode') == 'practice' and not v:
+    @field_validator('scenario_id')
+    @classmethod
+    def validate_scenario_id(cls, v, info):
+        if info.data.get('mode') == 'practice' and not v:
             raise ValueError('scenario_id is required for practice mode')
         return v
     
-    @validator('job_title', 'job_description')
-    def validate_job_fields(cls, v, values):
-        if values.get('mode') == 'interview':
+    @field_validator('job_title', 'job_description')
+    @classmethod
+    def validate_job_fields(cls, v, info):
+        if info.data.get('mode') == 'interview':
             if not v or not v.strip():
-                raise ValueError(f'{"job_title" if "job_title" in values else "job_description"} is required for interview mode')
+                raise ValueError(f'{"job_title" if "job_title" in info.data else "job_description"} is required for interview mode')
             if len(v.strip()) < 10:
-                raise ValueError(f'{"job_title" if "job_title" in values else "job_description"} must be at least 10 characters')
+                raise ValueError(f'{"job_title" if "job_title" in info.data else "job_description"} must be at least 10 characters')
         return v.strip() if v else v
 
 class AddQuestionsRequest(BaseModel):
     questions: List[str] = Field(..., min_items=1, max_items=20, description="List of interview questions")
     
-    @validator('questions')
+    @field_validator('questions')
+    @classmethod
     def validate_questions(cls, v):
         if not v:
             raise ValueError('Questions list cannot be empty')
@@ -156,7 +164,8 @@ class AddAnswerRequest(BaseModel):
     analysis_result: Optional[Dict[str, Any]] = Field(None, description="AI analysis result")
     score: Optional[Dict[str, Any]] = Field(None, description="Scoring data")
     
-    @validator('answer_text')
+    @field_validator('answer_text')
+    @classmethod
     def validate_answer_text(cls, v):
         if not v or not v.strip():
             raise ValueError('Answer text cannot be empty')
@@ -203,6 +212,7 @@ class TokenPayload(BaseModel):
     iat: int
 
 class TokenResponse(BaseModel):
+    """Response model for authentication tokens."""
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -237,11 +247,6 @@ class PasswordResetConfirmRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="New password")
 
 # Additional auth models
-class UserRegistrationRequest(BaseModel):
-    email: str = Field(..., description="User email address")
-    password: str = Field(..., min_length=8, description="User password")
-    name: str = Field(..., min_length=1, max_length=255, description="User full name")
-
 class TokenRefreshRequest(BaseModel):
     refresh_token: str = Field(..., description="Refresh token")
 

@@ -2,7 +2,7 @@
 
 ## 🚀 **Production Deployment Overview**
 
-This guide covers deploying the InterviewIQ Vector Database Integration in a production environment with proper security, monitoring, and scalability considerations.
+This guide covers deploying the Confida Vector Database Integration in a production environment with proper security, monitoring, and scalability considerations.
 
 ## 🏗️ **Production Architecture**
 
@@ -15,9 +15,9 @@ graph TB
     end
     
     subgraph "Application Layer"
-        APP1[InterviewIQ App Instance 1]
-        APP2[InterviewIQ App Instance 2]
-        APP3[InterviewIQ App Instance N]
+        APP1[Confida App Instance 1]
+        APP2[Confida App Instance 2]
+        APP3[Confida App Instance N]
     end
     
     subgraph "Database Layer"
@@ -66,8 +66,8 @@ Create a production `.env` file:
 
 ```bash
 # Database Configuration
-DATABASE_URL=postgresql://interviewiq_prod:secure_password@postgres-primary:5432/interviewiq_prod
-DATABASE_REPLICA_URL=postgresql://interviewiq_prod:secure_password@postgres-replica:5432/interviewiq_prod
+DATABASE_URL=postgresql://confida_prod:secure_password@postgres-primary:5432/confida_prod
+DATABASE_REPLICA_URL=postgresql://confida_prod:secure_password@postgres-replica:5432/confida_prod
 
 # Vector Database Configuration
 QDRANT_URL=http://qdrant-cluster:6333
@@ -113,8 +113,8 @@ services:
   postgres-primary:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=interviewiq_prod
-      - POSTGRES_USER=interviewiq_prod
+      - POSTGRES_DB=confida_prod
+      - POSTGRES_USER=confida_prod
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
@@ -122,7 +122,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U interviewiq_prod -d interviewiq_prod"]
+      test: ["CMD-SHELL", "pg_isready -U confida_prod -d confida_prod"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -131,8 +131,8 @@ services:
   postgres-replica:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=interviewiq_prod
-      - POSTGRES_USER=interviewiq_prod
+      - POSTGRES_DB=confida_prod
+      - POSTGRES_USER=confida_prod
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - PGUSER=postgres
     volumes:
@@ -188,7 +188,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     environment:
-      - DATABASE_URL=postgresql://interviewiq_prod:${POSTGRES_PASSWORD}@postgres-primary:5432/interviewiq_prod
+      - DATABASE_URL=postgresql://confida_prod:${POSTGRES_PASSWORD}@postgres-primary:5432/confida_prod
       - QDRANT_URL=http://qdrant-1:6333
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENVIRONMENT=production
@@ -357,13 +357,13 @@ http {
 ```sql
 -- scripts/init-db.sql
 -- Create production database and user
-CREATE DATABASE interviewiq_prod;
-CREATE USER interviewiq_prod WITH ENCRYPTED PASSWORD 'secure_password';
+CREATE DATABASE confida_prod;
+CREATE USER confida_prod WITH ENCRYPTED PASSWORD 'secure_password';
 
 -- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE interviewiq_prod TO interviewiq_prod;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO interviewiq_prod;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO interviewiq_prod;
+GRANT ALL PRIVILEGES ON DATABASE confida_prod TO confida_prod;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO confida_prod;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO confida_prod;
 
 -- Enable row-level security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -382,7 +382,7 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'interviewiq-app'
+  - job_name: 'confida-app'
     static_configs:
       - targets: ['app-1:8001', 'app-2:8001']
     metrics_path: '/metrics'
@@ -415,7 +415,7 @@ Create dashboards for:
 ```yaml
 # monitoring/alerts.yml
 groups:
-  - name: interviewiq-alerts
+  - name: confida-alerts
     rules:
       - alert: HighErrorRate
         expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
@@ -511,7 +511,7 @@ echo "🚀 Starting production deployment..."
 
 # Build and push images
 echo "📦 Building application image..."
-docker build -f Dockerfile.prod -t interviewiq:latest .
+docker build -f Dockerfile.prod -t confida:latest .
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
@@ -557,7 +557,7 @@ docker-compose -f docker-compose.prod.yml down
 
 # Restore from backup (if needed)
 # docker-compose -f docker-compose.prod.yml up -d postgres-primary
-# pg_restore -h localhost -U interviewiq_prod -d interviewiq_prod backup.sql
+# pg_restore -h localhost -U confida_prod -d confida_prod backup.sql
 
 # Start previous version
 docker-compose -f docker-compose.prod.yml up -d

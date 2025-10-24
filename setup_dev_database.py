@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Development database setup script for InterviewIQ.
+Development database setup script for Confida.
 This script sets up a PostgreSQL database for development.
 """
 
@@ -28,8 +28,8 @@ def check_postgresql():
 
 def create_dev_database():
     """Create development database and user."""
-    db_name = "interviewiq_dev"
-    db_user = "interviewiq_dev"
+    db_name = "confida_dev"
+    db_user = "confida_dev"
     db_password = "dev_password"
     
     try:
@@ -66,7 +66,7 @@ def create_dev_database():
 def test_connection():
     """Test database connection."""
     try:
-        db_url = "postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev"
+        db_url = "postgresql://confida_dev:dev_password@localhost:5432/confida_dev"
         engine = create_engine(db_url)
         
         with engine.connect() as conn:
@@ -85,7 +85,7 @@ def test_connection():
 def create_env_file():
     """Create .env file with development configuration."""
     env_content = """# Development Database Configuration
-DATABASE_URL=postgresql://interviewiq_dev:dev_password@localhost:5432/interviewiq_dev
+DATABASE_URL=postgresql://confida_dev:dev_password@localhost:5432/confida_dev
 
 # JWT Configuration
 SECRET_KEY=dev-secret-key-not-for-production
@@ -113,10 +113,10 @@ TEMPERATURE=0.7
 
 def main():
     """Main setup function."""
-    print("🚀 Setting up InterviewIQ development database...")
+    print("🚀 Setting up Confida development database...")
     print("📋 This will set up PostgreSQL as the default development database")
-    print("   Database: interviewiq_dev")
-    print("   User: interviewiq_dev")
+    print("   Database: confida_dev")
+    print("   User: confida_dev")
     print("   Password: dev_password")
     print()
     
@@ -135,7 +135,7 @@ def main():
         print("\n💡 Troubleshooting:")
         print("1. Make sure PostgreSQL is running: brew services start postgresql")
         print("2. Check if you have permission to create databases")
-        print("3. Try running: createdb interviewiq_dev manually")
+        print("3. Try running: createdb confida_dev manually")
         sys.exit(1)
     
     # Test connection

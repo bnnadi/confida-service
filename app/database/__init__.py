@@ -1,5 +1,5 @@
 """
-Database package for InterviewIQ application.
+Database package for Confida application.
 """
 from .connection import Base, get_db, init_db, check_db_connection, engine, SessionLocal
 from . import models

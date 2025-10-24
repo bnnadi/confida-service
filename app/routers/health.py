@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.utils.logger import get_logger
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
-from app.services.unified_ai_service import UnifiedAIService, AsyncUnifiedAIService
+from app.services.ai_service import UnifiedAIService, AsyncUnifiedAIService
 from app.dependencies import get_ai_service, get_async_ai_service
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "InterviewIQ API",
+        "service": "Confida API",
         "version": "1.0.0",
         "monitoring_enabled": settings.MONITORING_ENABLED
     }
@@ -40,7 +40,7 @@ async def detailed_health_check(
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "InterviewIQ API",
+        "service": "Confida API",
         "version": "1.0.0",
         "checks": {}
     }

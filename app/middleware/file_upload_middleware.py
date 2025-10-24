@@ -1,12 +1,12 @@
 from fastapi import Request, Response, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
-import logging
+from app.utils.logger import get_logger
 import time
 import os
 from app.config import get_settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 class FileUploadSecurityMiddleware(BaseHTTPMiddleware):

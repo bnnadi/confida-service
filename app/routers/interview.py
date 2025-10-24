@@ -1,16 +1,15 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
+# SQLAlchemy imports removed as they were unused
 from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
-from app.utils.endpoint_helpers import handle_service_errors
+# handle_service_errors import removed as it was unused
 from app.utils.validators import InputValidator, create_service_query_param
 from app.utils.database_operation_handler import DatabaseOperationHandler
 from app.database.connection import get_db
 from app.database.async_connection import get_async_db
-from app.services.unified_session_service import UnifiedSessionService
+from app.services.session_service import UnifiedSessionService
 from app.middleware.auth_middleware import get_current_user_required
-from app.dependencies import get_ai_service, get_async_ai_service, get_ai_service_dependency
+from app.dependencies import get_ai_service, get_async_ai_service
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
@@ -108,13 +107,13 @@ async def _handle_parse_jd_operation(is_async: bool, **kwargs):
             ai_service = await get_async_ai_service(db)
             if not ai_service:
                 raise HTTPException(status_code=500, detail="AI service not available")
-            return await _handle_async_parse_jd(ai_service, db, **kwargs)
+            return await _handle_parse_jd_unified(ai_service, db, **kwargs)
     else:
         db = next(get_db())
         ai_service = get_ai_service(db)
         if not ai_service:
             raise HTTPException(status_code=500, detail="AI service not available")
-        return await _handle_sync_parse_jd(ai_service, db, **kwargs)
+        return await _handle_parse_jd_unified(ai_service, db, **kwargs)
 
 async def _handle_analyze_answer_operation(is_async: bool, **kwargs):
     """Unified analyze answer handler for both async and sync."""
@@ -132,8 +131,8 @@ async def _handle_analyze_answer_operation(is_async: bool, **kwargs):
         return await _handle_sync_analyze_answer(ai_service, db, **kwargs)
 
 
-async def _handle_async_parse_jd(ai_service, db, request, validated_service, current_user):
-    """Handle async parse JD operation with atomic transaction management."""
+async def _handle_parse_jd_unified(ai_service, db, request, validated_service, current_user):
+    """Unified handler for parse JD operation (works for both async and sync)."""
     from app.utils.logger import get_logger
     from app.exceptions import AIServiceError
     from app.services.question_service import QuestionService
@@ -143,7 +142,6 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
     try:
         # Use intelligent question service
         question_service = QuestionService(db)
-        # Extract user context for intelligent selection
         user_context = {
             'user_id': str(current_user["id"]),
             'previous_questions': [],  # TODO: Get from user history
@@ -165,63 +163,7 @@ async def _handle_async_parse_jd(ai_service, db, request, validated_service, cur
             user_id=current_user["id"],
             role=request.role,
             job_description=request.jobDescription,
-            questions=[q["text"] for q in questions]  # Extract text for storage
-        )
-        
-        logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")
-        
-        # Count database vs AI questions
-        db_count = sum(1 for q in questions if q["source"] == "database")
-        ai_count = sum(1 for q in questions if q["source"] != "database")
-        
-        return ParseJDResponse(
-            questions=[q["text"] for q in questions],
-            role=request.role,
-            jobDescription=request.jobDescription,
-            service_used=validated_service,
-            question_bank_count=db_count,
-            ai_generated_count=ai_count
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to create session with questions: {e}")
-        raise AIServiceError(f"Failed to create interview session: {e}")
-
-
-async def _handle_sync_parse_jd(ai_service, db, request, validated_service, current_user):
-    """Handle sync parse JD operation with atomic transaction management."""
-    from app.utils.logger import get_logger
-    from app.exceptions import AIServiceError
-    from app.services.question_service import QuestionService
-    
-    logger = get_logger(__name__)
-    
-    try:
-        # Use intelligent question service
-        question_service = QuestionService(db)
-        # Extract user context for intelligent selection
-        user_context = {
-            'user_id': str(current_user["id"]),
-            'previous_questions': [],  # TODO: Get from user history
-            'preferred_difficulty': None,  # TODO: Get from user preferences
-            'weak_areas': [],  # TODO: Get from user analytics
-            'strong_areas': []  # TODO: Get from user analytics
-        }
-        
-        questions = question_service.generate_questions(
-            role=request.role,
-            job_description=request.jobDescription,
-            count=10,
-            user_context=user_context
-        )
-        
-        # Create session and store questions in database atomically
-        session_service = UnifiedSessionService(db)
-        session, session_questions = await session_service.create_session_with_questions_atomic(
-            user_id=current_user["id"],
-            role=request.role,
-            job_description=request.jobDescription,
-            questions=[q["text"] for q in questions]  # Extract text for storage
+            questions=[q["text"] for q in questions]
         )
         
         logger.info(f"Successfully created session {session.id} with {len(session_questions)} questions")

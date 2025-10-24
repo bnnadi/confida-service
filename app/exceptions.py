@@ -1,16 +1,16 @@
 """
-Custom exception hierarchy for InterviewIQ application.
+Custom exception hierarchy for Confida application.
 """
 
 from typing import Dict, Any
 
-class InterviewIQException(Exception):
-    """Base exception for InterviewIQ application."""
+class ConfidaException(Exception):
+    """Base exception for Confida application."""
     def __init__(self, message: str, context: Dict[str, Any] = None):
         super().__init__(message)
         self.context = context or {}
 
-class AIServiceError(InterviewIQException):
+class AIServiceError(ConfidaException):
     """Base exception for AI service errors."""
     pass
 
@@ -22,15 +22,15 @@ class InvalidResponseError(AIServiceError):
     """Raised when AI response cannot be parsed."""
     pass
 
-class RateLimitExceededError(InterviewIQException):
+class RateLimitExceededError(ConfidaException):
     """Raised when rate limit is exceeded."""
     pass
 
-class ConfigurationError(InterviewIQException):
+class ConfigurationError(ConfidaException):
     """Raised when there are configuration issues."""
     pass
 
-class AdminError(InterviewIQException):
+class AdminError(ConfidaException):
     """Base exception for admin-related errors."""
     pass
 
