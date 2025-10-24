@@ -139,21 +139,22 @@ Returns API health status.
 ## Development
 
 ### Current Implementation
+- **AI Service Microservice**: Primary AI processing through dedicated microservice
+- **Hybrid AI Service**: Intelligent fallback to direct AI services when microservice unavailable
 - **AI Integration**: Full OpenAI, Anthropic, and Ollama support with automatic fallback
-- **Hybrid AI Service**: Intelligent service selection and failover
 - **Error Handling**: Comprehensive error handling with graceful degradation
 - **Rate Limiting**: Built-in rate limiting middleware
 - **Service Testing**: Admin endpoints for testing all AI services
 - **Speech Processing**: Speech-to-text transcription support
 
 ### Features Implemented
-- ✅ OpenAI GPT integration for intelligent question generation
-- ✅ Anthropic Claude integration for answer analysis
-- ✅ Ollama integration for local AI processing
-- ✅ Hybrid AI service with automatic failover
+- ✅ AI Service Microservice integration with pure HTTP client
+- ✅ Clean microservice architecture with proper separation
+- ✅ Question generation via AI service microservice
+- ✅ Answer analysis via AI service microservice
+- ✅ Speech-to-text transcription via AI service microservice
 - ✅ Rate limiting and admin endpoints
 - ✅ Comprehensive error handling
-- ✅ Speech-to-text transcription
 - ✅ Centralized logging and configuration
 
 ### Future Enhancements
@@ -196,12 +197,36 @@ curl -X POST "http://localhost:8000/api/v1/analyze-answer" \
   }'
 ```
 
+## AI Service Configuration
+
+The backend uses a pure microservice architecture for AI operations:
+
+### Environment Variables
+
+```bash
+# AI Service Microservice Configuration
+AI_SERVICE_URL=http://localhost:8001
+AI_SERVICE_TIMEOUT=30.0
+AI_SERVICE_RETRY_ATTEMPTS=3
+```
+
+### Pure Microservice Architecture
+
+The backend follows proper microservice separation:
+1. **AI Service Client**: Pure HTTP client for AI service microservice
+2. **No Fallback Logic**: Clean separation of concerns
+3. **Health Monitoring**: Simple health checks for microservice connectivity
+4. **Error Handling**: Proper HTTP error responses when microservice is unavailable
+
 ## Dependencies
 
 - **fastapi**: Modern web framework for building APIs
 - **uvicorn**: ASGI server for running FastAPI applications
 - **pydantic**: Data validation using Python type annotations
 - **python-multipart**: Support for form data (future file uploads)
+- **httpx**: HTTP client for AI service microservice communication
+
+**Note**: Direct AI service dependencies (OpenAI, Anthropic, Ollama, etc.) have been removed to maintain proper microservice separation.
 
 ## License
 

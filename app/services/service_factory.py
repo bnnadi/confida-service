@@ -37,16 +37,9 @@ class ServiceFactory:
         try:
             # Store service class names for lazy initialization to avoid circular imports
             service_class_names = {
-                'ai_service': 'app.services.ai_service.AIService',
+                'ai_client': 'app.services.ai_client.AIServiceClient',
                 'analytics_service': 'app.services.analytics_service.AnalyticsService',
-                'vector_service': 'app.services.vector_service.VectorService',
-                'embedding_service': 'app.services.embedding_service.EmbeddingService',
-                'ollama_service': 'app.services.ollama_service.OllamaService',
-                'speech_service': 'app.services.speech_service.SpeechToTextService',
                 'file_service': 'app.services.file_service.FileService',
-                'multi_agent_scoring': 'app.services.multi_agent_scoring.MultiAgentScoringService',
-                'smart_token_optimizer': 'app.services.smart_token_optimizer.SmartTokenOptimizer',
-                'cost_tracker': 'app.services.cost_tracker.CostTracker',
                 'health_service': 'app.services.health_service.HealthService',
                 'scenario_service': 'app.services.scenario_service.ScenarioService',
                 'auth_service': 'app.services.auth_service.AuthService',
@@ -89,7 +82,7 @@ class ServiceFactory:
             # Create service instance with appropriate parameters
             if service_name in ['file_service'] and db_session:
                 instance = service_class(db_session)
-            elif service_name in ['ai_service', 'analytics_service'] and db_session:
+            elif service_name in ['analytics_service'] and db_session:
                 instance = service_class(db_session)
             else:
                 instance = service_class()
@@ -127,10 +120,7 @@ class ServiceFactory:
         
         try:
             # Create async service instance
-            if service_name == 'ai_service' and async_db_session:
-                from app.services.ai_service import AsyncAIService
-                instance = AsyncAIService(async_db_session)
-            elif service_name in ['ai_service', 'analytics_service'] and async_db_session:
+            if service_name in ['analytics_service'] and async_db_session:
                 instance = service_class(async_db_session)
             else:
                 instance = service_class()
@@ -174,41 +164,17 @@ def get_async_service(service_name: str, async_db_session: Optional[AsyncSession
     """Get an async service instance."""
     return service_factory.get_async_service(service_name, async_db_session)
 
-def get_ai_service(db_session: Optional[Session] = None) -> Any:
-    """Get AI service instance."""
-    return get_service('ai_service', db_session)
-
-def get_async_ai_service(async_db_session: Optional[AsyncSession] = None) -> Any:
-    """Get async AI service instance."""
-    return get_async_service('ai_service', async_db_session)
+def get_ai_client() -> Any:
+    """Get AI service client instance."""
+    return get_service('ai_client')
 
 def get_analytics_service(db_session: Optional[Session] = None) -> Any:
     """Get analytics service instance."""
     return get_service('analytics_service', db_session)
 
-def get_vector_service() -> Any:
-    """Get vector service instance."""
-    return get_service('vector_service')
-
-def get_embedding_service() -> Any:
-    """Get embedding service instance."""
-    return get_service('embedding_service')
-
-def get_ollama_service() -> Any:
-    """Get Ollama service instance."""
-    return get_service('ollama_service')
-
-def get_speech_service() -> Any:
-    """Get speech service instance."""
-    return get_service('speech_service')
-
 def get_file_service(db_session: Session) -> Any:
     """Get file service instance."""
     return get_service('file_service', db_session)
-
-def get_multi_agent_scoring_service() -> Any:
-    """Get multi-agent scoring service instance."""
-    return get_service('multi_agent_scoring')
 
 def get_validation_service() -> Any:
     """Get validation service instance."""
@@ -233,14 +199,6 @@ def get_health_service() -> Any:
 def get_scenario_service() -> Any:
     """Get scenario service instance."""
     return get_service('scenario_service')
-
-def get_smart_token_optimizer() -> Any:
-    """Get smart token optimizer instance."""
-    return get_service('smart_token_optimizer')
-
-def get_cost_tracker() -> Any:
-    """Get cost tracker instance."""
-    return get_service('cost_tracker')
 
 # Initialize factory on import
 service_factory.initialize()

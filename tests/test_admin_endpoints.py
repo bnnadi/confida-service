@@ -9,25 +9,26 @@ from app.main import app
 
 def test_admin_services_status_success(client: TestClient):
     """Test successful admin services status endpoint."""
-    # Mock AI service
-    mock_ai_service = MagicMock()
-    mock_ai_service.get_available_services.return_value = {"ollama": True, "openai": False, "anthropic": True}
-    mock_ai_service.get_service_priority.return_value = ["ollama", "anthropic", "openai"]
+    # Mock AI service client
+    mock_ai_client = MagicMock()
+    mock_ai_client.health_check.return_value = True
+    mock_ai_client.base_url = "http://localhost:8001"
+    mock_ai_client.timeout = 30.0
     
     # Override the dependency
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: mock_ai_service
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
     
     try:
         response = client.get("/api/v1/admin/services/status")
         
         assert response.status_code == 200
         data = response.json()
-        assert "available_services" in data
-        assert "service_priority" in data
+        assert "ai_service_microservice" in data
         assert "configuration" in data
-        assert data["available_services"]["ollama"] is True
-        assert data["available_services"]["openai"] is False
+        assert data["ai_service_microservice"]["status"] == "healthy"
+        assert data["ai_service_microservice"]["url"] == "http://localhost:8001"
+        assert data["configuration"]["ai_service_url"] == "http://localhost:8001"
     finally:
         # Clean up the override
         client.app.dependency_overrides.clear()
@@ -36,8 +37,8 @@ def test_admin_services_status_success(client: TestClient):
 def test_admin_services_status_no_ai_service(client: TestClient):
     """Test admin services status when AI service is not initialized."""
     # Override the dependency to return None
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: None
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: None
     
     try:
         response = client.get("/api/v1/admin/services/status")
@@ -52,37 +53,35 @@ def test_admin_services_status_no_ai_service(client: TestClient):
 
 def test_admin_services_test_success(client: TestClient):
     """Test successful admin services test endpoint."""
-    # Mock AI service
-    mock_ai_service = MagicMock()
-    mock_tester = MagicMock()
-    mock_tester.test_all_services.return_value = {
-        "ollama": {"status": "success", "response_time": 0.5},
-        "openai": {"status": "error", "error": "API key not configured"}
-    }
+    # Mock AI service client
+    mock_ai_client = MagicMock()
+    mock_ai_client.health_check.return_value = True
+    mock_ai_client.base_url = "http://localhost:8001"
+    mock_ai_client.timeout = 30.0
     
     # Override the dependency
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: mock_ai_service
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
     
-    with patch('app.utils.service_tester.ServiceTester', return_value=mock_tester):
-        try:
-            response = client.post("/api/v1/admin/services/test")
-            
-            assert response.status_code == 200
-            data = response.json()
-            assert "test_results" in data
-            assert "ollama" in data["test_results"]
-            assert "openai" in data["test_results"]
-        finally:
-            # Clean up the override
-            client.app.dependency_overrides.clear()
+    try:
+        response = client.post("/api/v1/admin/services/test")
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "test_results" in data
+        assert "ai_service_microservice" in data["test_results"]
+        assert data["test_results"]["ai_service_microservice"]["status"] == "healthy"
+        assert data["test_results"]["overall_status"] == "healthy"
+    finally:
+        # Clean up the override
+        client.app.dependency_overrides.clear()
 
 
 def test_admin_services_test_no_ai_service(client: TestClient):
     """Test admin services test when AI service is not initialized."""
     # Override the dependency to return None
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: None
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: None
     
     try:
         response = client.post("/api/v1/admin/services/test")
@@ -135,12 +134,12 @@ def test_admin_stats_endpoint(client: TestClient):
 def test_admin_services_status_exception_handling(client: TestClient):
     """Test admin services status with exception handling."""
     # Mock AI service that raises an exception
-    mock_ai_service = MagicMock()
-    mock_ai_service.get_available_services.side_effect = Exception("Service error")
+    mock_ai_client = MagicMock()
+    mock_ai_client.get_available_services.side_effect = Exception("Service error")
     
     # Override the dependency
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: mock_ai_service
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
     
     try:
         response = client.get("/api/v1/admin/services/status")
@@ -181,8 +180,8 @@ def test_admin_stats_exception_handling(client: TestClient):
 def test_admin_error_response_format(client: TestClient):
     """Test that admin error responses follow consistent format."""
     # Override the dependency to return None
-    from app.dependencies import get_ai_service
-    client.app.dependency_overrides[get_ai_service] = lambda: None
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: None
     
     try:
         response = client.get("/api/v1/admin/services/status")

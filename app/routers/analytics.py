@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.services.database_service import get_db
 from app.services.analytics_service import AnalyticsService
-from app.services.cost_tracker import CostTracker
-from app.services.smart_token_optimizer import SmartTokenOptimizer
+# Note: CostTracker and SmartTokenOptimizer removed - using pure microservice architecture
 from app.models.analytics_models import (
     PerformanceMetrics, SessionAnalytics, TrendAnalysis, ReportRequest, 
     ReportResponse, AnalyticsSummary, PerformanceComparison, AnalyticsFilter,
@@ -22,7 +21,7 @@ from app.database.question_database_models import (
     QuestionGenerationLog, QuestionTemplate, QuestionMatch, QuestionFeedback
 )
 from sqlalchemy import func, desc, and_
-from app.dependencies import get_current_user_required
+from app.middleware.auth_middleware import get_current_user_required
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -427,7 +426,7 @@ async def get_dashboard_metrics(
 async def get_question_generation_statistics(
     days: int = Query(7, description="Number of days to analyze"),
     current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_db)
 ):
     """Get comprehensive statistics about question generation methods."""
     try:
@@ -484,7 +483,7 @@ async def get_question_generation_statistics(
 async def get_database_performance_metrics(
     days: int = Query(7, description="Number of days to analyze"),
     current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_db)
 ):
     """Get database performance metrics for question retrieval."""
     try:

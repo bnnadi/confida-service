@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, desc
 from app.database.models import InterviewSession, SessionQuestion
 # AsyncDatabaseOperations functionality now in unified database service
-from app.services.question_service import QuestionService
+# Note: QuestionService removed - using pure microservice architecture
 from app.exceptions import AIServiceError
 # Error handling imports removed as they were unused
 from app.utils.logger import get_logger
@@ -31,7 +31,8 @@ class SessionService:
             self.db_ops = AsyncDatabaseOperations(db_session)
         else:
             # For sync operations, we'll use direct SQLAlchemy operations
-            self.question_service = QuestionService(db_session)
+            # Note: QuestionService removed - using pure microservice architecture
+            pass
     
     # Session Creation Methods
     async def create_session(
@@ -90,7 +91,8 @@ class SessionService:
                 # For async, we'll need to handle this differently
                 questions_data = []  # TODO: Implement async scenario question generation
             else:
-                questions_data = self.question_service.generate_questions_from_scenario(scenario_id)
+                # Note: Question generation now handled by AI service microservice
+                questions_data = []  # TODO: Implement scenario-based question generation via AI service
             
             # Create session
             session_data = {

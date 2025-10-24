@@ -112,7 +112,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, sessions, auth, files, speech, vector_search, cache, health, analytics, scoring
+    from app.routers import interview, sessions, auth, files, speech, cache, health, analytics, scoring
+    from app.utils.logger import get_logger
+    logger = get_logger(__name__)
     
     # Core routers (always enabled)
     routers = [
@@ -121,7 +123,7 @@ def load_routers():
         ("sessions", sessions.router),
         ("files", files.router),
         ("speech", speech.router),
-        ("vector_search", vector_search.router),
+        # Note: vector_search router removed - services deleted
         ("cache", cache.router),
         ("health", health.router),
         ("analytics", analytics.router),

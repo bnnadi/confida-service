@@ -10,8 +10,7 @@ from app.utils.metrics import metrics, get_metrics_output
 from app.config import get_settings
 from app.utils.logger import get_logger
 from app.services.database_service import get_db, get_async_db
-from app.services.ai_service import AIService, AsyncAIService
-from app.dependencies import get_ai_service, get_async_ai_service
+from app.dependencies import get_ai_client_dependency
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -261,19 +260,20 @@ def _calculate_performance_indicators(stats: Dict[str, Any]) -> Dict[str, Any]:
 
 # AI Service Health Endpoints
 @router.get("/ai-services", response_model=None)
-async def get_ai_service_health(ai_service = Depends(get_ai_service)):
-    """Get comprehensive AI service health status."""
+async def get_ai_service_health(ai_client = Depends(get_ai_client_dependency)):
+    """Get AI service microservice health status."""
     try:
-        if not ai_service:
-            raise HTTPException(status_code=503, detail="AI service not available")
+        if not ai_client:
+            raise HTTPException(status_code=503, detail="AI service unavailable")
         
-        health_status = ai_service.get_service_health()
+        is_healthy = await ai_client.health_check()
         
         return {
-            "overall_status": "healthy" if all(
-                service["status"] == "healthy" for service in health_status.values()
-            ) else "degraded",
-            "services": health_status,
+            "overall_status": "healthy" if is_healthy else "unhealthy",
+            "ai_service_microservice": {
+                "status": "healthy" if is_healthy else "unhealthy",
+                "url": ai_client.base_url
+            },
             "timestamp": datetime.utcnow().isoformat(),
             "service": "ai-health"
         }
@@ -284,17 +284,22 @@ async def get_ai_service_health(ai_service = Depends(get_ai_service)):
 
 
 @router.get("/ai-services/detailed")
-async def get_detailed_ai_health(ai_service = Depends(get_ai_service)):
-    """Get detailed AI service diagnostics and health information."""
+async def get_detailed_ai_health(ai_client = Depends(get_ai_client_dependency)):
+    """Get detailed AI service microservice diagnostics and health information."""
     try:
-        if not ai_service:
-            raise HTTPException(status_code=503, detail="AI service not available")
+        if not ai_client:
+            raise HTTPException(status_code=503, detail="AI service unavailable")
         
         # Get detailed health information
-        detailed_health = await ai_service.health_check()
+        is_healthy = await ai_client.health_check()
         
         return {
-            "detailed_health": detailed_health,
+            "ai_service_microservice": {
+                "status": "healthy" if is_healthy else "unhealthy",
+                "url": ai_client.base_url,
+                "timeout": ai_client.timeout,
+                "retry_attempts": ai_client.retry_attempts
+            },
             "timestamp": datetime.utcnow().isoformat(),
             "service": "ai-health-detailed"
         }
@@ -304,27 +309,4 @@ async def get_detailed_ai_health(ai_service = Depends(get_ai_service)):
         raise HTTPException(status_code=500, detail=f"Detailed AI health check failed: {str(e)}")
 
 
-@router.post("/ai-services/recovery")
-async def trigger_ai_service_recovery(ai_service = Depends(get_ai_service)):
-    """Manually trigger AI service recovery and circuit breaker reset."""
-    try:
-        if not ai_service:
-            raise HTTPException(status_code=503, detail="AI service not available")
-        
-        # Reset circuit breakers
-        for service_name, circuit_breaker in ai_service.circuit_breakers.items():
-            circuit_breaker.reset()
-            ai_service.service_health[service_name].status = "healthy"
-            ai_service.service_health[service_name].consecutive_failures = 0
-        
-        logger.info("AI service recovery triggered - circuit breakers reset")
-        
-        return {
-            "message": "AI service recovery completed",
-            "timestamp": datetime.utcnow().isoformat(),
-            "services_reset": list(ai_service.circuit_breakers.keys())
-        }
-        
-    except Exception as e:
-        logger.error(f"AI service recovery failed: {e}")
-        raise HTTPException(status_code=500, detail=f"AI service recovery failed: {str(e)}")
+# Note: AI service recovery endpoint removed - not needed for pure microservice approach

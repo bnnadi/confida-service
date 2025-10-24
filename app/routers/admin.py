@@ -3,7 +3,7 @@ from app.config import settings
 from app.utils.service_tester import ServiceTester
 # handle_service_errors import removed as it was unused
 # Exception imports removed as they were unused
-from app.dependencies import get_ai_service
+from app.dependencies import get_ai_client_dependency
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -11,28 +11,28 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 @router.get("/services/status")
-async def get_services_status(ai_service=Depends(get_ai_service)):
+async def get_services_status(ai_client=Depends(get_ai_client_dependency)):
     """
-    Get detailed status of all AI services.
+    Get detailed status of AI service microservice.
     """
-    if ai_service is None:
-        logger.warning("AI service not initialized when getting service status")
+    if ai_client is None:
+        logger.warning("AI service client not initialized when getting service status")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI service not initialized"
         )
     
     try:
+        is_healthy = await ai_client.health_check()
         return {
-            "available_services": ai_service.get_available_services(),
-            "service_priority": ai_service.get_service_priority(),
+            "ai_service_microservice": {
+                "status": "healthy" if is_healthy else "unhealthy",
+                "url": ai_client.base_url
+            },
             "configuration": {
-                "ollama_url": settings.OLLAMA_BASE_URL,
-                "ollama_model": settings.OLLAMA_MODEL,
-                "openai_configured": settings.is_openai_configured,
-                "openai_model": settings.OPENAI_MODEL,
-                "anthropic_configured": settings.is_anthropic_configured,
-                "anthropic_model": settings.ANTHROPIC_MODEL
+                "ai_service_url": settings.AI_SERVICE_URL,
+                "ai_service_timeout": settings.AI_SERVICE_TIMEOUT,
+                "ai_service_retry_attempts": settings.AI_SERVICE_RETRY_ATTEMPTS
             }
         }
     except Exception as e:
@@ -43,20 +43,30 @@ async def get_services_status(ai_service=Depends(get_ai_service)):
         )
 
 @router.post("/services/test")
-async def test_services(ai_service=Depends(get_ai_service)):
+async def test_services(ai_client=Depends(get_ai_client_dependency)):
     """
-    Test all configured AI services.
+    Test AI service microservice.
     """
-    if ai_service is None:
-        logger.warning("AI service not initialized when testing services")
+    if ai_client is None:
+        logger.warning("AI service client not initialized when testing services")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI service not initialized"
         )
     
     try:
-        tester = ServiceTester(ai_service, settings)
-        test_results = tester.test_all_services()
+        # Test AI service microservice
+        ai_service_healthy = await ai_client.health_check()
+        
+        test_results = {
+            "ai_service_microservice": {
+                "status": "healthy" if ai_service_healthy else "unhealthy",
+                "url": ai_client.base_url,
+                "timeout": ai_client.timeout
+            },
+            "overall_status": "healthy" if ai_service_healthy else "unhealthy"
+        }
+        
         return {"test_results": test_results}
     except Exception as e:
         logger.error(f"Error testing services: {e}")
@@ -96,6 +106,8 @@ async def get_configuration():
             "version": "1.0.0",  # This would come from settings
             "features": {
                 "ai_services": {
+                    "ai_service_microservice_enabled": bool(settings.AI_SERVICE_URL),
+                    "ai_service_fallback_enabled": settings.AI_SERVICE_FALLBACK_ENABLED,
                     "ollama_enabled": bool(settings.OLLAMA_BASE_URL),
                     "openai_enabled": settings.is_openai_configured,
                     "anthropic_enabled": settings.is_anthropic_configured

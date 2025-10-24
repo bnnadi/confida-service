@@ -3,35 +3,31 @@ Service testing utility to eliminate repetitive testing logic.
 """
 
 from typing import Dict, Any
-from app.services.ai_service import AIService
-
+# Note: AIService removed - using pure microservice architecture
 
 class ServiceTester:
     """Utility class for testing AI services with consistent error handling."""
     
-    def __init__(self, ai_service: AIService, settings):
-        self.ai_service = ai_service
+    def __init__(self, ai_client, settings):
+        self.ai_client = ai_client
         self.settings = settings
         self.test_data = ("Software Engineer", "We are looking for a software engineer with Python experience.")
     
-    def test_service(self, service_name: str) -> Dict[str, Any]:
-        """Test a single service with consistent error handling."""
+    async def test_service(self, service_name: str) -> Dict[str, Any]:
+        """Test AI service microservice with consistent error handling."""
         try:
-            test_response = self.ai_service.generate_interview_questions(
-                *self.test_data,
-                preferred_service=service_name
-            )
-            return {"status": "success", "questions_count": len(test_response.questions)}
+            # Test AI service microservice health
+            is_healthy = await self.ai_client.health_check()
+            if is_healthy:
+                return {"status": "success", "service": "ai_service_microservice"}
+            else:
+                return {"status": "error", "error": "AI service microservice unhealthy"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
-    def test_all_services(self) -> Dict[str, Any]:
-        """Test all configured services."""
+    async def test_all_services(self) -> Dict[str, Any]:
+        """Test AI service microservice."""
         results = {}
-        services = ["ollama", "openai", "anthropic"]
-        
-        for service in services:
-            if self.settings.is_service_configured(service):
-                results[service] = self.test_service(service)
-        
+        # Test AI service microservice
+        results["ai_service_microservice"] = await self.test_service("ai_service_microservice")
         return results

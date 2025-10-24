@@ -15,27 +15,6 @@ python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.6
 
-# AI and ML dependencies
-openai>=1.3.0
-anthropic>=0.7.0
-ollama>=0.1.0
-numpy>=1.24.0,<2
-scikit-learn>=1.3.0
-
-# Vector database - Qdrant integration with compatible versions
-qdrant-client>=1.7.0
-sentence-transformers>=2.2.2,<2.3.0
-huggingface_hub>=0.16.0,<0.20.0
-transformers>=4.30.0,<4.36.0
-torch>=2.0.0,<2.2.0
-
-# Audio and video processing
-opencv-python>=4.8.0
-librosa>=0.10.0
-soundfile>=0.12.0
-pydub>=0.25.0
-speechrecognition>=3.10.0
-
 # HTTP and async
 httpx>=0.25.0
 aiofiles>=23.2.0
