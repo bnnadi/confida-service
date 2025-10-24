@@ -6,7 +6,7 @@ from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerReq
 from app.utils.validators import InputValidator, create_service_query_param
 # DatabaseOperationHandler removed - using unified database service
 from app.services.database_service import get_db, get_async_db
-from app.services.session_service import UnifiedSessionService
+from app.services.session_service import SessionService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_service, get_async_ai_service
 from app.config import get_settings
@@ -157,7 +157,7 @@ async def _handle_parse_jd_unified(ai_service, db, request, validated_service, c
         )
         
         # Create session and store questions in database atomically
-        session_service = UnifiedSessionService(db)
+        session_service = SessionService(db)
         session, session_questions = await session_service.create_session_with_questions_atomic(
             user_id=current_user["id"],
             role=request.role,

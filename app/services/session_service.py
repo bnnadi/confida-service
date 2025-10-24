@@ -20,8 +20,8 @@ from datetime import datetime
 logger = get_logger(__name__)
 
 
-class UnifiedSessionService:
-    """Unified service for managing interview sessions with both sync and async support."""
+class SessionService:
+    """Service for managing interview sessions with both sync and async support."""
     
     def __init__(self, db_session: Union[Session, AsyncSession]):
         self.db_session = db_session

@@ -3,13 +3,13 @@ Service testing utility to eliminate repetitive testing logic.
 """
 
 from typing import Dict, Any
-from app.services.ai_service import UnifiedAIService
+from app.services.ai_service import AIService
 
 
 class ServiceTester:
     """Utility class for testing AI services with consistent error handling."""
     
-    def __init__(self, ai_service: UnifiedAIService, settings):
+    def __init__(self, ai_service: AIService, settings):
         self.ai_service = ai_service
         self.settings = settings
         self.test_data = ("Software Engineer", "We are looking for a software engineer with Python experience.")

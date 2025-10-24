@@ -14,7 +14,7 @@ from app.database.models import Question, SessionQuestion
 
 
 class TestQuestionService:
-        """Test cases for QuestionService."""
+    """Test cases for QuestionService."""
     
     @pytest.fixture
     def mock_db_session(self):

@@ -88,7 +88,7 @@ class CircuitBreaker:
             self.state = ServiceStatus.CIRCUIT_OPEN
             logger.warning(f"Circuit breaker: Service marked as unhealthy after {self.failure_count} failures")
 
-class UnifiedAIService:
+class AIService:
     """
     Unified AI service with comprehensive error handling and retry logic.
     
@@ -388,7 +388,7 @@ class UnifiedAIService:
 
 
 # Async version of the unified AI service
-class AsyncUnifiedAIService(UnifiedAIService):
+class AsyncAIService(AIService):
     """Async version of the unified AI service."""
     
     def __init__(self, db_session=None):

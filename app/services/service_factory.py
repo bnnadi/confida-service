@@ -1,5 +1,5 @@
 """
-Unified Service Factory for Confida
+Service Factory for Confida
 
 This factory consolidates all service instantiation patterns into a single,
 consistent service factory that eliminates redundancy and provides a clean
@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 T = TypeVar('T')
 
 class ServiceFactory:
-    """Unified service factory for creating and managing service instances."""
+    """Service factory for creating and managing service instances."""
     
     def __init__(self):
         self._services: Dict[str, Any] = {}
@@ -37,9 +37,9 @@ class ServiceFactory:
         try:
             # Store service class names for lazy initialization to avoid circular imports
             service_class_names = {
-                'ai_service': 'app.services.ai_service.UnifiedAIService',
-                'analytics_service': 'app.services.analytics_service.UnifiedAnalyticsService',
-                'vector_service': 'app.services.vector_service.UnifiedVectorService',
+                'ai_service': 'app.services.ai_service.AIService',
+                'analytics_service': 'app.services.analytics_service.AnalyticsService',
+                'vector_service': 'app.services.vector_service.VectorService',
                 'embedding_service': 'app.services.embedding_service.EmbeddingService',
                 'ollama_service': 'app.services.ollama_service.OllamaService',
                 'speech_service': 'app.services.speech_service.SpeechToTextService',
@@ -128,8 +128,8 @@ class ServiceFactory:
         try:
             # Create async service instance
             if service_name == 'ai_service' and async_db_session:
-                from app.services.ai_service import AsyncUnifiedAIService
-                instance = AsyncUnifiedAIService(async_db_session)
+                from app.services.ai_service import AsyncAIService
+                instance = AsyncAIService(async_db_session)
             elif service_name in ['ai_service', 'analytics_service'] and async_db_session:
                 instance = service_class(async_db_session)
             else:

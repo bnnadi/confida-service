@@ -10,7 +10,7 @@ from app.utils.metrics import metrics, get_metrics_output
 from app.config import get_settings
 from app.utils.logger import get_logger
 from app.services.database_service import get_db, get_async_db
-from app.services.ai_service import UnifiedAIService, AsyncUnifiedAIService
+from app.services.ai_service import AIService, AsyncAIService
 from app.dependencies import get_ai_service, get_async_ai_service
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -261,7 +261,7 @@ def _calculate_performance_indicators(stats: Dict[str, Any]) -> Dict[str, Any]:
 
 # AI Service Health Endpoints
 @router.get("/ai-services", response_model=None)
-async def get_ai_service_health(ai_service: UnifiedAIService = Depends(get_ai_service)):
+async def get_ai_service_health(ai_service = Depends(get_ai_service)):
     """Get comprehensive AI service health status."""
     try:
         if not ai_service:
@@ -284,7 +284,7 @@ async def get_ai_service_health(ai_service: UnifiedAIService = Depends(get_ai_se
 
 
 @router.get("/ai-services/detailed")
-async def get_detailed_ai_health(ai_service: UnifiedAIService = Depends(get_ai_service)):
+async def get_detailed_ai_health(ai_service = Depends(get_ai_service)):
     """Get detailed AI service diagnostics and health information."""
     try:
         if not ai_service:
@@ -305,7 +305,7 @@ async def get_detailed_ai_health(ai_service: UnifiedAIService = Depends(get_ai_s
 
 
 @router.post("/ai-services/recovery")
-async def trigger_ai_service_recovery(ai_service: UnifiedAIService = Depends(get_ai_service)):
+async def trigger_ai_service_recovery(ai_service = Depends(get_ai_service)):
     """Manually trigger AI service recovery and circuit breaker reset."""
     try:
         if not ai_service:

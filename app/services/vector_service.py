@@ -15,7 +15,7 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class UnifiedVectorService:
+class VectorService:
     """Unified service for vector database operations with integrated storage engine and content management."""
     
     def __init__(self):
@@ -555,4 +555,4 @@ class UnifiedVectorService:
 
 
 # Global vector service instance
-unified_vector_service = UnifiedVectorService()
+vector_service = VectorService()
