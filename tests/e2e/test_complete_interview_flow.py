@@ -15,7 +15,7 @@ class TestCompleteInterviewFlow:
     """Test cases for complete interview flows."""
     
     @pytest.mark.e2e
-    def test_complete_interview_session_flow(self, client, sample_user, mock_ai_service):
+    def test_complete_interview_session_flow(self, client, sample_user, mock_ai_client):
         """Test complete interview session flow from creation to completion."""
         # Step 1: Create interview session
         session_data = {
@@ -23,7 +23,7 @@ class TestCompleteInterviewFlow:
             "job_description": "We are looking for a Senior Python Developer with 5+ years of experience in Django, Flask, and API development. The ideal candidate should have strong debugging skills and experience with database optimization."
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create session
             create_response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -92,7 +92,7 @@ class TestCompleteInterviewFlow:
             assert final_session["completed_questions"] == len(questions_data["questions"])
     
     @pytest.mark.e2e
-    def test_multiple_sessions_per_user(self, client, sample_user, mock_ai_service):
+    def test_multiple_sessions_per_user(self, client, sample_user, mock_ai_client):
         """Test creating and managing multiple sessions for a single user."""
         # Create first session
         session1_data = {
@@ -100,7 +100,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create first session
             response1 = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -139,7 +139,7 @@ class TestCompleteInterviewFlow:
             assert session2["id"] in session_ids
     
     @pytest.mark.e2e
-    def test_question_bank_integration_flow(self, client, sample_user, mock_ai_service, mock_question_bank_service):
+    def test_question_bank_integration_flow(self, client, sample_user, mock_ai_client, mock_question_bank_service):
         """Test complete flow with question bank integration."""
         # Step 1: Create session (should use question bank)
         session_data = {
@@ -147,8 +147,8 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
-            with patch('app.services.hybrid_ai_service.QuestionBankService', return_value=mock_question_bank_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
+            with patch('app.services.session_service.SessionService', return_value=mock_question_bank_service):
                 # Create session
                 create_response = client.post(
                     f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -192,7 +192,7 @@ class TestCompleteInterviewFlow:
                 assert "questions_by_difficulty" in question_bank_stats
     
     @pytest.mark.e2e
-    def test_error_recovery_flow(self, client, sample_user, mock_ai_service):
+    def test_error_recovery_flow(self, client, sample_user, mock_ai_client):
         """Test error recovery and resilience in the interview flow."""
         # Step 1: Create session
         session_data = {
@@ -200,7 +200,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create session
             create_response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -247,7 +247,7 @@ class TestCompleteInterviewFlow:
             assert session_details["status"] == "active"
     
     @pytest.mark.e2e
-    def test_concurrent_session_operations(self, client, sample_user, mock_ai_service):
+    def test_concurrent_session_operations(self, client, sample_user, mock_ai_client):
         """Test concurrent operations on the same session."""
         # Step 1: Create session
         session_data = {
@@ -255,7 +255,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create session
             create_response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -287,7 +287,7 @@ class TestCompleteInterviewFlow:
             assert final_session["status"] == "paused"
     
     @pytest.mark.e2e
-    def test_session_lifecycle_management(self, client, sample_user, mock_ai_service):
+    def test_session_lifecycle_management(self, client, sample_user, mock_ai_client):
         """Test complete session lifecycle from creation to deletion."""
         # Step 1: Create session
         session_data = {
@@ -295,7 +295,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create session
             create_response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -343,7 +343,7 @@ class TestCompleteInterviewFlow:
             assert get_response.status_code == 404
     
     @pytest.mark.e2e
-    def test_data_consistency_across_operations(self, client, sample_user, mock_ai_service):
+    def test_data_consistency_across_operations(self, client, sample_user, mock_ai_client):
         """Test data consistency across multiple operations."""
         # Step 1: Create session
         session_data = {
@@ -351,7 +351,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create session
             create_response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -406,7 +406,7 @@ class TestCompleteInterviewFlow:
             assert final_session["total_questions"] == questions_data["total"]
     
     @pytest.mark.e2e
-    def test_performance_under_load(self, client, sample_user, mock_ai_service):
+    def test_performance_under_load(self, client, sample_user, mock_ai_client):
         """Test system performance under multiple concurrent requests."""
         # Step 1: Create multiple sessions concurrently
         session_data = {
@@ -414,7 +414,7 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Create 5 sessions
             sessions = []
             for i in range(5):

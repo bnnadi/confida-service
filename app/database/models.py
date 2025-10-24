@@ -5,7 +5,8 @@ from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, 
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.database.connection import Base
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 import uuid
 
 class User(Base):

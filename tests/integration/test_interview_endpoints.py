@@ -14,10 +14,10 @@ class TestInterviewEndpoints:
     """Test cases for interview API endpoints."""
     
     @pytest.mark.integration
-    def test_parse_job_description_success(self, client, sample_parse_request, mock_ai_service):
+    def test_parse_job_description_success(self, client, sample_parse_request, mock_ai_client):
         """Test successful job description parsing."""
         # Arrange
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=sample_parse_request)
             
@@ -65,10 +65,10 @@ class TestInterviewEndpoints:
         assert "detail" in data
     
     @pytest.mark.integration
-    def test_analyze_answer_success(self, client, sample_analyze_request, mock_ai_service):
+    def test_analyze_answer_success(self, client, sample_analyze_request, mock_ai_client):
         """Test successful answer analysis."""
         # Arrange
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=sample_analyze_request)
             
@@ -127,10 +127,10 @@ class TestInterviewEndpoints:
         assert "detail" in data
     
     @pytest.mark.integration
-    def test_get_available_services(self, client, mock_ai_service):
+    def test_health_check(self, client, mock_ai_client):
         """Test getting available AI services."""
         # Arrange
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.get("/api/v1/services")
             
@@ -154,53 +154,15 @@ class TestInterviewEndpoints:
             assert "questions_by_category" in question_bank_stats
             assert "questions_by_difficulty" in question_bank_stats
     
-    @pytest.mark.integration
-    def test_list_models(self, client, mock_ai_service):
-        """Test listing available models."""
-        # Arrange
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
-            # Act
-            response = client.get("/api/v1/models")
-            
-            # Assert
-            assert response.status_code == 200
-            data = response.json()
-            assert "models" in data
-            assert "default_models" in data
-            
-            # Check models structure
-            models = data["models"]
-            assert "openai" in models
-            assert "anthropic" in models
-            assert "ollama" in models
-            
-            # Check default models
-            default_models = data["default_models"]
-            assert "openai" in default_models
-            assert "anthropic" in default_models
-            assert "ollama" in default_models
+    # Note: list_models tests removed - endpoint doesn't exist in pure microservice architecture
     
     @pytest.mark.integration
-    def test_list_models_with_service_filter(self, client, mock_ai_service):
-        """Test listing models for specific service."""
-        # Arrange
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
-            # Act
-            response = client.get("/api/v1/models?service=openai")
-            
-            # Assert
-            assert response.status_code == 200
-            data = response.json()
-            assert "models" in data
-            assert "default_models" in data
-    
-    @pytest.mark.integration
-    def test_parse_job_description_with_preferred_service(self, client, sample_parse_request, mock_ai_service):
+    def test_parse_job_description_with_preferred_service(self, client, sample_parse_request, mock_ai_client):
         """Test job description parsing with preferred service."""
         # Arrange
         sample_parse_request["preferredService"] = "anthropic"
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=sample_parse_request)
             
@@ -211,12 +173,12 @@ class TestInterviewEndpoints:
             assert "service_used" in data
     
     @pytest.mark.integration
-    def test_analyze_answer_with_preferred_service(self, client, sample_analyze_request, mock_ai_service):
+    def test_analyze_answer_with_preferred_service(self, client, sample_analyze_request, mock_ai_client):
         """Test answer analysis with preferred service."""
         # Arrange
         sample_analyze_request["preferredService"] = "anthropic"
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=sample_analyze_request)
             
@@ -227,7 +189,7 @@ class TestInterviewEndpoints:
             assert "service_used" in data
     
     @pytest.mark.integration
-    def test_parse_job_description_large_input(self, client, mock_ai_service):
+    def test_parse_job_description_large_input(self, client, mock_ai_client):
         """Test job description parsing with large input."""
         # Arrange
         large_request = {
@@ -235,7 +197,7 @@ class TestInterviewEndpoints:
             "jobDescription": "We are looking for a Senior Python Developer with extensive experience in web development, API design, database optimization, microservices architecture, cloud computing, DevOps practices, and team leadership. The ideal candidate should have strong debugging skills, experience with performance optimization, and the ability to mentor junior developers. " * 10  # Large job description
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=large_request)
             
@@ -246,7 +208,7 @@ class TestInterviewEndpoints:
             assert len(data["questions"]) > 0
     
     @pytest.mark.integration
-    def test_analyze_answer_large_input(self, client, mock_ai_service):
+    def test_analyze_answer_large_input(self, client, mock_ai_client):
         """Test answer analysis with large input."""
         # Arrange
         large_request = {
@@ -255,7 +217,7 @@ class TestInterviewEndpoints:
             "answer": "I have extensive experience with Python web frameworks including Django, Flask, FastAPI, and Pyramid. I've worked on large-scale applications with millions of users, implemented complex business logic, optimized database queries, and designed RESTful APIs. " * 5  # Large answer
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=large_request)
             
@@ -266,7 +228,7 @@ class TestInterviewEndpoints:
             assert "improvements" in data
     
     @pytest.mark.integration
-    def test_parse_job_description_special_characters(self, client, mock_ai_service):
+    def test_parse_job_description_special_characters(self, client, mock_ai_client):
         """Test job description parsing with special characters."""
         # Arrange
         special_request = {
@@ -274,7 +236,7 @@ class TestInterviewEndpoints:
             "jobDescription": "We're looking for a Python Developer with 5+ years of experience. Must have: Django/Flask, PostgreSQL, Redis, Docker, AWS. Salary: $80k-$120k. Benefits: Health, Dental, 401k."
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=special_request)
             
@@ -285,7 +247,7 @@ class TestInterviewEndpoints:
             assert len(data["questions"]) > 0
     
     @pytest.mark.integration
-    def test_analyze_answer_special_characters(self, client, mock_ai_service):
+    def test_analyze_answer_special_characters(self, client, mock_ai_client):
         """Test answer analysis with special characters."""
         # Arrange
         special_request = {
@@ -294,7 +256,7 @@ class TestInterviewEndpoints:
             "answer": "I've worked with Django, Flask, and FastAPI. I've built APIs that handle 10k+ requests/second and used PostgreSQL, Redis, and Docker. I'm familiar with AWS services like EC2, S3, and RDS."
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=special_request)
             
@@ -305,7 +267,7 @@ class TestInterviewEndpoints:
             assert "improvements" in data
     
     @pytest.mark.integration
-    def test_parse_job_description_unicode(self, client, mock_ai_service):
+    def test_parse_job_description_unicode(self, client, mock_ai_client):
         """Test job description parsing with unicode characters."""
         # Arrange
         unicode_request = {
@@ -313,7 +275,7 @@ class TestInterviewEndpoints:
             "jobDescription": "We're looking for a Python Developer with experience in web development, API design, and database optimization. The ideal candidate should have strong problem-solving skills and be able to work in a fast-paced environment. 🚀"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=unicode_request)
             
@@ -324,7 +286,7 @@ class TestInterviewEndpoints:
             assert len(data["questions"]) > 0
     
     @pytest.mark.integration
-    def test_analyze_answer_unicode(self, client, mock_ai_service):
+    def test_analyze_answer_unicode(self, client, mock_ai_client):
         """Test answer analysis with unicode characters."""
         # Arrange
         unicode_request = {
@@ -333,7 +295,7 @@ class TestInterviewEndpoints:
             "answer": "I have 5 years of experience with Django and Flask. I've built several web applications and APIs. I'm passionate about clean code and best practices! 💻"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=unicode_request)
             
@@ -418,10 +380,10 @@ class TestInterviewEndpoints:
     def test_parse_job_description_ai_service_error(self, client, sample_parse_request):
         """Test job description parsing when AI service fails."""
         # Arrange
-        mock_ai_service = AsyncMock()
-        mock_ai_service.generate_interview_questions.side_effect = Exception("AI service error")
+        mock_ai_client = AsyncMock()
+        mock_ai_client.generate_questions.side_effect = Exception("AI service error")
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/parse-jd", json=sample_parse_request)
             
@@ -434,10 +396,10 @@ class TestInterviewEndpoints:
     def test_analyze_answer_ai_service_error(self, client, sample_analyze_request):
         """Test answer analysis when AI service fails."""
         # Arrange
-        mock_ai_service = AsyncMock()
-        mock_ai_service.analyze_answer.side_effect = Exception("AI service error")
+        mock_ai_client = AsyncMock()
+        mock_ai_client.analyze_answer.side_effect = Exception("AI service error")
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post("/api/v1/analyze-answer", json=sample_analyze_request)
             
@@ -450,10 +412,10 @@ class TestInterviewEndpoints:
     def test_get_services_ai_service_error(self, client):
         """Test getting services when AI service fails."""
         # Arrange
-        mock_ai_service = AsyncMock()
-        mock_ai_service.get_available_services.side_effect = Exception("AI service error")
+        mock_ai_client = AsyncMock()
+        mock_ai_client.health_check.side_effect = Exception("AI service error")
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.get("/api/v1/services")
             
@@ -462,18 +424,4 @@ class TestInterviewEndpoints:
             data = response.json()
             assert "detail" in data
     
-    @pytest.mark.integration
-    def test_list_models_ai_service_error(self, client):
-        """Test listing models when AI service fails."""
-        # Arrange
-        mock_ai_service = AsyncMock()
-        mock_ai_service.list_models.side_effect = Exception("AI service error")
-        
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
-            # Act
-            response = client.get("/api/v1/models")
-            
-            # Assert
-            assert response.status_code == 500
-            data = response.json()
-            assert "detail" in data
+    # Note: list_models error test removed - endpoint doesn't exist in pure microservice architecture

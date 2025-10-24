@@ -4,7 +4,7 @@ Tests for authentication functionality.
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.user import User
+from app.models.schemas import UserResponse
 from app.services.auth_service import AuthService
 
 

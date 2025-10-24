@@ -56,17 +56,12 @@ class Settings:
     FILE_CLOUD_STORAGE_REGION: str = os.getenv("FILE_CLOUD_STORAGE_REGION", "us-east-1")
 
     
-    # Ollama Settings
-    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama2")
+    # Note: Direct AI service settings removed - using AI service microservice only
     
-    # OpenAI Settings
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
-    
-    # Anthropic Settings
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229")
+    # AI Service Microservice Settings
+    AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://localhost:8001")
+    AI_SERVICE_TIMEOUT: float = float(os.getenv("AI_SERVICE_TIMEOUT", "30.0"))
+    AI_SERVICE_RETRY_ATTEMPTS: int = int(os.getenv("AI_SERVICE_RETRY_ATTEMPTS", "3"))
     
     # Application Settings
     MAX_TOKENS: int = 2000
@@ -244,9 +239,7 @@ class Settings:
     def configured_services(self) -> Dict[str, bool]:
         """Get all service configuration status at once."""
         return {
-            "ollama": bool(self.OLLAMA_BASE_URL),
-            "openai": bool(self.OPENAI_API_KEY),
-            "anthropic": bool(self.ANTHROPIC_API_KEY)
+            "ai_service_microservice": bool(self.AI_SERVICE_URL)
         }
     
     def is_service_configured(self, service: str) -> bool:

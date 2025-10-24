@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from datetime import datetime
-from app.logging_config import setup_logging
+from app.utils.logging_config import setup_logging
 from app.middleware.logging_middleware import log_requests
 from app.middleware.rate_limiter import RateLimiter
 from app.middleware.redis_rate_limiter import RedisRateLimiter
@@ -112,7 +112,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, sessions, auth, files, speech, vector_search, cache, health, analytics, scoring
+    from app.routers import interview, sessions, auth, files, speech, cache, health, analytics, scoring
+    from app.utils.logger import get_logger
+    logger = get_logger(__name__)
     
     # Core routers (always enabled)
     routers = [
@@ -121,7 +123,7 @@ def load_routers():
         ("sessions", sessions.router),
         ("files", files.router),
         ("speech", speech.router),
-        ("vector_search", vector_search.router),
+        # Note: vector_search router removed - services deleted
         ("cache", cache.router),
         ("health", health.router),
         ("analytics", analytics.router),
@@ -178,15 +180,19 @@ app.add_middleware(RateLimitingMiddleware)
 
 from app.startup import validate_startup, check_service_health
 from app.utils.env_config import log_environment_status
-from app.database.connection import init_db, check_db_connection
-from app.database.async_connection import init_async_db, async_db_manager
+from app.services.database_service import init_database, init_async_database, database_service
 
 # Initialize database
-init_db()
+init_database()
 
 # Check database connection
-if not check_db_connection():
-    logger.error("❌ Database connection failed")
+try:
+    health_check = database_service.health_check_sync()
+    if health_check["status"] != "healthy":
+        logger.error("❌ Database connection failed")
+        raise RuntimeError("Database connection failed")
+except Exception as e:
+    logger.error(f"❌ Database connection failed: {e}")
     raise RuntimeError("Database connection failed")
 
 # Async database will be initialized in startup event handler
@@ -243,7 +249,7 @@ async def root():
 async def health_check():
     """Comprehensive health check that verifies all dependencies with actual connectivity tests."""
     from app.services.health_service import HealthService
-    from app.database.async_connection import get_db_health
+    # Use unified database service for health checks
     
     health_service = HealthService()
     health_data = await health_service.get_comprehensive_health()

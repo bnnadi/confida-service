@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.services.file_service import FileService
 from app.models.schemas import (
     FileType, FileUploadResponse, FileInfoResponse, 

@@ -1,8 +1,8 @@
 """
-Unified AI Request Handler
+AI Request Handler
 
 Provides a clean, unified interface for creating AI service requests
-instead of duplicate methods in UnifiedAIService.
+instead of duplicate methods in AIService.
 """
 
 import os
@@ -27,7 +27,7 @@ class ServiceConfig:
 
 class AIRequestHandler:
     """
-    Unified AI request handler that eliminates duplication across services.
+    AI request handler that eliminates duplication across services.
     Provides a clean, configuration-driven approach to AI service requests.
     """
     
@@ -61,7 +61,7 @@ class AIRequestHandler:
         """Initialize service configurations."""
         return {
             'openai': ServiceConfig(
-                client=None,  # Will be set by UnifiedAIService
+                client=None,  # Will be set by AIService
                 model=os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
                 method_name="chat.completions.create",
                 system_key="messages",
@@ -70,7 +70,7 @@ class AIRequestHandler:
                 temperature_key="temperature"
             ),
             'anthropic': ServiceConfig(
-                client=None,  # Will be set by UnifiedAIService
+                client=None,  # Will be set by AIService
                 model=os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"),
                 method_name="messages.create",
                 system_key="system",

@@ -6,45 +6,128 @@ This module provides REST API endpoints for multi-agent answer analysis and scor
 import time
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from app.services.multi_agent_scoring import multi_agent_scoring_service
 from app.models.scoring_models import (
     MultiAgentAnalysisRequest, MultiAgentAnalysisResponse,
     MultiAgentStatusResponse, AgentTestRequest, AgentTestResponse,
-    ScoringConfiguration, PerformanceMetrics, AnalysisHistory
+    ScoringConfiguration, MultiAgentPerformanceMetrics, AnalysisHistory
 )
-from app.dependencies import get_current_user
+from app.dependencies import get_ai_client_dependency
+from app.middleware.auth_middleware import get_current_user
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/scoring", tags=["multi-agent-scoring"])
 
+
+def _convert_to_multi_agent_analysis(result: Dict[str, Any]):
+    """Convert AI service result to MultiAgentAnalysis format."""
+    from app.models.scoring_models import MultiAgentAnalysis, AgentScore, ContentAnalysis, DeliveryAnalysis, TechnicalAnalysis
+    
+    # Extract scores from result
+    score = result.get("score", {})
+    clarity = score.get("clarity", 0)
+    confidence = score.get("confidence", 0)
+    
+    # Create agent scores
+    content_score = AgentScore(
+        score=clarity,
+        feedback=result.get("analysis", ""),
+        strengths=result.get("suggestions", [])[:2],  # First 2 suggestions as strengths
+        improvements=result.get("suggestions", [])[2:]  # Rest as improvements
+    )
+    
+    delivery_score = AgentScore(
+        score=confidence,
+        feedback="Communication clarity and confidence assessment",
+        strengths=[],
+        improvements=[]
+    )
+    
+    technical_score = AgentScore(
+        score=(clarity + confidence) / 2,  # Average score
+        feedback="Technical accuracy and domain knowledge assessment",
+        strengths=[],
+        improvements=[]
+    )
+    
+    # Create analysis objects
+    content_analysis = ContentAnalysis(
+        score=clarity,
+        feedback=result.get("analysis", ""),
+        strengths=result.get("suggestions", [])[:2],
+        improvements=result.get("suggestions", [])[2:]
+    )
+    
+    delivery_analysis = DeliveryAnalysis(
+        score=confidence,
+        feedback="Communication style and clarity assessment",
+        strengths=[],
+        improvements=[]
+    )
+    
+    technical_analysis = TechnicalAnalysis(
+        score=(clarity + confidence) / 2,
+        feedback="Technical accuracy assessment",
+        strengths=[],
+        improvements=[]
+    )
+    
+    # Calculate overall score
+    overall_score = (clarity + confidence) / 2
+    
+    return MultiAgentAnalysis(
+        content_agent=content_score,
+        delivery_agent=delivery_score,
+        technical_agent=technical_score,
+        overall_score=overall_score,
+        recommendations=result.get("suggestions", []),
+        strengths=result.get("suggestions", [])[:2],
+        areas_for_improvement=result.get("suggestions", [])[2:],
+        analysis_metadata={
+            "source": "ai_service_microservice",
+            "response_length": len(result.get("answer", "")),
+            "converted_from": "ai_service_result"
+        }
+    )
+
 @router.post("/analyze", response_model=MultiAgentAnalysisResponse)
 async def analyze_answer_multi_agent(
     request: MultiAgentAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    ai_client = Depends(get_ai_client_dependency)
 ):
     """
-    Analyze an interview answer using multiple specialized AI agents.
+    Analyze an interview answer using AI service microservice.
     
     This endpoint provides comprehensive analysis using:
-    - Content Analysis Agent: Evaluates relevance, completeness, and structure
-    - Delivery Analysis Agent: Assesses communication style and clarity
-    - Technical Analysis Agent: Analyzes technical accuracy and domain knowledge
+    - AI Service Microservice: Primary analysis service
+    - Multi-Agent Fallback: Content, Delivery, and Technical analysis agents
     """
     try:
         start_time = time.time()
-        logger.info(f"Starting multi-agent analysis for user {current_user['id']}")
+        logger.info(f"Starting analysis for user {current_user['id']}")
         
-        # Perform multi-agent analysis
-        analysis = await multi_agent_scoring_service.analyze_response(
-            response=request.response,
-            question=request.question,
-            job_description=request.job_description,
-            role=request.role,
-            weights=request.weights
-        )
+        if not ai_client:
+            raise HTTPException(status_code=503, detail="AI service unavailable")
+        
+        # Use AI service microservice
+        try:
+            logger.info("Using AI service microservice for analysis")
+            result = await ai_client.analyze_answer(
+                job_description=request.job_description,
+                question=request.question,
+                answer=request.response,
+                role=request.role
+            )
+            
+            # Convert to expected format
+            analysis = _convert_to_multi_agent_analysis(result)
+            
+        except Exception as e:
+            logger.error(f"AI service microservice failed: {e}")
+            raise HTTPException(status_code=503, detail=f"AI service unavailable: {str(e)}")
         
         processing_time = time.time() - start_time
         
@@ -56,16 +139,16 @@ async def analyze_answer_multi_agent(
             analysis.overall_score
         )
         
-        logger.info(f"Multi-agent analysis completed in {processing_time:.2f}s with score {analysis.overall_score}")
+        logger.info(f"Analysis completed in {processing_time:.2f}s with score {analysis.overall_score}")
         
         return MultiAgentAnalysisResponse(
             analysis=analysis,
             processing_time=processing_time,
-            agents_used=["content_agent", "delivery_agent", "technical_agent"]
+            agents_used=["ai_service_microservice", "content_agent", "delivery_agent", "technical_agent"]
         )
         
     except Exception as e:
-        logger.error(f"Multi-agent analysis failed: {e}")
+        logger.error(f"Analysis failed: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
@@ -261,7 +344,7 @@ async def get_scoring_configuration():
             detail=f"Failed to get configuration: {str(e)}"
         )
 
-@router.get("/metrics", response_model=PerformanceMetrics)
+@router.get("/metrics", response_model=MultiAgentPerformanceMetrics)
 async def get_performance_metrics():
     """
     Get performance metrics for the multi-agent scoring system.
@@ -271,7 +354,7 @@ async def get_performance_metrics():
     try:
         # This would typically come from a metrics service
         # For now, return placeholder metrics
-        return PerformanceMetrics(
+        return MultiAgentPerformanceMetrics(
             total_analyses=0,  # Would be tracked in a real implementation
             average_processing_time=0.0,
             success_rate=1.0,

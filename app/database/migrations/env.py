@@ -13,7 +13,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import our models and configuration
-from app.database.connection import Base
+from app.database.models import Base
 from app.config import get_settings
 from app.utils.logger import get_logger
 

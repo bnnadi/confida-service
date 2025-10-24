@@ -52,7 +52,7 @@ def handle_analytics_errors(operation_name: str):
     return decorator
 
 
-class UnifiedAnalyticsService:
+class AnalyticsService:
     """Unified service for analytics and reporting functionality with both comprehensive and simplified modes."""
     
     def __init__(self, db: Session):

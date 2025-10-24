@@ -4,7 +4,7 @@ Authentication router for user registration, login, and management.
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user_required, get_current_user
 from app.models.schemas import (

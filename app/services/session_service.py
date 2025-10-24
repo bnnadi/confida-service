@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, desc
 from app.database.models import InterviewSession, SessionQuestion
-from app.database.async_operations import AsyncDatabaseOperations
-from app.services.question_service import QuestionService
+# AsyncDatabaseOperations functionality now in unified database service
+# Note: QuestionService removed - using pure microservice architecture
 from app.exceptions import AIServiceError
 # Error handling imports removed as they were unused
 from app.utils.logger import get_logger
@@ -20,8 +20,8 @@ from datetime import datetime
 logger = get_logger(__name__)
 
 
-class UnifiedSessionService:
-    """Unified service for managing interview sessions with both sync and async support."""
+class SessionService:
+    """Service for managing interview sessions with both sync and async support."""
     
     def __init__(self, db_session: Union[Session, AsyncSession]):
         self.db_session = db_session
@@ -31,7 +31,8 @@ class UnifiedSessionService:
             self.db_ops = AsyncDatabaseOperations(db_session)
         else:
             # For sync operations, we'll use direct SQLAlchemy operations
-            self.question_service = QuestionService(db_session)
+            # Note: QuestionService removed - using pure microservice architecture
+            pass
     
     # Session Creation Methods
     async def create_session(
@@ -90,7 +91,8 @@ class UnifiedSessionService:
                 # For async, we'll need to handle this differently
                 questions_data = []  # TODO: Implement async scenario question generation
             else:
-                questions_data = self.question_service.generate_questions_from_scenario(scenario_id)
+                # Note: Question generation now handled by AI service microservice
+                questions_data = []  # TODO: Implement scenario-based question generation via AI service
             
             # Create session
             session_data = {

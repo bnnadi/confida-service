@@ -5,7 +5,7 @@ from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.services.auth_service import AuthService
 from app.models.schemas import TokenPayload, TokenType
 from app.utils.logger import get_logger
@@ -203,9 +203,9 @@ def get_user_id_from_token(credentials: Optional[HTTPAuthorizationCredentials] =
     
     try:
         from app.services.auth_service import AuthService
-        from app.database.connection import SessionLocal
+        from app.services.database_service import database_service
         
-        db = SessionLocal()
+        db = database_service.get_sync_session()
         auth_service = AuthService(db)
         
         token_payload = auth_service.verify_token(
