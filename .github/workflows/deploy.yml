@@ -54,7 +54,7 @@ jobs:
         echo "DATABASE_URL: $DATABASE_URL"
         echo "Current directory: $(pwd)"
         echo "Alembic files:"
-        ls -la alembic/versions/
+        ls -la app/database/migrations/versions/
         
         # Ensure database exists and user has permissions
         echo "Creating database if it doesn't exist..."
