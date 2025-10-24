@@ -1,5 +1,5 @@
 """
-Unit tests for QuestionBankService.
+Unit tests for QuestionService.
 
 Tests the core functionality of the question bank service including
 question retrieval, storage, and statistics.
@@ -9,12 +9,12 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 import uuid
 
-from app.services.question_bank_service import QuestionBankService
+from app.services.question_service import QuestionService
 from app.database.models import Question, SessionQuestion
 
 
-class TestQuestionBankService:
-    """Test cases for QuestionBankService."""
+class TestQuestionService:
+        """Test cases for QuestionService."""
     
     @pytest.fixture
     def mock_db_session(self):
@@ -30,8 +30,8 @@ class TestQuestionBankService:
     
     @pytest.fixture
     def question_bank_service(self, mock_db_session):
-        """Create QuestionBankService instance with mocked database."""
-        return QuestionBankService(mock_db_session)
+        """Create QuestionService instance with mocked database."""
+        return QuestionService(mock_db_session)
     
     @pytest.mark.unit
     def test_get_questions_for_role_no_questions(self, question_bank_service, mock_db_session):

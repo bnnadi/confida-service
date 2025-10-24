@@ -26,7 +26,7 @@ from app.dependencies import get_ai_service, get_db
 from app.database.connection import Base, get_db as get_db_connection
 from app.database.models import User, InterviewSession, Question, SessionQuestion, Answer
 from app.services.hybrid_ai_service import HybridAIService
-from app.services.question_bank_service import QuestionBankService
+from app.services.question_service import QuestionService
 from app.config import get_settings
 from faker import Faker
 

@@ -260,7 +260,7 @@ def _calculate_performance_indicators(stats: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # AI Service Health Endpoints
-@router.get("/ai-services")
+@router.get("/ai-services", response_model=None)
 async def get_ai_service_health(ai_service: UnifiedAIService = Depends(get_ai_service)):
     """Get comprehensive AI service health status."""
     try:

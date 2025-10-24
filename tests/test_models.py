@@ -3,7 +3,7 @@ Tests for database models.
 """
 import pytest
 from sqlalchemy.orm import Session
-from app.models.user import User
+from app.models.schemas import UserResponse
 from app.models.interview import InterviewSession, Question, Answer
 
 
