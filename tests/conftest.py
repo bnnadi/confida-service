@@ -1,12 +1,16 @@
 """
-Simple test configuration for Confida tests.
+Test configuration for Confida tests.
 
-This module provides basic test configuration without complex database models
-for testing the testing infrastructure.
+This module provides test fixtures and configuration for the testing infrastructure.
 """
 import pytest
 import os
 from pathlib import Path
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.main import app
+from app.database.models import Base
 
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
@@ -50,3 +54,32 @@ def mock_service():
             return f"processed_{value}"
     
     return MockService()
+
+# Database fixtures
+@pytest.fixture(scope="session")
+def test_db_engine():
+    """Create test database engine."""
+    engine = create_engine("sqlite:///./test_confida.db", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    return engine
+
+@pytest.fixture
+def test_db_session(test_db_engine):
+    """Create test database session."""
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+@pytest.fixture
+def db_session(test_db_session):
+    """Alias for test_db_session."""
+    return test_db_session
+
+# FastAPI client fixture
+@pytest.fixture
+def client():
+    """Create FastAPI test client."""
+    return TestClient(app)
