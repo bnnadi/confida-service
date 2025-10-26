@@ -7,10 +7,21 @@ import pytest
 import os
 from pathlib import Path
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, JSON
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database.models import Base
+
+# Override JSONB type for SQLite compatibility
+from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
+# Patch JSONB to use JSON for SQLite
+original_visit_JSONB = SQLiteTypeCompiler.visit_JSONB
+
+def visit_JSONB(self, type_, **kw):
+    return self.visit_JSON(type_)
+
+SQLiteTypeCompiler.visit_JSONB = visit_JSONB
 
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
@@ -83,3 +94,138 @@ def db_session(test_db_session):
 def client():
     """Create FastAPI test client."""
     return TestClient(app)
+
+# Test fixtures for integration tests
+@pytest.fixture
+def sample_user(db_session):
+    """Create a sample user for testing."""
+    from app.database.models import User
+    from werkzeug.security import generate_password_hash
+    user = User(
+        email="test@example.com",
+        name="Test User",
+        password_hash=generate_password_hash("testpass123"),
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+@pytest.fixture
+def mock_ai_client():
+    """Mock AI client for testing."""
+    from unittest.mock import AsyncMock
+    client = AsyncMock()
+    client.generate_questions = AsyncMock(return_value=[
+        {"text": "What is Python?", "type": "technical"},
+        {"text": "Explain decorators.", "type": "technical"},
+        {"text": "What is your experience with Django?", "type": "experience"},
+        {"text": "How do you handle database migrations?", "type": "technical"},
+        {"text": "Describe your debugging process.", "type": "behavioral"}
+    ])
+    client.analyze_answer = AsyncMock(return_value={
+        "score": 0.85,
+        "feedback": "Good answer",
+        "strengths": ["Clear explanation"],
+        "improvements": ["Could provide more detail"]
+    })
+    return client
+
+@pytest.fixture
+def sample_parse_request():
+    """Sample request data for parsing job description."""
+    return {
+        "role": "Python Developer",
+        "jobDescription": "We are looking for a Python developer with 5+ years of experience in Django and Flask. Strong debugging skills required.",
+        "service": "openai"
+    }
+
+@pytest.fixture
+def sample_analyze_request():
+    """Sample request data for analyzing answer."""
+    return {
+        "question": "What is Python?",
+        "answer": "Python is a high-level programming language known for its simplicity and readability.",
+        "service": "openai"
+    }
+
+@pytest.fixture
+def sample_interview_session(db_session, sample_user):
+    """Create a sample interview session."""
+    from app.database.models import InterviewSession
+    session = InterviewSession(
+        user_id=sample_user.id,
+        role="Python Developer",
+        job_description="Test job description",
+        status="active",
+        total_questions=5,
+        completed_questions=0
+    )
+    db_session.add(session)
+    db_session.commit()
+    db_session.refresh(session)
+    return session
+
+@pytest.fixture
+def sample_question(db_session):
+    """Create a sample question."""
+    from app.database.models import Question
+    import json
+    question = Question(
+        question_text="What is Python?",
+        question_metadata={"source": "test"},
+        difficulty_level="easy",
+        category="python",
+        subcategory="basics",
+        compatible_roles=["python_developer"],
+        required_skills=["python"],
+        industry_tags=["tech"]
+    )
+    db_session.add(question)
+    db_session.commit()
+    db_session.refresh(question)
+    return question
+
+@pytest.fixture
+def sample_session_question(db_session, sample_interview_session, sample_question):
+    """Create a sample session question."""
+    from app.database.models import SessionQuestion
+    session_question = SessionQuestion(
+        session_id=sample_interview_session.id,
+        question_id=sample_question.id,
+        question_order=1,
+        session_specific_context={"context": "test"}
+    )
+    db_session.add(session_question)
+    db_session.commit()
+    db_session.refresh(session_question)
+    return session_question
+
+@pytest.fixture
+def mock_question_bank_service():
+    """Mock question bank service for testing."""
+    from unittest.mock import Mock
+    service = Mock()
+    service.get_questions_for_role = Mock(return_value=[
+        {"text": "Question 1", "type": "technical"},
+        {"text": "Question 2", "type": "behavioral"}
+    ])
+    return service
+
+@pytest.fixture
+def generate_test_sessions():
+    """Fixture to generate test sessions."""
+    def _generate(count=5):
+        sessions = []
+        for i in range(count):
+            sessions.append({
+                "id": f"session-{i}",
+                "user_id": f"user-{i}",
+                "role": f"Developer {i}",
+                "status": "active",
+                "total_questions": 10,
+                "completed_questions": i
+            })
+        return sessions
+    return _generate
