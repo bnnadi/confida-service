@@ -7,21 +7,37 @@ import pytest
 import os
 from pathlib import Path
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, JSON
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.main import app
+
+# Replace JSONB with JSON for SQLite compatibility
+# This must happen before importing models
+import sqlalchemy.dialects.postgresql.base
+import sqlalchemy.dialects.sqlite.base
+from sqlalchemy import JSON
+
+# Patch JSONB class to handle SQLite
+if not hasattr(sqlalchemy.dialects.postgresql.base.JSONB, '_patched_for_sqlite'):
+    original_impl = sqlalchemy.dialects.postgresql.base.JSONB.load_dialect_impl
+    
+    def _patched_load_dialect_impl(self, dialect):
+        if dialect.name == 'sqlite':
+            return dialect.type_descriptor(JSON())
+        return original_impl(self, dialect)
+    
+    sqlalchemy.dialects.postgresql.base.JSONB.load_dialect_impl = _patched_load_dialect_impl
+    sqlalchemy.dialects.postgresql.base.JSONB._patched_for_sqlite = True
+
+# Patch SQLite compiler to handle JSONB
+if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_jsonb'):
+    def visit_JSONB(self, type_, **kw):
+        return self.visit_JSON(type_, **kw)
+    
+    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_JSONB = visit_JSONB
+    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_jsonb = True
+
 from app.database.models import Base
-
-# Override JSONB type for SQLite compatibility
-from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
-
-# Patch JSONB to use JSON for SQLite
-original_visit_JSONB = SQLiteTypeCompiler.visit_JSONB
-
-def visit_JSONB(self, type_, **kw):
-    return self.visit_JSON(type_)
-
-SQLiteTypeCompiler.visit_JSONB = visit_JSONB
 
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
