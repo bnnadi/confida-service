@@ -17,6 +17,10 @@ from datetime import datetime
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
+# Add project root to Python path before importing app modules
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from app.config import get_settings
 from app.utils.logger import get_logger
 

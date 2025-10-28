@@ -8,7 +8,7 @@ import asyncio
 import time
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncEngine
-from app.database.async_connection import async_db_manager
+from app.services.database_service import database_service
 from app.utils.logger import get_logger
 from datetime import datetime, timedelta
 

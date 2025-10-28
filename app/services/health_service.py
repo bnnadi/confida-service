@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database.connection import SessionLocal
+from app.services.database_service import database_service
 from app.config import settings
 import redis
 import httpx
@@ -18,7 +18,7 @@ class HealthService:
         """Check database connectivity and basic operations."""
         try:
             # Test database connection
-            db = SessionLocal()
+            db = database_service.get_sync_session()
             self.db_session = db
             
             # Simple query to test connectivity

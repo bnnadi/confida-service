@@ -239,19 +239,11 @@ class ValidationService:
                 if not is_valid:
                     errors.append(error)
         
-        # Validate URLs
-        if not self.validate_url(self.settings.OLLAMA_BASE_URL):
-            errors.append(f"Invalid Ollama URL format: {self.settings.OLLAMA_BASE_URL}")
-        elif not self.settings.OLLAMA_BASE_URL.startswith(('http://', 'https://')):
-            errors.append("Ollama URL must use HTTP or HTTPS protocol")
-        
-        # Validate models
-        for service in ['openai', 'anthropic']:
-            if getattr(self.settings, f'is_{service}_configured', False):
-                model = getattr(self.settings, f'{service.upper()}_MODEL', '')
-                is_valid, warning = self.validate_model(model, service)
-                if not is_valid:
-                    warnings.append(warning)
+        # Validate AI service microservice URL
+        if not self.validate_url(self.settings.AI_SERVICE_URL):
+            errors.append(f"Invalid AI service URL format: {self.settings.AI_SERVICE_URL}")
+        elif not self.settings.AI_SERVICE_URL.startswith(('http://', 'https://')):
+            errors.append("AI service URL must use HTTP or HTTPS protocol")
         
         # Validate numeric values
         temp_valid, temp_error = self.validate_numeric_value(

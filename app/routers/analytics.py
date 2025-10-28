@@ -9,10 +9,9 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
-from app.database.connection import get_db, get_db_session
-from app.services.analytics_service import UnifiedAnalyticsService
-from app.services.cost_tracker import CostTracker
-from app.services.smart_token_optimizer import SmartTokenOptimizer
+from app.services.database_service import get_db
+from app.services.analytics_service import AnalyticsService
+# Note: CostTracker and SmartTokenOptimizer removed - using pure microservice architecture
 from app.models.analytics_models import (
     PerformanceMetrics, SessionAnalytics, TrendAnalysis, ReportRequest, 
     ReportResponse, AnalyticsSummary, PerformanceComparison, AnalyticsFilter,
@@ -22,7 +21,7 @@ from app.database.question_database_models import (
     QuestionGenerationLog, QuestionTemplate, QuestionMatch, QuestionFeedback
 )
 from sqlalchemy import func, desc, and_
-from app.dependencies import get_current_user_required
+from app.middleware.auth_middleware import get_current_user_required
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,9 +29,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 
-def get_analytics_service(db: Session = Depends(get_db)) -> UnifiedAnalyticsService:
+def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
     """Dependency to get analytics service."""
-    return UnifiedAnalyticsService(db)
+    return AnalyticsService(db)
 
 
 @router.get("/performance/{user_id}", response_model=PerformanceMetrics)
@@ -40,7 +39,7 @@ async def get_performance_metrics(
     user_id: str,
     time_period: str = Query("30d", description="Time period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get performance metrics for a user.
@@ -81,7 +80,7 @@ async def get_trend_analysis(
     metric: str = Query("average_score", description="Metric to analyze"),
     time_period: str = Query("30d", description="Time period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get trend analysis for a user.
@@ -130,7 +129,7 @@ async def get_session_analytics(
     limit: int = Query(10, description="Number of sessions to return", ge=1, le=100),
     offset: int = Query(0, description="Number of sessions to skip", ge=0),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get session analytics for a user.
@@ -162,7 +161,7 @@ async def get_session_analytics(
 async def generate_report(
     request: ReportRequest,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Generate a comprehensive analytics report.
@@ -204,7 +203,7 @@ async def generate_report(
 async def get_analytics_summary(
     user_id: str,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get analytics summary for dashboard display.
@@ -238,7 +237,7 @@ async def get_performance_comparison(
     current_period: str = Query("30d", description="Current period: 7d, 30d, 90d, 1y"),
     previous_period: str = Query("30d", description="Previous period: 7d, 30d, 90d, 1y"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get performance comparison between two periods.
@@ -286,7 +285,7 @@ async def export_report(
     start_date: Optional[datetime] = Query(None, description="Report start date"),
     end_date: Optional[datetime] = Query(None, description="Report end date"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Export analytics report in specified format.
@@ -350,7 +349,7 @@ async def export_report(
 
 @router.get("/health")
 async def analytics_health_check(
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Health check for analytics service.
@@ -383,7 +382,7 @@ async def analytics_health_check(
 async def get_dashboard_metrics(
     user_id: str,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: UnifiedAnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service)
 ):
     """
     Get metrics optimized for dashboard display.
@@ -427,7 +426,7 @@ async def get_dashboard_metrics(
 async def get_question_generation_statistics(
     days: int = Query(7, description="Number of days to analyze"),
     current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_db)
 ):
     """Get comprehensive statistics about question generation methods."""
     try:
@@ -484,7 +483,7 @@ async def get_question_generation_statistics(
 async def get_database_performance_metrics(
     days: int = Query(7, description="Number of days to analyze"),
     current_user: dict = Depends(get_current_user_required),
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_db)
 ):
     """Get database performance metrics for question retrieval."""
     try:

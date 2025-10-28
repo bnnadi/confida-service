@@ -14,7 +14,7 @@ class TestSessionEndpoints:
     """Test cases for session API endpoints."""
     
     @pytest.mark.integration
-    def test_create_session_success(self, client, sample_user, sample_parse_request, mock_ai_service):
+    def test_create_session_success(self, client, sample_user, sample_parse_request, mock_ai_client):
         """Test successful session creation."""
         # Arrange
         session_data = {
@@ -22,7 +22,7 @@ class TestSessionEndpoints:
             "job_description": "Looking for Python developer with Django experience"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -515,10 +515,10 @@ class TestSessionEndpoints:
             "job_description": "Looking for Python developer"
         }
         
-        mock_ai_service = AsyncMock()
-        mock_ai_service.generate_interview_questions.side_effect = Exception("AI service error")
+        mock_ai_client = AsyncMock()
+        mock_ai_client.generate_questions.side_effect = Exception("AI service error")
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             # Act
             response = client.post(
                 f"/api/v1/sessions/?user_id={sample_user.id}",
@@ -531,7 +531,7 @@ class TestSessionEndpoints:
             assert "detail" in data
     
     @pytest.mark.integration
-    def test_session_creation_with_database_error(self, client, sample_user, mock_ai_service):
+    def test_session_creation_with_database_error(self, client, sample_user, mock_ai_client):
         """Test session creation when database fails."""
         # Arrange
         session_data = {
@@ -539,7 +539,7 @@ class TestSessionEndpoints:
             "job_description": "Looking for Python developer"
         }
         
-        with patch('app.routers.interview.get_ai_service', return_value=mock_ai_service):
+        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client):
             with patch('app.database.connection.get_db') as mock_get_db:
                 mock_db = mock_get_db.return_value
                 mock_db.add.side_effect = Exception("Database error")

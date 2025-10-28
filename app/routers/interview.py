@@ -4,12 +4,11 @@ from typing import Optional
 from app.models.schemas import ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse
 # handle_service_errors import removed as it was unused
 from app.utils.validators import InputValidator, create_service_query_param
-from app.utils.database_operation_handler import DatabaseOperationHandler
-from app.database.connection import get_db
-from app.database.async_connection import get_async_db
-from app.services.session_service import UnifiedSessionService
+# DatabaseOperationHandler removed - using unified database service
+from app.services.database_service import get_db, get_async_db
+from app.services.session_service import SessionService
 from app.middleware.auth_middleware import get_current_user_required
-from app.dependencies import get_ai_service, get_async_ai_service
+from app.dependencies import get_ai_client_dependency
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
@@ -18,47 +17,156 @@ router = APIRouter(prefix="/api/v1", tags=["interview"])
 async def parse_job_description(
     request: ParseJDRequest,
     service: Optional[str] = create_service_query_param(),
-    current_user: dict = Depends(get_current_user_required)
+    current_user: dict = Depends(get_current_user_required),
+    ai_client = Depends(get_ai_client_dependency)
 ):
-    """Parse job description and generate relevant interview questions using AI."""
+    """Parse job description and generate relevant interview questions using AI service microservice."""
     validated_service = InputValidator.validate_service(service)
     
-    # Use unified database operation handler
-    handler = DatabaseOperationHandler()
-    return await handler.handle_operation(
-        operation_type="parse_jd",
-        request=request,
-        validated_service=validated_service,
-        current_user=current_user
-    )
+    if not ai_client:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+    
+    try:
+        # Use AI service microservice
+        user_context = {
+            'user_id': str(current_user["id"]),
+            'previous_questions': [],  # TODO: Get from user history
+            'preferred_difficulty': None,  # TODO: Get from user preferences
+            'weak_areas': [],  # TODO: Get from user analytics
+            'strong_areas': []  # TODO: Get from user analytics
+        }
+        
+        questions = await ai_client.generate_questions(
+            role=request.role,
+            job_description=request.jobDescription,
+            count=10,
+            user_context=user_context
+        )
+        
+        # Create session and store questions in database atomically
+        from app.services.database_service import get_db
+        db = next(get_db())
+        session_service = SessionService(db)
+        session, session_questions = await session_service.create_session_with_questions_atomic(
+            user_id=current_user["id"],
+            role=request.role,
+            job_description=request.jobDescription,
+            questions=[q["text"] for q in questions]
+        )
+        
+        # Count database vs AI questions
+        db_count = sum(1 for q in questions if q.get("source") == "database")
+        ai_count = sum(1 for q in questions if q.get("source") != "database")
+        
+        return ParseJDResponse(
+            questions=[q["text"] for q in questions],
+            role=request.role,
+            jobDescription=request.jobDescription,
+            service_used=validated_service,
+            question_bank_count=db_count,
+            ai_generated_count=ai_count
+        )
+        
+    except Exception as e:
+        from app.utils.logger import get_logger
+        logger = get_logger(__name__)
+        logger.error(f"Failed to generate questions: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
 
 @router.post("/analyze-answer", response_model=AnalyzeAnswerResponse)
 async def analyze_answer(
     request: AnalyzeAnswerRequest,
     service: Optional[str] = create_service_query_param(),
     question_id: int = Query(..., description="Question ID to store the answer"),
-    current_user: dict = Depends(get_current_user_required)
+    current_user: dict = Depends(get_current_user_required),
+    ai_client = Depends(get_ai_client_dependency)
 ):
-    """Analyze user's answer and provide feedback using AI."""
+    """Analyze user's answer and provide feedback using AI service microservice."""
     validated_service = InputValidator.validate_service(service)
     
-    # Use unified database operation handler
-    handler = DatabaseOperationHandler()
-    return await handler.handle_operation(
-        operation_type="analyze_answer",
-        request=request,
-        validated_service=validated_service,
-        current_user=current_user,
-        question_id=question_id
-    )
+    if not ai_client:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+    
+    try:
+        # Verify question exists and belongs to user
+        from app.services.database_service import get_db
+        from app.database.models import Question, InterviewSession
+        from sqlalchemy import select
+        
+        db = next(get_db())
+        question = db.query(Question).join(InterviewSession).filter(
+            Question.id == question_id,
+            InterviewSession.user_id == current_user["id"]
+        ).first()
+        
+        if not question:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        # Get question text and role for analysis
+        question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
+        role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
+        
+        # Use AI service microservice for analysis
+        response = await ai_client.analyze_answer(
+            job_description=request.jobDescription,
+            question=question_text,
+            answer=request.answer,
+            role=role
+        )
+        
+        # Store answer and analysis in database
+        session_service = SessionService(db)
+        session_service.add_answer(
+            question_id=question_id,
+            answer_text=request.answer,
+            analysis_result=response,
+            score={"clarity": response.get("score", {}).get("clarity", 0), 
+                  "confidence": response.get("score", {}).get("confidence", 0)},
+            multi_agent_scores=response.get("multi_agent_analysis")
+        )
+        
+        return AnalyzeAnswerResponse(
+            analysis=response.get("analysis", ""),
+            score=response.get("score", {}),
+            suggestions=response.get("suggestions", []),
+            jobDescription=request.jobDescription,
+            answer=request.answer,
+            service_used=validated_service
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        from app.utils.logger import get_logger
+        logger = get_logger(__name__)
+        logger.error(f"Failed to analyze answer: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze answer: {str(e)}")
 
 @router.get("/services")
-async def get_available_services():
+async def get_available_services(ai_client = Depends(get_ai_client_dependency)):
     """
-    Get status of available AI services.
+    Get status of AI service microservice.
     """
-    handler = DatabaseOperationHandler()
-    return await handler.handle_operation(operation_type="get_services")
+    if not ai_client:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+    
+    try:
+        is_healthy = await ai_client.health_check()
+        health_status = {
+            "ai_service_microservice": {
+                "status": "healthy" if is_healthy else "unhealthy",
+                "url": ai_client.base_url
+            }
+        }
+        return {
+            "ai_service_microservice": health_status["ai_service_microservice"],
+            "status": "healthy" if is_healthy else "unhealthy"
+        }
+    except Exception as e:
+        from app.utils.logger import get_logger
+        logger = get_logger(__name__)
+        logger.error(f"Failed to get service status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get service status: {str(e)}")
 
 @router.get("/models")
 async def list_models():
@@ -158,7 +266,7 @@ async def _handle_parse_jd_unified(ai_service, db, request, validated_service, c
         )
         
         # Create session and store questions in database atomically
-        session_service = UnifiedSessionService(db)
+        session_service = SessionService(db)
         session, session_questions = await session_service.create_session_with_questions_atomic(
             user_id=current_user["id"],
             role=request.role,

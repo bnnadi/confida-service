@@ -1,21 +1,17 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from typing import List
 from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
-from app.services.speech_service import SpeechToTextService
 from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
+from app.dependencies import get_ai_client_dependency
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
-
-# Dependency for SpeechToTextService
-def get_speech_service() -> SpeechToTextService:
-    return SpeechToTextService()
 
 def get_file_service(db = Depends(get_db)) -> FileService:
     return FileService(db)
@@ -26,11 +22,11 @@ async def transcribe_audio_endpoint(
     language: str = Query("en-US", description="Language code for transcription (e.g., en-US, es-ES)"),
     save_file: bool = Query(False, description="Whether to save the uploaded file for future reference"),
     current_user: dict = Depends(get_current_user_required),
-    speech_service: SpeechToTextService = Depends(get_speech_service),
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    ai_client = Depends(get_ai_client_dependency)
 ):
     """
-    Transcribe audio file to text using speech recognition.
+    Transcribe audio file to text using AI service microservice.
     
     Supports multiple audio formats and can optionally save the file for future reference.
     """
@@ -43,43 +39,66 @@ async def transcribe_audio_endpoint(
                 status_code=400,
                 detail=f"File validation failed: {', '.join(errors)}"
             )
+        
+        if not ai_client:
+            raise HTTPException(status_code=503, detail="AI service unavailable")
+        
         filename = audio_file.filename
         mime_type = "audio/wav"  # Default for speech recognition
         
         # Read audio data
         audio_data = await audio_file.read()
         
-        # Transcribe audio
-        transcription = speech_service.transcribe_audio(audio_data, language)
+        # Save file temporarily for AI service
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            temp_file.write(audio_data)
+            temp_file_path = temp_file.name
         
-        # Optionally save file
-        file_id = None
-        if save_file:
-            try:
-                # Reset file pointer for saving
-                audio_file.file.seek(0)
-                
-                # Save file
-                file_id = file_service.generate_file_id()
-                file_info = file_service.save_file(audio_file, FileType.AUDIO, file_id)
-                
-                logger.info(f"Audio file saved with ID: {file_id}")
-            except Exception as e:
-                logger.warning(f"Failed to save audio file: {e}")
-                # Continue with transcription even if save fails
-        
-        return TranscribeResponse(
-            transcription=transcription,
-            language=language,
-            confidence=0.95,  # Placeholder confidence score
-            file_id=file_id,
-            metadata={
-                "filename": filename,
-                "mime_type": mime_type,
-                "file_size": len(audio_data),
-                "saved": file_id is not None
-            }
-        )
+        try:
+            # Use AI service microservice for transcription
+            session_id = f"transcription_{current_user['id']}_{filename}"
+            result = await ai_client.transcribe_audio(
+                audio_file_path=temp_file_path,
+                session_id=session_id,
+                language=language
+            )
+            
+            # Extract transcription from result
+            if isinstance(result, dict) and "transcript" in result:
+                transcript = result["transcript"]
+            elif isinstance(result, dict) and "text" in result:
+                transcript = result["text"]
+            else:
+                # Fallback to direct speech service
+                logger.warning("AI service returned unexpected format, falling back to direct speech service")
+                transcript = speech_service.transcribe_audio(audio_data, language)
+            
+            # Save file if requested
+            if save_file:
+                saved_file = file_service.save_file(
+                    filename=filename,
+                    content=audio_data,
+                    file_type=FileType.AUDIO,
+                    user_id=current_user["id"]
+                )
+                file_id = saved_file.id
+            else:
+                file_id = None
+            
+            return TranscribeResponse(
+                transcript=transcript,
+                language=language,
+                filename=filename,
+                file_id=file_id,
+                confidence=result.get("confidence", 0.0) if isinstance(result, dict) else 0.0
+            )
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
         
     except HTTPException:
         raise
@@ -95,7 +114,7 @@ async def transcribe_saved_audio(
     file_id: str,
     language: str = Query("en-US", description="Language code for transcription"),
     current_user: dict = Depends(get_current_user_required),
-    speech_service: SpeechToTextService = Depends(get_speech_service),
+    # Note: speech_service removed - using AI service microservice
     file_service: FileService = Depends(get_file_service)
 ):
     """
