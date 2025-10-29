@@ -9,6 +9,7 @@ from app.utils.logger import get_logger
 from app.config import get_settings
 from typing import Dict, Any, Optional
 import httpx
+import json
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -103,6 +104,67 @@ class AIServiceClient:
             raise AIServiceUnavailableError(f"AI service unavailable: {e}")
         except Exception as e:
             logger.error(f"Failed to generate questions: {e}")
+            raise
+    
+    async def generate_questions_structured(
+        self,
+        role_name: str,
+        job_description: str,
+        resume: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Calls ai-service /ai/questions/generate and returns structured JSON.
+        
+        Args:
+            role_name: Job role/title
+            job_description: Job description text
+            resume: Optional resume text for context
+            
+        Returns:
+            Dict containing structured response with identifiers, questions, and embedding_vectors
+        """
+        try:
+            logger.info(f"Generating structured questions for role: {role_name}")
+            
+            payload = {
+                "role_name": role_name,
+                "job_description": job_description
+            }
+            if resume:
+                payload["resume"] = resume
+            
+            response = await self.client.post(
+                f"{self.base_url}/ai/questions/generate",
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Structured questions generated successfully for role: {role_name}")
+                
+                # Validate response structure
+                if not isinstance(result, dict):
+                    raise ValueError("AI service returned invalid JSON structure")
+                if "questions" not in result:
+                    raise ValueError("AI service response missing 'questions' field")
+                if "identifiers" not in result:
+                    raise ValueError("AI service response missing 'identifiers' field")
+                
+                return result
+            else:
+                logger.error(f"Structured question generation failed: {response.status_code}")
+                raise AIServiceUnavailableError(
+                    f"Question generation failed: {response.status_code}"
+                )
+                
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to AI service: {e}")
+            raise AIServiceUnavailableError(f"AI service unavailable: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response from AI service: {e}")
+            raise ValueError(f"Invalid JSON response from AI service: {e}")
+        except Exception as e:
+            logger.error(f"Failed to generate structured questions: {e}")
             raise
     
     async def analyze_answer(

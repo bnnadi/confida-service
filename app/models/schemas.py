@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 
 # Request Models
@@ -350,4 +350,50 @@ class SessionPreviewResponse(BaseModel):
 
 class ScenarioListResponse(BaseModel):
     scenarios: List[ScenarioInfo]
-    total: int 
+    total: int
+
+# Question Generation Models (New Structured API)
+class JobRequest(BaseModel):
+    """Request model for structured question generation."""
+    role_name: str = Field(..., min_length=1, max_length=200, description="The job role/title")
+    job_description: str = Field(..., min_length=10, max_length=10000, description="The full job description")
+    resume: Optional[str] = Field(None, max_length=50000, description="Optional resume text for context")
+    limit: Optional[int] = Field(10, ge=1, le=50, description="Maximum number of questions to generate")
+    
+    @field_validator('role_name')
+    @classmethod
+    def validate_role_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Role name cannot be empty')
+        return v.strip()
+    
+    @field_validator('job_description')
+    @classmethod
+    def validate_job_description(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Job description cannot be empty')
+        if len(v.strip()) < 10:
+            raise ValueError('Job description must be at least 10 characters')
+        return v.strip()
+
+class QuestionIdentifier(BaseModel):
+    """Identifier metadata for a question."""
+    question_id: Optional[str] = None
+    category: Optional[str] = None
+    difficulty: Optional[str] = None
+    role: Optional[str] = None
+    tags: Optional[List[str]] = Field(default_factory=list)
+
+class StructuredQuestion(BaseModel):
+    """Structured question with metadata."""
+    text: str = Field(..., description="The question text")
+    source: Literal["from_library", "newly_generated"] = Field(..., description="Question source")
+    question_id: Optional[str] = Field(None, description="Question ID from database or ai-service")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Question metadata")
+    identifiers: Optional[QuestionIdentifier] = None
+
+class StructuredQuestionResponse(BaseModel):
+    """Response model for structured question generation."""
+    identifiers: Dict[str, Any] = Field(..., description="Global identifiers for the question set")
+    questions: List[StructuredQuestion] = Field(..., description="List of generated questions")
+    embedding_vectors: Optional[Dict[str, List[float]]] = Field(None, description="Embedding vectors for questions") 

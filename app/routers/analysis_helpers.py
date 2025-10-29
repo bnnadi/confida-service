@@ -11,10 +11,13 @@ logger = get_logger(__name__)
 
 async def perform_analysis_with_fallback(ai_service, request, question_text: str, role: str) -> Dict[str, Any]:
     """
-    Shared analysis logic with fallback to single AI service.
+    Shared analysis logic using ai-service microservice.
+    
+    All AI logic is handled by the ai-service microservice.
+    No direct LLM calls are made in the API service.
     
     Args:
-        ai_service: The AI service instance
+        ai_service: The AI service client (should be AIServiceClient instance)
         request: The analysis request
         question_text: The question text
         role: The job role
@@ -22,44 +25,32 @@ async def perform_analysis_with_fallback(ai_service, request, question_text: str
     Returns:
         Analysis response dictionary
     """
-    try:
-        from app.services.multi_agent_scoring import multi_agent_scoring_service
-        
-        # Perform multi-agent analysis
-        analysis = await multi_agent_scoring_service.analyze_response(
-            response=request.answer,
-            question=question_text,
-            job_description=request.jobDescription,
-            role=role
-        )
-        
-        logger.info(f"Multi-agent analysis completed with overall score: {analysis.overall_score}")
-        return convert_to_legacy_format(analysis)
-        
-    except Exception as e:
-        logger.warning(f"Multi-agent analysis failed, falling back to single AI: {e}")
-        
-        # Fallback to unified AI service
-        if ai_service:
+    # Use ai-service microservice for analysis
+    if ai_service:
+        try:
             response = await ai_service.analyze_answer(
                 job_description=request.jobDescription,
                 answer=request.answer,
                 question=question_text,
                 role=role
             )
-        else:
-            # Final fallback if no AI service available
-            response = {
-                "analysis": "AI analysis service is currently unavailable. Please try again later.",
-                "score": {"clarity": 7.0, "confidence": 7.0, "technical": 7.0, "overall": 7.0},
-                "suggestions": ["Service temporarily unavailable", "Please try again in a few moments"],
-                "multi_agent_analysis": None
-            }
-        
-        # Convert to dict if it's a Pydantic model
-        if hasattr(response, 'dict'):
-            return response.dict()
-        return response
+            
+            # Convert to dict if it's a Pydantic model
+            if hasattr(response, 'dict'):
+                return response.dict()
+            return response
+        except Exception as e:
+            logger.error(f"AI service analysis failed: {e}")
+            raise
+    
+    # Fallback if no AI service available
+    logger.warning("AI service unavailable, returning default response")
+    return {
+        "analysis": "AI analysis service is currently unavailable. Please try again later.",
+        "score": {"clarity": 7.0, "confidence": 7.0, "technical": 7.0, "overall": 7.0},
+        "suggestions": ["Service temporarily unavailable", "Please try again in a few moments"],
+        "multi_agent_analysis": None
+    }
 
 def convert_to_legacy_format(analysis) -> Dict[str, Any]:
     """
