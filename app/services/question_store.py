@@ -64,7 +64,11 @@ class QuestionStoreService:
                 source = q_data.get("source", "newly_generated")
                 ai_question_id = q_data.get("question_id")
                 
-                # Handle library questions with known IDs
+                # Handle library questions with stable IDs from ai-service
+                # For source="from_library", ai-service should provide a stable UUID
+                # that matches an existing Question record in PostgreSQL.
+                # This prevents duplicate persistence and ensures embedding vectors
+                # map correctly to existing questions.
                 if source == "from_library" and ai_question_id:
                     existing = await self._find_question_by_id(ai_question_id)
                     if existing:

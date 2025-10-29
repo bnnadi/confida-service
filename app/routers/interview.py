@@ -110,20 +110,21 @@ async def generate_questions(
                 detail="Invalid AI service response: expected JSON object"
             )
         
-        # Validate required fields - embedding_vectors is optional but preferred
-        required = ["questions", "identifiers", "embedding_vectors"]
-        missing = [f for f in required if f not in ai_response]
-        if missing:
-            # embedding_vectors is optional, warn but don't fail
-            required_critical = ["questions", "identifiers"]
-            missing_critical = [f for f in required_critical if f not in ai_response]
-            if missing_critical:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"AI response missing required fields: {', '.join(missing_critical)}"
-                )
-            else:
-                logger.warning(f"AI response missing optional field(s): {missing}")
+        # Validate required fields
+        required_fields = ["questions", "identifiers"]
+        missing_required = [f for f in required_fields if f not in ai_response]
+        if missing_required:
+            raise HTTPException(
+                status_code=422,
+                detail=f"AI response missing required fields: {', '.join(missing_required)}"
+            )
+        
+        # Check for optional fields (preferred but not required)
+        if "embedding_vectors" not in ai_response:
+            logger.warning(
+                "AI response missing embedding_vectors (optional but preferred). "
+                "Will generate embeddings via ai-service as needed."
+            )
         
         # Extract questions and identifiers
         questions_data = ai_response.get("questions", [])
@@ -136,15 +137,11 @@ async def generate_questions(
                 detail="AI service returned no questions"
             )
         
-        # Validate identifiers shape (warn only)
+        # Validate identifiers shape (warn only - not strict requirement)
         expected_keys = ["skills", "focus_areas", "difficulty", "tone"]
         missing_keys = [k for k in expected_keys if k not in identifiers]
         if missing_keys:
             logger.warning(f"AI identifiers missing expected fields: {missing_keys}")
-        
-        # Validate embedding_vectors presence
-        if "embedding_vectors" not in ai_response:
-            logger.debug("No embedding_vectors in AI response, will generate as needed")
         
         logger.debug(f"AI response valid with {len(questions_data)} questions")
         
