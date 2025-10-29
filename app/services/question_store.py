@@ -256,9 +256,14 @@ class QuestionStoreService:
         """
         Persist questions and sync to Qdrant in a pseudo-transaction.
         
+        This method handles the complete pipeline:
+        1. Persists questions to PostgreSQL
+        2. Maps embeddings from AI service question IDs to persisted DB IDs
+        3. Syncs each question to Qdrant with its corresponding embedding
+        
         Args:
-            questions: List of question dictionaries
-            embeddings_dict: Optional dictionary mapping question IDs to embeddings
+            questions: List of question dictionaries from AI service (with question_id)
+            embeddings_dict: Dictionary mapping AI service question_id to embedding vectors
             session_id: Optional session ID
             
         Returns:
@@ -269,15 +274,29 @@ class QuestionStoreService:
             # Step 1: Persist to PostgreSQL
             persisted = await self.persist_questions(questions, session_id)
             
-            # Step 2: Sync to Qdrant
+            # Step 2: Map embeddings from AI service IDs to persisted DB IDs
+            embedding_map = {}
+            if embeddings_dict:
+                for q_data, persisted_q in zip(questions, persisted):
+                    ai_id = q_data.get("question_id") or q_data.get("id")
+                    db_id = str(persisted_q.id)
+                    
+                    if ai_id and ai_id in embeddings_dict:
+                        embedding_map[db_id] = embeddings_dict[ai_id]
+                    elif db_id in embeddings_dict:  # Fallback: direct DB ID match
+                        embedding_map[db_id] = embeddings_dict[db_id]
+            
+            # Step 3: Sync to Qdrant with mapped embeddings
+            sync_count = 0
             for q in persisted:
-                embedding = None
-                if embeddings_dict:
-                    embedding = embeddings_dict.get(str(q.id))
+                embedding = embedding_map.get(str(q.id))
                 success = await self.sync_question_to_vector_store(q, embedding)
-                if not success:
+                if success:
+                    sync_count += 1
+                else:
                     logger.warning(f"Qdrant sync failed for {q.id}, but question persisted to DB")
             
+            logger.info(f"Synced {sync_count}/{len(persisted)} questions to Qdrant")
             return persisted
         except Exception as e:
             logger.error(f"Transaction failed during persist_and_sync: {e}")

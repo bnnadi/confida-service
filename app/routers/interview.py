@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 # SQLAlchemy imports removed as they were unused
-from typing import Optional
+from typing import Optional, List, Dict
 from app.models.schemas import (
     ParseJDRequest, ParseJDResponse, AnalyzeAnswerRequest, AnalyzeAnswerResponse,
     JobRequest, StructuredQuestionResponse
@@ -12,7 +12,6 @@ from app.services.database_service import get_db, get_async_db
 from app.services.question_store import QuestionStoreService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_client_dependency
-from app.config import get_settings
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
@@ -32,9 +31,48 @@ def _map_embedding_vectors(questions_data, persisted_questions, embedding_vector
     for q_data, persisted_q in zip(questions_data, persisted_questions):
         ai_id = q_data.get("question_id") or q_data.get("id")
         db_id = str(persisted_q.id)
+        
         if ai_id and ai_id in embedding_vectors:
             embedding_map[db_id] = embedding_vectors[ai_id]
+        elif db_id in embedding_vectors:  # Fallback: direct DB ID match
+            embedding_map[db_id] = embedding_vectors[db_id]
     return embedding_map
+
+async def _persist_and_sync_questions(
+    questions_data: List[Dict],
+    embedding_vectors: Dict[str, List[float]],
+    session_id: Optional[str] = None
+) -> List:
+    """
+    Shared logic for persisting and syncing questions with Qdrant.
+    
+    This helper consolidates all persistence and sync logic into a single reusable function.
+    
+    Args:
+        questions_data: List of question dictionaries from AI service
+        embedding_vectors: Dictionary mapping AI service question_id to embedding vectors
+        session_id: Optional session ID for tracking
+        
+    Returns:
+        List of persisted Question objects
+    """
+    async_db_gen = get_async_db()
+    session = await async_db_gen.__anext__()
+    try:
+        question_store = QuestionStoreService(session)
+        persisted = await question_store.persist_and_sync_questions(
+            questions=questions_data,
+            embeddings_dict=embedding_vectors,
+            session_id=session_id
+        )
+        await session.commit()
+        return persisted
+    finally:
+        await session.close()
+        try:
+            await async_db_gen.__anext__()  # Trigger cleanup
+        except StopAsyncIteration:
+            pass
 
 @router.post("/questions/generate", response_model=StructuredQuestionResponse)
 async def generate_questions(
@@ -110,64 +148,14 @@ async def generate_questions(
         
         logger.debug(f"AI response valid with {len(questions_data)} questions")
         
-        # Step 2: Persist questions to PostgreSQL
-        settings = get_settings()
-        persisted_questions = []
+        # Step 2: Persist questions to PostgreSQL and sync to Qdrant (consolidated)
+        persisted_questions = await _persist_and_sync_questions(
+            questions_data=questions_data,
+            embedding_vectors=embedding_vectors,
+            session_id=None
+        )
         
-        if settings.ASYNC_DATABASE_ENABLED:
-            async_db_gen = get_async_db()
-            session = await async_db_gen.__anext__()
-            try:
-                question_store = QuestionStoreService(session)
-                persisted_questions = await question_store.persist_questions(
-                    questions_data,
-                    session_id=None  # Optional: could link to a session
-                )
-                
-                # Step 3: Map embedding vectors from AI service IDs to persisted DB IDs
-                embedding_map = _map_embedding_vectors(questions_data, persisted_questions, embedding_vectors)
-                
-                # Step 4: Sync embeddings to Qdrant
-                sync_count = 0
-                for question in persisted_questions:
-                    embedding = embedding_map.get(str(question.id))
-                    if await question_store.sync_question_to_vector_store(question, embedding):
-                        sync_count += 1
-                
-                from app.utils.logger import get_logger
-                logger = get_logger(__name__)
-                logger.info(f"Synced {sync_count}/{len(persisted_questions)} questions to Qdrant.")
-            finally:
-                await session.commit()
-                try:
-                    await async_db_gen.__anext__()
-                except StopAsyncIteration:
-                    pass
-        else:
-            db = next(get_db())
-            try:
-                question_store = QuestionStoreService(db)
-                persisted_questions = await question_store.persist_questions(
-                    questions_data,
-                    session_id=None
-                )
-                
-                # Step 3: Simplified embedding mapping using stable question_id
-                embedding_map = {}
-                for q_data, persisted_q in zip(questions_data, persisted_questions):
-                    ai_id = q_data.get("question_id") or q_data.get("id")
-                    db_id = str(persisted_q.id)
-                    if ai_id and ai_id in embedding_vectors:
-                        embedding_map[db_id] = embedding_vectors[ai_id]
-                
-                # Step 4: Sync embeddings to Qdrant
-                for question in persisted_questions:
-                    embedding = embedding_map.get(str(question.id))
-                    await question_store.sync_question_to_vector_store(question, embedding)
-            finally:
-                db.close()
-        
-        # Step 6: Build final structured response
+        # Step 3: Build final structured response
         from app.models.schemas import StructuredQuestion, QuestionIdentifier
         
         structured_questions = []
@@ -234,7 +222,7 @@ async def parse_job_description(
     Parse job description and generate relevant interview questions.
     
     ⚠️ DEPRECATED: This endpoint is maintained for backward compatibility only.
-    It redirects to the structured question generation flow.
+    It uses the structured question generation flow internally.
     New clients should use /api/v1/questions/generate instead.
     """
     from app.utils.logger import get_logger
@@ -265,60 +253,28 @@ async def parse_job_description(
         )
         
         # Extract questions from structured response
-        questions = structured_response.get("questions", [])
+        questions_data = structured_response.get("questions", [])
         embedding_vectors = structured_response.get("embedding_vectors", {})
         
-        # Persist questions if needed (for backward compatibility)
-        settings = get_settings()
-        if settings.ASYNC_DATABASE_ENABLED:
-            async_db_gen = get_async_db()
-            session = await async_db_gen.__anext__()
-            try:
-                question_store = QuestionStoreService(session)
-                persisted_questions = await question_store.persist_questions(questions)
-                
-                # Map embedding vectors from AI service IDs to persisted DB IDs
-                embedding_map = _map_embedding_vectors(questions, persisted_questions, embedding_vectors)
-                
-                for question in persisted_questions:
-                    embedding = embedding_map.get(str(question.id))
-                    await question_store.sync_question_to_vector_store(question, embedding)
-            finally:
-                await session.commit()
-        else:
-            db = next(get_db())
-            try:
-                question_store = QuestionStoreService(db)
-                persisted_questions = await question_store.persist_questions(questions)
-                
-                # Map embedding vectors from AI service IDs to persisted DB IDs
-                embedding_map = _map_embedding_vectors(questions, persisted_questions, embedding_vectors)
-                
-                # Sync embeddings to Qdrant
-                sync_count = 0
-                for question in persisted_questions:
-                    embedding = embedding_map.get(str(question.id))
-                    if await question_store.sync_question_to_vector_store(question, embedding):
-                        sync_count += 1
-                
-                from app.utils.logger import get_logger
-                logger = get_logger(__name__)
-                logger.info(f"Synced {sync_count}/{len(persisted_questions)} questions to Qdrant.")
-            finally:
-                db.close()
+        # Persist questions using shared helper (consolidated logic)
+        await _persist_and_sync_questions(
+            questions_data=questions_data,
+            embedding_vectors=embedding_vectors,
+            session_id=None
+        )
         
         # Format response for backward compatibility
         question_texts = [
             q.get("text") if isinstance(q, dict) else str(q)
-            for q in questions
+            for q in questions_data
         ]
         
         # Count by source
         question_bank_count = sum(
-            1 for q in questions 
+            1 for q in questions_data 
             if (isinstance(q, dict) and q.get("source") == "from_library")
         )
-        ai_generated_count = len(questions) - question_bank_count
+        ai_generated_count = len(questions_data) - question_bank_count
         
         return ParseJDResponse(
             questions=question_texts,
@@ -352,46 +308,57 @@ async def analyze_answer(
         raise HTTPException(status_code=503, detail="AI service unavailable")
     
     try:
-        # Verify question exists and belongs to user
-        from app.services.database_service import get_db
-        from app.database.models import Question, InterviewSession
+        # Verify question exists and belongs to user (async)
+        from app.database.models import Question, InterviewSession, Answer
         from sqlalchemy import select
         
-        db = next(get_db())
-        question = db.query(Question).join(InterviewSession).filter(
-            Question.id == question_id,
-            InterviewSession.user_id == current_user["id"]
-        ).first()
-        
-        if not question:
-            raise HTTPException(status_code=404, detail="Question not found")
-        
-        # Get question text and role for analysis
-        question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
-        role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
-        
-        # Use AI service microservice for analysis
-        response = await ai_client.analyze_answer(
-            job_description=request.jobDescription,
-            question=question_text,
-            answer=request.answer,
-            role=role
-        )
-        
-        # Store answer and analysis in database directly
-        from app.database.models import Answer
-        
-        answer = Answer(
-            question_id=question_id,
-            answer_text=request.answer,
-            analysis_result=response,
-            score={"clarity": response.get("score", {}).get("clarity", 0), 
-                  "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis")
-        )
-        
-        db.add(answer)
-        db.commit()
+        async_db_gen = get_async_db()
+        session = await async_db_gen.__anext__()
+        try:
+            # Verify question access
+            result = await session.execute(
+                select(Question)
+                .join(InterviewSession)
+                .where(
+                    Question.id == question_id,
+                    InterviewSession.user_id == current_user["id"]
+                )
+            )
+            question = result.scalar_one_or_none()
+            
+            if not question:
+                raise HTTPException(status_code=404, detail="Question not found")
+            
+            # Get question text and role for analysis
+            question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
+            role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
+            
+            # Use AI service microservice for analysis
+            response = await ai_client.analyze_answer(
+                job_description=request.jobDescription,
+                question=question_text,
+                answer=request.answer,
+                role=role
+            )
+            
+            # Store answer and analysis in database directly
+            answer = Answer(
+                question_id=question_id,
+                answer_text=request.answer,
+                analysis_result=response,
+                score={"clarity": response.get("score", {}).get("clarity", 0), 
+                      "confidence": response.get("score", {}).get("confidence", 0)},
+                multi_agent_scores=response.get("multi_agent_analysis")
+            )
+            
+            session.add(answer)
+            await session.commit()
+        finally:
+            await session.close()
+            try:
+                await async_db_gen.__anext__()  # Trigger cleanup
+            except StopAsyncIteration:
+                pass
         
         return AnalyzeAnswerResponse(
             analysis=response.get("analysis", ""),
@@ -466,9 +433,11 @@ async def pull_model(model_name: str):
 
 # Legacy handlers (kept for backward compatibility)
 async def _handle_database_operation(operation_type: str, **kwargs):
-    """Unified handler for database operations (async/sync)."""
-    settings = get_settings()
+    """
+    Unified handler for database operations.
     
+    Standardized to use async-only pattern.
+    """
     # Use strategy pattern for operation handling
     operation_handlers = {
         "parse_jd": _handle_parse_jd_operation,
@@ -479,10 +448,8 @@ async def _handle_database_operation(operation_type: str, **kwargs):
     if not handler:
         raise HTTPException(status_code=400, detail=f"Unknown operation type: {operation_type}")
     
-    if settings.ASYNC_DATABASE_ENABLED:
-        return await handler(is_async=True, **kwargs)
-    else:
-        return await handler(is_async=False, **kwargs)
+    # Always use async pattern (standardized)
+    return await handler(is_async=True, **kwargs)
 
 async def _handle_parse_jd_operation(is_async: bool, **kwargs):
     """Unified handler for JD parsing using ai-client."""
@@ -536,7 +503,12 @@ async def _handle_analyze_answer_operation(is_async: bool, **kwargs):
 
 
 async def _handle_parse_jd_unified(ai_client, db, request, validated_service, current_user):
-    """JD parsing logic using provided ai-client."""
+    """
+    JD parsing logic using provided ai-client.
+    
+    NOTE: This is a legacy handler kept for backward compatibility.
+    Uses QuestionStoreService.persist_and_sync_questions() for consolidated logic.
+    """
     from app.utils.logger import get_logger
     from app.exceptions import AIServiceError
     
@@ -555,19 +527,15 @@ async def _handle_parse_jd_unified(ai_client, db, request, validated_service, cu
         
         # Extract questions data
         questions_data = response.get("questions", [])
-        
-        # Persist questions to database
-        question_store = QuestionStoreService(db)
-        persisted = await question_store.persist_questions(questions_data)
-        
-        # Sync each persisted question to vector store with simplified mapping
         embedding_vectors = response.get("embedding_vectors", {})
-        embedding_map = _map_embedding_vectors(questions_data, persisted, embedding_vectors)
         
-        # Sync embeddings to Qdrant
-        for q in persisted:
-            embedding = embedding_map.get(str(q.id))
-            await question_store.sync_question_to_vector_store(q, embedding)
+        # Persist questions to database using consolidated service method
+        question_store = QuestionStoreService(db)
+        _ = await question_store.persist_and_sync_questions(
+            questions=questions_data,
+            embeddings_dict=embedding_vectors,
+            session_id=None
+        )  # Questions persisted and synced to Qdrant
         
         # Extract question texts for response
         question_texts = [
