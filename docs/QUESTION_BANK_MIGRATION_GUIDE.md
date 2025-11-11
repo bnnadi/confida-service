@@ -1,483 +1,214 @@
 # Question Bank Migration and Data Seeding Guide
 
+This guide explains how to migrate existing questions to the global question bank structure and seed the question bank with initial data.
+
 ## Overview
 
-This guide covers the comprehensive question bank migration and data seeding system implemented for Confida. The system migrates existing session-bound questions to a global question bank and provides extensive data seeding capabilities.
+The question bank migration process consists of three main steps:
 
-## 🎯 **What Was Implemented**
+1. **Data Migration** - Migrate any existing questions to the global question bank structure
+2. **Data Seeding** - Populate the question bank with comprehensive, diverse questions
+3. **Validation** - Verify data integrity and migration success
 
-### **Core Migration System**
-- **Question Bank Migration Script** - Migrates existing session-bound questions to global question bank
-- **Data Seeding System** - Comprehensive seeding with sample questions from multiple sources
-- **CLI Management Tool** - Command-line interface for question bank operations
-- **Data Validation System** - Quality checks and data integrity validation
-- **Sample Question Database** - Curated collection of high-quality interview questions
+## Prerequisites
 
-### **Key Features**
-- **Zero-downtime migration** - Migrates existing data without service interruption
-- **Duplicate detection** - Identifies and handles duplicate questions intelligently
-- **Data enrichment** - Automatically enriches questions with metadata, skills, and tags
-- **Quality validation** - Comprehensive data quality checks and reporting
-- **Flexible seeding** - Support for multiple question sources and formats
+- Database schema migration `7b15fd9db179` must be applied (creates global question bank structure)
+- Database connection configured in environment variables
+- Python dependencies installed
 
-## 📁 **Files Created**
+## Migration Process
 
-### **Migration Scripts**
-```
-scripts/
-├── question_bank_migration.py      # Main migration and seeding script
-├── question_bank_cli.py            # CLI tool for question bank management
-└── question_bank_validator.py      # Data validation and quality checks
-```
+### Step 1: Data Migration
 
-### **Data Files**
-```
-data/
-└── sample_questions.json           # Comprehensive sample question database
-```
+Run the migration script to migrate any existing questions:
 
-### **Documentation**
-```
-docs/
-└── QUESTION_BANK_MIGRATION_GUIDE.md  # This comprehensive guide
-```
-
-## 🚀 **Quick Start**
-
-### **1. Run Migration**
 ```bash
-# Migrate existing questions to question bank
-python scripts/question_bank_migration.py
-
-# Dry run to see what would be migrated
-python scripts/question_bank_cli.py migrate --dry-run
+python scripts/migrate_questions.py
 ```
 
-### **2. Seed Sample Questions**
+**What it does:**
+- Checks for questions without proper metadata and updates them
+- Validates data integrity
+- Updates session statistics
+- Ensures all questions have required fields
+
+**Output:**
+- Migration statistics (questions migrated, sessions updated, etc.)
+- Logs of any issues or warnings
+
+### Step 2: Data Seeding
+
+Seed the question bank with comprehensive questions:
+
 ```bash
-# Seed with comprehensive sample questions
-python scripts/question_bank_cli.py seed
-
-# Seed from custom JSON file
-python scripts/question_bank_cli.py seed --file data/sample_questions.json
+python scripts/seed_question_bank.py
 ```
 
-### **3. Validate Data Quality**
+**What it does:**
+- Loads questions from `data/sample_questions.json`
+- Adds additional comprehensive questions
+- Skips questions that already exist (safe to run multiple times)
+- Creates questions with proper metadata, categories, and tags
+
+**Output:**
+- Seeding statistics (questions created, skipped, errors)
+- Question distribution by category
+
+### Step 3: Validation
+
+Validate the migration and seeding:
+
 ```bash
-# Run comprehensive validation
-python scripts/question_bank_validator.py
-
-# Fix common issues
-python scripts/question_bank_validator.py --fix
-
-# Generate detailed report
-python scripts/question_bank_validator.py --report
+python scripts/validate_migration.py
 ```
 
-## 🔧 **Migration Process**
+**What it does:**
+- Counts statistics (total questions, sessions, links)
+- Checks data integrity (orphaned questions, invalid links, duplicates)
+- Measures performance impact
+- Generates validation report
 
-### **Step 1: Data Analysis**
-The migration script analyzes existing questions to:
-- Identify session-bound questions that need migration
-- Detect duplicate questions across sessions
-- Extract metadata and context information
-- Calculate usage statistics and performance metrics
+**Output:**
+- Validation report printed to console
+- Report saved to `logs/migration_validation_report.txt`
+- Exit code: 0 if successful, 1 if rollback recommended
 
-### **Step 2: Question Enrichment**
-Each question is enriched with:
-- **Metadata** - Source, migration timestamp, version information
-- **Skills** - Extracted from question text and context
-- **Roles** - Compatible roles from session context
-- **Tags** - Industry tags from job descriptions
-- **Statistics** - Usage count, average score, success rate
+## Scripts Overview
 
-### **Step 3: Global Question Bank Creation**
-Questions are migrated to the global question bank with:
-- **Unique IDs** - New UUIDs for global questions
-- **Session Links** - `SessionQuestion` records linking sessions to global questions
-- **Metadata Preservation** - All original data preserved and enhanced
-- **Duplicate Handling** - Intelligent duplicate detection and merging
+### `scripts/migrate_questions.py`
 
-### **Step 4: Session Updates**
-Existing sessions are updated to:
-- Link to global questions via `SessionQuestion` table
-- Maintain question order and session-specific context
-- Preserve all existing functionality
+**Purpose:** Migrate existing questions to global question bank structure
 
-## 📊 **Data Seeding System**
+**Features:**
+- Updates questions without metadata
+- Infers category and subcategory from question text
+- Validates data integrity
+- Updates session statistics
+- Safe to run multiple times
 
-### **Question Categories**
-
-#### **Technical Questions**
-- **Python** - Language-specific questions with difficulty levels
-- **JavaScript** - Frontend and Node.js questions
-- **Java** - Enterprise development questions
-- **Database** - SQL, optimization, and design questions
-- **Algorithms** - Data structures and algorithmic thinking
-
-#### **Behavioral Questions**
-- **Conflict Resolution** - Team dynamics and problem-solving
-- **Learning Agility** - Adaptability and growth mindset
-- **Resilience** - Handling failure and challenges
-- **Decision Making** - Critical thinking and leadership
-
-#### **System Design Questions**
-- **Web Services** - API design and microservices
-- **Real-time Systems** - Chat, notifications, streaming
-- **Distributed Systems** - Caching, consistency, scalability
-- **Recommendation Systems** - ML and data processing
-
-#### **Leadership Questions**
-- **Team Management** - Motivation and team building
-- **Feedback** - Communication and people management
-- **Stakeholder Management** - Prioritization and negotiation
-- **Decision Making** - Courage and leadership
-
-#### **Industry-Specific Questions**
-- **Fintech** - Security, compliance, trading systems
-- **Healthcare** - Privacy, regulations, medical software
-- **E-commerce** - Scalability, recommendations, performance
-
-### **Question Metadata Structure**
-```json
-{
-  "question": "Explain the difference between list comprehensions and generator expressions in Python.",
-  "difficulty": "medium",
-  "category": "technical",
-  "subcategory": "python",
-  "skills": ["python", "programming", "optimization", "memory_management"],
-  "tags": ["python", "performance", "data_structures"],
-  "compatible_roles": ["software_engineer", "backend_developer", "python_developer"],
-  "industry_tags": ["technology", "software"],
-  "usage_count": 0,
-  "average_score": null,
-  "success_rate": null
-}
-```
-
-## 🛠️ **CLI Tool Usage**
-
-### **Migration Commands**
+**Usage:**
 ```bash
-# Migrate existing questions
-python scripts/question_bank_cli.py migrate
-
-# Dry run migration
-python scripts/question_bank_cli.py migrate --dry-run
+python scripts/migrate_questions.py
 ```
 
-### **Seeding Commands**
+### `scripts/seed_question_bank.py`
+
+**Purpose:** Seed question bank with comprehensive questions
+
+**Features:**
+- Loads questions from `data/sample_questions.json`
+- Adds technical, behavioral, system design, leadership, and industry-specific questions
+- Skips duplicates (safe to run multiple times)
+- Creates questions with proper metadata
+
+**Usage:**
 ```bash
-# Seed with built-in questions
-python scripts/question_bank_cli.py seed
-
-# Seed from JSON file
-python scripts/question_bank_cli.py seed --file data/custom_questions.json
+python scripts/seed_question_bank.py
 ```
 
-### **Statistics Commands**
+### `scripts/validate_migration.py`
+
+**Purpose:** Validate migration and data integrity
+
+**Features:**
+- Validates data integrity
+- Checks for orphaned questions, invalid links, duplicates
+- Measures performance impact
+- Generates comprehensive validation report
+
+**Usage:**
 ```bash
-# Show question bank statistics
-python scripts/question_bank_cli.py stats
+python scripts/validate_migration.py
 ```
 
-### **Search Commands**
-```bash
-# Search questions
-python scripts/question_bank_cli.py search "python decorators"
+## Validation Report
 
-# Search with filters
-python scripts/question_bank_cli.py search "algorithms" --category technical --difficulty hard --limit 5
-```
+The validation script generates a comprehensive report that includes:
 
-### **Maintenance Commands**
-```bash
-# Clean up duplicates
-python scripts/question_bank_cli.py cleanup
+- **Statistics:** Total questions, sessions, session-question links
+- **Data Integrity:** Issues and warnings found
+- **Performance:** Query performance metrics
+- **Rollback Recommendation:** Whether rollback is required
 
-# Export questions
-python scripts/question_bank_cli.py export questions.json --format json
-python scripts/question_bank_cli.py export questions.csv --format csv --category technical
-```
+The report is saved to `logs/migration_validation_report.txt`.
 
-## 🔍 **Data Validation System**
+## Rollback Procedures
 
-### **Validation Checks**
+If validation indicates rollback is required:
 
-#### **Question Text Quality**
-- Length validation (10-1000 characters)
-- Proper punctuation and sentence structure
-- Common typo detection
-- Whitespace normalization
+1. **Check the validation report** for specific issues
+2. **Review logs** for detailed error messages
+3. **Fix data issues** manually or restore from backup
+4. **Re-run validation** to confirm fixes
 
-#### **Metadata Validation**
-- Required fields presence
-- JSON structure validation
-- Data type consistency
-- Value range validation
+### Common Issues and Solutions
 
-#### **Category Validation**
-- Valid category values
-- Category-subcategory consistency
-- Proper classification logic
+**Issue: Invalid session-question links**
+- **Cause:** SessionQuestion references non-existent Question
+- **Solution:** Remove invalid SessionQuestion records or create missing Questions
 
-#### **Skills and Roles Validation**
-- List structure validation
-- Non-empty values
-- Reasonable limits (max 20 skills, 10 roles)
-- Data type consistency
+**Issue: Orphaned questions**
+- **Cause:** Questions exist but aren't linked to any session
+- **Solution:** This is not necessarily a problem - orphaned questions can be used for future sessions
 
-#### **Usage Statistics Validation**
-- Numeric value validation
-- Range validation (scores 0-10, success rate 0-1)
-- Consistency checks
+**Issue: Duplicate questions**
+- **Cause:** Multiple questions with identical text
+- **Solution:** Review duplicates and merge if appropriate, or mark one as inactive
 
-#### **Duplicate Detection**
-- Text similarity analysis
-- Exact duplicate identification
-- Cross-category duplicate detection
+**Issue: Questions without metadata**
+- **Cause:** Questions created before metadata was required
+- **Solution:** Re-run migration script to update metadata
 
-#### **Data Consistency**
-- Cross-reference validation
-- Relationship integrity
-- Orphaned data detection
+## Performance Testing
 
-### **Quality Metrics**
-- **Quality Score** - Overall data quality (0-100)
-- **Validation Coverage** - Percentage of questions validated
-- **Issue Distribution** - Issues by type and severity
-- **Recommendations** - Automated improvement suggestions
+After migration, test performance with production-like data volumes:
 
-### **Validation Commands**
-```bash
-# Run full validation
-python scripts/question_bank_validator.py
+1. **Query Performance:** Test question selection queries
+2. **Load Testing:** Test under concurrent load
+3. **Index Usage:** Verify indexes are being used
+4. **Cache Performance:** Test caching effectiveness
 
-# Fix common issues
-python scripts/question_bank_validator.py --fix
+## Best Practices
 
-# Generate detailed report
-python scripts/question_bank_validator.py --report
+1. **Backup First:** Always backup database before migration
+2. **Test in Staging:** Run migration in staging environment first
+3. **Monitor Logs:** Watch for warnings and errors during migration
+4. **Validate After:** Always run validation after migration
+5. **Document Issues:** Document any issues encountered and resolutions
 
-# Dry run fixes
-python scripts/question_bank_validator.py --fix --dry-run
-```
+## Troubleshooting
 
-## 📈 **Migration Statistics**
+### Migration Fails
 
-### **Expected Results**
-- **Questions Migrated** - All existing session-bound questions
-- **Duplicates Handled** - Intelligent merging of duplicate questions
-- **Metadata Enriched** - Enhanced with skills, roles, and tags
-- **Sessions Updated** - All sessions linked to global questions
-- **Zero Data Loss** - All original data preserved
+1. Check database connection
+2. Verify schema migration is applied
+3. Review error logs for specific issues
+4. Check database permissions
 
-### **Performance Impact**
-- **Migration Time** - Typically 1-5 minutes for 1000+ questions
-- **Database Impact** - Minimal, uses transactions for safety
-- **Service Availability** - No downtime during migration
-- **Storage Impact** - Slight increase due to metadata enrichment
+### Seeding Fails
 
-## 🔧 **Configuration**
+1. Verify `data/sample_questions.json` exists and is valid JSON
+2. Check database connection
+3. Review error logs for specific questions
+4. Check for duplicate questions (may cause errors)
 
-### **Environment Variables**
-```bash
-# Database connection
-DATABASE_URL=postgresql://user:pass@localhost:5432/confida
+### Validation Fails
 
-# Migration settings
-MIGRATION_DRY_RUN=false
-MIGRATION_BATCH_SIZE=100
-MIGRATION_VALIDATE=true
+1. Review validation report for specific issues
+2. Check data integrity issues
+3. Fix issues and re-run validation
+4. Consider rollback if critical issues found
 
-# Seeding settings
-SEED_SAMPLE_QUESTIONS=true
-SEED_CUSTOM_QUESTIONS=false
-SEED_VALIDATE_QUALITY=true
-```
+## Support
 
-### **Migration Settings**
-```python
-# In question_bank_migration.py
-MIGRATION_CONFIG = {
-    "batch_size": 100,
-    "validate_duplicates": True,
-    "enrich_metadata": True,
-    "preserve_original": True,
-    "create_session_links": True
-}
-```
+For issues or questions:
+1. Check logs in `logs/` directory
+2. Review validation report
+3. Check database for data issues
+4. Consult team for assistance
 
-## 🚨 **Troubleshooting**
+## Related Documentation
 
-### **Common Issues**
-
-#### **Migration Failures**
-```bash
-# Check database connectivity
-python -c "from app.database.connection import get_db; print('DB connected')"
-
-# Verify question bank structure
-python scripts/question_bank_cli.py stats
-
-# Run validation
-python scripts/question_bank_validator.py
-```
-
-#### **Data Quality Issues**
-```bash
-# Check for duplicates
-python scripts/question_bank_cli.py search "duplicate text"
-
-# Validate specific questions
-python scripts/question_bank_validator.py --report
-
-# Fix common issues
-python scripts/question_bank_validator.py --fix
-```
-
-#### **Performance Issues**
-```bash
-# Check database performance
-python scripts/question_bank_cli.py stats
-
-# Monitor migration progress
-tail -f logs/migration.log
-
-# Optimize database
-python scripts/question_bank_cli.py cleanup
-```
-
-### **Recovery Procedures**
-
-#### **Rollback Migration**
-```bash
-# Restore from backup
-pg_restore -d confida backup_before_migration.sql
-
-# Or reset question bank
-python scripts/question_bank_cli.py cleanup --reset
-```
-
-#### **Fix Corrupted Data**
-```bash
-# Validate and fix
-python scripts/question_bank_validator.py --fix
-
-# Re-run migration
-python scripts/question_bank_migration.py
-```
-
-## 📚 **API Integration**
-
-### **Question Bank Service**
-```python
-from app.services.question_bank_service import QuestionBankService
-from app.database.connection import get_db
-
-# Get question bank service
-db = next(get_db())
-qb_service = QuestionBankService(db)
-
-# Get questions for role
-questions = qb_service.get_questions_for_role(
-    role="software_engineer",
-    job_description="Python developer role",
-    count=10
-)
-
-# Store generated questions
-qb_service.store_generated_questions(
-    questions=["Question 1", "Question 2"],
-    role="software_engineer",
-    job_description="Python developer role",
-    ai_service_used="gpt-4",
-    prompt_hash="abc123"
-)
-
-# Get statistics
-stats = qb_service.get_question_bank_stats()
-```
-
-### **Async Question Bank Service**
-```python
-from app.services.async_question_bank_service import AsyncQuestionBankService
-from app.database.async_connection import get_async_db
-
-async with get_async_db() as db:
-    qb_service = AsyncQuestionBankService(db)
-    
-    # Async operations
-    questions = await qb_service.get_questions_for_role(
-        role="software_engineer",
-        job_description="Python developer role",
-        count=10
-    )
-    
-    stats = await qb_service.get_question_bank_stats()
-```
-
-## 🎯 **Best Practices**
-
-### **Migration Best Practices**
-1. **Always run dry-run first** - Validate migration before execution
-2. **Backup database** - Create backup before major migrations
-3. **Monitor progress** - Watch logs and statistics during migration
-4. **Validate results** - Run validation after migration completion
-5. **Test functionality** - Verify all features work after migration
-
-### **Data Quality Best Practices**
-1. **Regular validation** - Run validation checks regularly
-2. **Fix issues promptly** - Address quality issues as they arise
-3. **Monitor statistics** - Track question usage and performance
-4. **Update metadata** - Keep question metadata current and accurate
-5. **Remove duplicates** - Clean up duplicate questions regularly
-
-### **Seeding Best Practices**
-1. **Use curated sources** - Only seed high-quality questions
-2. **Validate before seeding** - Check question quality before adding
-3. **Categorize properly** - Ensure correct category and subcategory
-4. **Enrich metadata** - Add comprehensive skills and tags
-5. **Test integration** - Verify seeded questions work with services
-
-## 🔮 **Future Enhancements**
-
-### **Planned Features**
-- **Question Versioning** - Track question changes over time
-- **A/B Testing** - Test different question variations
-- **Machine Learning** - AI-powered question recommendation
-- **Analytics Dashboard** - Visual question bank management
-- **API Endpoints** - REST API for question bank operations
-
-### **Advanced Seeding**
-- **External Sources** - Import from external question databases
-- **AI Generation** - Generate questions using AI services
-- **Community Contributions** - User-submitted questions
-- **Quality Scoring** - Automated quality assessment
-- **Dynamic Updates** - Real-time question updates
-
-## 📞 **Support and Resources**
-
-### **Documentation**
-- **Migration Guide** - This comprehensive guide
-- **API Documentation** - Service integration examples
-- **CLI Reference** - Command-line tool documentation
-- **Validation Guide** - Data quality management
-
-### **Tools and Scripts**
-- **Migration Script** - `scripts/question_bank_migration.py`
-- **CLI Tool** - `scripts/question_bank_cli.py`
-- **Validator** - `scripts/question_bank_validator.py`
-- **Sample Data** - `data/sample_questions.json`
-
-### **Monitoring**
-- **Health Checks** - Database and service monitoring
-- **Quality Metrics** - Data quality tracking
-- **Performance Stats** - Migration and seeding performance
-- **Error Logging** - Comprehensive error tracking
-
----
-
-**The Question Bank Migration and Data Seeding system is now fully implemented and ready for production use!** 🎉
-
-This system provides a robust foundation for managing interview questions with comprehensive migration, seeding, validation, and management capabilities.
+- `QUESTION_BANK_MIGRATION_GUIDE.md` - This guide
+- `MIGRATION_GUIDE.md` - General migration guide
+- `DATABASE_SETUP.md` - Database setup instructions
