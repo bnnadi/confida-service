@@ -203,9 +203,12 @@ class QuestionDataMigration:
             select(SessionQuestion.question_id).distinct()
         ).scalars().all()
         
+        # Convert to set for O(1) membership checks instead of O(n)
+        all_session_question_ids_set = set(all_session_question_ids)
+        
         orphaned_count = 0
         for question in all_questions:
-            if question.id not in all_session_question_ids:
+            if question.id not in all_session_question_ids_set:
                 orphaned_count += 1
                 logger.warning(f"Found orphaned question: {question.id} - {question.question_text[:50]}...")
         

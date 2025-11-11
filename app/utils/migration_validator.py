@@ -151,7 +151,11 @@ class MigrationValidator:
             select(SessionQuestion.question_id).distinct()
         ).scalars().all()
         
-        orphaned = [q for q in all_questions if q.id not in linked_question_ids]
+        # Convert to set for O(1) membership checks instead of O(n)
+        # This reduces overall complexity from O(n²) to O(n)
+        linked_question_ids_set = set(linked_question_ids)
+        
+        orphaned = [q for q in all_questions if q.id not in linked_question_ids_set]
         return orphaned
     
     def _find_invalid_session_question_links(self) -> List[SessionQuestion]:
