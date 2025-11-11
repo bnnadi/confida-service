@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from datetime import datetime
 from app.utils.logging_config import setup_logging
+from app.utils.logger import get_logger
 from app.middleware.logging_middleware import log_requests
 from app.middleware.rate_limiter import RateLimiter
 from app.middleware.redis_rate_limiter import RedisRateLimiter
@@ -10,8 +11,10 @@ from app.middleware.file_upload_middleware import create_file_upload_middleware_
 from app.exceptions import RateLimitExceededError
 from app.config import settings
 
-# Setup logging
-logger = setup_logging()
+# Setup logging configuration
+setup_logging()
+# Get logger instance
+logger = get_logger(__name__)
 
 # Set custom OpenAPI schema using simplified documentation builder
 from app.utils.api_documentation import APIDocumentationBuilder
@@ -180,7 +183,8 @@ app.add_middleware(RateLimitingMiddleware)
 
 from app.startup import validate_startup, check_service_health
 from app.utils.env_config import log_environment_status
-from app.services.database_service import init_database, init_async_database, database_service
+from app.services.database_service import init_database, init_async_database, init_async_db, get_db_health, database_service
+from app.database.async_connection import async_db_manager
 
 # Initialize database
 init_database()

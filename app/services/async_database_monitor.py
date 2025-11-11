@@ -8,7 +8,9 @@ import asyncio
 import time
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import text
 from app.services.database_service import database_service
+from app.database.async_connection import async_db_manager
 from app.utils.logger import get_logger
 from datetime import datetime, timedelta
 
@@ -144,7 +146,7 @@ class AsyncDatabaseMonitor:
             
             # Test a simple query
             async with async_db_manager.engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             
             response_time = time.time() - start_time
             
@@ -186,7 +188,7 @@ class AsyncDatabaseMonitor:
             start_time = time.time()
             
             async with async_db_manager.engine.begin() as conn:
-                result = await conn.execute("SELECT 1 as test")
+                result = await conn.execute(text("SELECT 1 as test"))
                 test_value = result.scalar()
             
             response_time = time.time() - start_time
