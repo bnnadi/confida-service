@@ -4,6 +4,7 @@ Async Database Connection Manager.
 This module provides a compatibility layer for async database operations,
 wrapping the unified database_service to provide the expected async_db_manager interface.
 """
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncEngine
 from app.services.database_service import database_service
 from app.utils.logger import get_logger
@@ -24,20 +25,14 @@ class AsyncDatabaseManager:
         self._database_service = database_service
     
     @property
-    def engine(self) -> AsyncEngine:
+    def engine(self) -> Optional[AsyncEngine]:
         """
         Get the async database engine.
         
         Returns:
-            AsyncEngine: The async SQLAlchemy engine
-            
-        Raises:
-            RuntimeError: If database service is not initialized
+            Optional[AsyncEngine]: The async SQLAlchemy engine, or None if not initialized
         """
-        engine = self._database_service.async_engine
-        if not engine:
-            raise RuntimeError("Async database engine not initialized")
-        return engine
+        return self._database_service.async_engine
     
     async def close(self) -> None:
         """

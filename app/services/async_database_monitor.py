@@ -142,6 +142,10 @@ class AsyncDatabaseMonitor:
     async def _collect_metrics(self) -> None:
         """Collect performance metrics."""
         try:
+            if not async_db_manager.engine:
+                self.logger.warning("Cannot collect metrics: database engine not initialized")
+                return
+            
             start_time = time.time()
             
             # Test a simple query
@@ -185,6 +189,13 @@ class AsyncDatabaseMonitor:
     async def _test_connectivity(self) -> Dict[str, Any]:
         """Test database connectivity."""
         try:
+            if not async_db_manager.engine:
+                return {
+                    "connected": False,
+                    "error": "Database engine not initialized",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
             start_time = time.time()
             
             async with async_db_manager.engine.begin() as conn:

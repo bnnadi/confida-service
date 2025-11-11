@@ -89,8 +89,14 @@ class QuestionDataMigration:
                 for question in questions_without_metadata:
                     self._update_question_metadata(question)
                     self.migration_stats["questions_migrated"] += 1
+                
+                # Flush changes to make them visible in the session
+                self.db_session.flush()
+                # Commit metadata updates before validation
+                self.db_session.commit()
+                logger.info(f"✅ Committed {len(questions_without_metadata)} metadata updates")
             
-            # Validate data integrity
+            # Validate data integrity (now runs on committed data)
             self._validate_data_integrity()
             
             # Update session statistics
@@ -242,8 +248,12 @@ class QuestionDataMigration:
                 session.total_questions = question_count
                 self.migration_stats["sessions_updated"] += 1
         
-        self.db_session.commit()
-        logger.info(f"✅ Updated {self.migration_stats['sessions_updated']} session statistics")
+        # Only commit if there were updates
+        if self.migration_stats["sessions_updated"] > 0:
+            self.db_session.commit()
+            logger.info(f"✅ Updated {self.migration_stats['sessions_updated']} session statistics")
+        else:
+            logger.info("✅ No session statistics updates needed")
 
 def main():
     """Main function to run migration."""
