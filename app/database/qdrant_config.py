@@ -177,6 +177,10 @@ class QdrantConfig:
     
     async def delete_collections(self):
         """Delete all collections (for testing/cleanup)."""
+        if not QDRANT_AVAILABLE:
+            logger.warning("Qdrant client not available, skipping collection deletion")
+            return
+        
         if not self._initialized:
             self._initialize_client()
         
@@ -196,6 +200,12 @@ class QdrantConfig:
     
     def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
         """Get information about a specific collection."""
+        if not QDRANT_AVAILABLE:
+            return {
+                "name": collection_name,
+                "error": "qdrant-client package is not installed"
+            }
+        
         if not self._initialized:
             self._initialize_client()
         
@@ -217,6 +227,12 @@ class QdrantConfig:
     
     def get_all_collections_info(self) -> Dict[str, Any]:
         """Get information about all collections."""
+        if not QDRANT_AVAILABLE:
+            return {
+                "error": "qdrant-client package is not installed",
+                "collections": {}
+            }
+        
         collections_info = {}
         for collection_name in self.COLLECTIONS.keys():
             collections_info[collection_name] = self.get_collection_info(collection_name)
