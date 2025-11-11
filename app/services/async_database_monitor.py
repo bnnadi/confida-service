@@ -6,11 +6,11 @@ including connection statistics, performance metrics, and health status.
 """
 import asyncio
 import time
-from typing import Dict, Any, Optional
-from sqlalchemy.ext.asyncio import AsyncEngine
-from app.services.database_service import database_service
+from typing import Dict, Any
+from sqlalchemy import text
+from app.database.async_connection import async_db_manager
 from app.utils.logger import get_logger
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ class AsyncDatabaseMonitor:
             overall_status = "healthy"
             if not connectivity_status["connected"]:
                 overall_status = "unhealthy"
-            elif pool_stats["pool_size"] >= pool_stats["max_overflow"] * 0.9:
+            elif "error" not in pool_stats and pool_stats.get("pool_size", 0) >= pool_stats.get("max_overflow", 0) * 0.9:
                 overall_status = "degraded"
             
             return {
@@ -140,16 +140,25 @@ class AsyncDatabaseMonitor:
     async def _collect_metrics(self) -> None:
         """Collect performance metrics."""
         try:
+            if not async_db_manager.engine:
+                self.logger.warning("Cannot collect metrics: database engine not initialized")
+                return
+            
             start_time = time.time()
             
             # Test a simple query
             async with async_db_manager.engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             
             response_time = time.time() - start_time
             
             # Get connection pool stats
             pool_stats = await self._get_pool_statistics()
+            
+            # Check if pool_stats contains an error
+            if "error" in pool_stats:
+                self.logger.warning(f"Cannot collect full metrics: {pool_stats['error']}")
+                return
             
             # Calculate queries per second (simplified)
             queries_per_second = 1 / response_time if response_time > 0 else 0
@@ -158,10 +167,10 @@ class AsyncDatabaseMonitor:
             metrics = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "response_time": response_time,
-                "active_connections": pool_stats["checked_out"],
+                "active_connections": pool_stats.get("checked_out", 0),
                 "queries_per_second": queries_per_second,
-                "pool_size": pool_stats["pool_size"],
-                "overflow": pool_stats["overflow"]
+                "pool_size": pool_stats.get("pool_size", 0),
+                "overflow": pool_stats.get("overflow", 0)
             }
             
             self.performance_history.append(metrics)
@@ -174,8 +183,10 @@ class AsyncDatabaseMonitor:
             if response_time > 1.0:  # More than 1 second
                 self.logger.warning(f"Slow database response: {response_time:.2f}s")
             
-            if pool_stats["checked_out"] >= pool_stats["pool_size"] * 0.8:
-                self.logger.warning(f"High connection pool usage: {pool_stats['checked_out']}/{pool_stats['pool_size']}")
+            checked_out = pool_stats.get("checked_out", 0)
+            pool_size = pool_stats.get("pool_size", 0)
+            if pool_size > 0 and checked_out >= pool_size * 0.8:
+                self.logger.warning(f"High connection pool usage: {checked_out}/{pool_size}")
                 
         except Exception as e:
             self.logger.error(f"Error collecting metrics: {e}")
@@ -183,10 +194,17 @@ class AsyncDatabaseMonitor:
     async def _test_connectivity(self) -> Dict[str, Any]:
         """Test database connectivity."""
         try:
+            if not async_db_manager.engine:
+                return {
+                    "connected": False,
+                    "error": "Database engine not initialized",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
             start_time = time.time()
             
             async with async_db_manager.engine.begin() as conn:
-                result = await conn.execute("SELECT 1 as test")
+                result = await conn.execute(text("SELECT 1 as test"))
                 test_value = result.scalar()
             
             response_time = time.time() - start_time
@@ -260,12 +278,23 @@ class AsyncDatabaseMonitor:
             health_status = await self.get_health_status()
             pool_status = await self.get_connection_pool_status()
             
+            # Check if health_status contains an error
+            if "error" in health_status:
+                return {
+                    "overall_status": health_status.get("status", "unhealthy"),
+                    "error": health_status.get("error", "Unknown error"),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            # Safely access nested structures
+            connectivity = health_status.get("connectivity", {})
+            
             return {
-                "overall_status": health_status["status"],
-                "connected": health_status["connectivity"]["connected"],
+                "overall_status": health_status.get("status", "unknown"),
+                "connected": connectivity.get("connected", False),
                 "active_connections": pool_status.get("checked_out", 0),
                 "pool_size": pool_status.get("pool_size", 0),
-                "response_time_ms": health_status["connectivity"].get("response_time_ms", 0),
+                "response_time_ms": connectivity.get("response_time_ms", 0),
                 "timestamp": datetime.utcnow().isoformat()
             }
             

@@ -7,7 +7,7 @@ and session handling into a single, comprehensive database service.
 import asyncio
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable, AsyncGenerator
 from sqlalchemy import create_engine, text, select, update, delete, func
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
@@ -346,6 +346,24 @@ class DatabaseService:
         Base.metadata.drop_all(bind=self._sync_engine)
         logger.info("✅ Database tables dropped successfully")
     
+    # Engine Access (Public API)
+    @property
+    def async_engine(self) -> Optional[AsyncEngine]:
+        """
+        Get the async database engine.
+        
+        Returns:
+            Optional[AsyncEngine]: The async SQLAlchemy engine, or None if not initialized
+        """
+        if not self._initialized:
+            self.initialize()
+        return self._async_engine
+    
+    @property
+    def is_initialized(self) -> bool:
+        """Check if the database service is initialized."""
+        return self._initialized
+    
     # Cleanup
     async def close_async(self):
         """Close async database connections."""
@@ -391,3 +409,12 @@ async def init_async_database():
     except Exception as e:
         logger.error(f"❌ Async database initialization failed: {e}")
         raise
+
+# Alias for backward compatibility
+async def init_async_db():
+    """Alias for init_async_database() for backward compatibility."""
+    return await init_async_database()
+
+async def get_db_health() -> Dict[str, Any]:
+    """Get async database health status."""
+    return await database_service.health_check_async()
