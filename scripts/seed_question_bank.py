@@ -41,6 +41,9 @@ class QuestionBankSeeder:
             "categories_created": 0,
             "errors": 0
         }
+        # Track existing categories in memory to avoid querying after each addition
+        self._existing_categories = set()
+        self._load_existing_categories()
     
     def seed_question_bank(self, use_sample_file: bool = True) -> Dict[str, Any]:
         """
@@ -297,14 +300,15 @@ class QuestionBankSeeder:
                 updated_at=datetime.utcnow()
             )
             
+            # Track categories BEFORE adding to session
+            # Check if this is a new category (not in existing categories and not already tracked)
+            is_new_category = category not in self._existing_categories
+            if is_new_category:
+                self._existing_categories.add(category)
+                self.seeding_stats["categories_created"] += 1
+            
             self.db_session.add(question)
             self.seeding_stats["questions_created"] += 1
-            
-            # Track categories
-            if category not in [c for c, _ in self.db_session.execute(
-                select(Question.category).distinct()
-            ).all()]:
-                self.seeding_stats["categories_created"] += 1
             
             return question
             
@@ -313,6 +317,18 @@ class QuestionBankSeeder:
             logger.error(f"  Question text: {question_text[:100]}...")
             self.seeding_stats["errors"] += 1
             return None
+    
+    def _load_existing_categories(self) -> None:
+        """Load existing categories from database into memory."""
+        try:
+            existing_categories = self.db_session.execute(
+                select(Question.category).distinct()
+            ).scalars().all()
+            self._existing_categories = set(existing_categories)
+            logger.debug(f"Loaded {len(self._existing_categories)} existing categories: {self._existing_categories}")
+        except Exception as e:
+            logger.warning(f"Could not load existing categories: {e}")
+            self._existing_categories = set()
     
     def _generate_prompt_hash(self, question_text: str) -> str:
         """Generate a hash for the question text."""
