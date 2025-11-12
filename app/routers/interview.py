@@ -12,6 +12,8 @@ from app.services.database_service import get_db, get_async_db
 from app.services.question_store import QuestionStoreService
 from app.middleware.auth_middleware import get_current_user_required
 from app.dependencies import get_ai_client_dependency
+from app.services.ai_client import AIServiceUnavailableError
+from app.utils.fallback import get_fallback_response
 
 router = APIRouter(prefix="/api/v1", tags=["interview"])
 
@@ -78,7 +80,8 @@ async def _persist_and_sync_questions(
 async def generate_questions(
     request: JobRequest,
     current_user: dict = Depends(get_current_user_required),
-    ai_client = Depends(get_ai_client_dependency)
+    ai_client = Depends(get_ai_client_dependency),
+    db = Depends(get_async_db)
 ):
     """
     Generate structured interview questions using AI service.
@@ -97,11 +100,39 @@ async def generate_questions(
         logger = get_logger(__name__)
         
         # Step 1: Call AI service for structured question generation
-        ai_response = await ai_client.generate_questions_structured(
-            role_name=request.role_name,
-            job_description=request.job_description,
-            resume=request.resume
-        )
+        try:
+            ai_response = await ai_client.generate_questions_structured(
+                role_name=request.role_name,
+                job_description=request.job_description,
+                resume=request.resume
+            )
+        except AIServiceUnavailableError as e:
+            logger.warning(f"AI service unavailable, using enhanced fallback: {e}")
+            # Use enhanced fallback that queries database
+            db_session = await db.__anext__()
+            try:
+                fallback_response = await get_fallback_response(
+                    operation="question_generation",
+                    role=request.role_name,
+                    count=10,
+                    db_session=db_session,
+                    job_description=request.job_description
+                )
+                ai_response = {
+                    "questions": fallback_response.get("questions", []),
+                    "identifiers": {
+                        "role": request.role_name,
+                        "difficulty": "medium",
+                        "category": "general"
+                    },
+                    "embedding_vectors": {}
+                }
+                logger.info(f"Using fallback questions: {fallback_response.get('metadata', {}).get('source', 'unknown')}")
+            finally:
+                try:
+                    await db.__anext__()
+                except StopAsyncIteration:
+                    pass
         
         # Validate AI service response structure
         if not isinstance(ai_response, dict):
@@ -516,11 +547,32 @@ async def _handle_parse_jd_unified(ai_client, db, request, validated_service, cu
     
     try:
         # Call ai-service for structured question generation
-        response = await ai_client.generate_questions_structured(
-            role_name=request.role,
-            job_description=request.jobDescription,
-            resume=getattr(request, "resume", None)
-        )
+        try:
+            response = await ai_client.generate_questions_structured(
+                role_name=request.role,
+                job_description=request.jobDescription,
+                resume=getattr(request, "resume", None)
+            )
+        except AIServiceUnavailableError as e:
+            logger.warning(f"AI service unavailable, using enhanced fallback: {e}")
+            # Use enhanced fallback that queries database
+            fallback_response = await get_fallback_response(
+                operation="question_generation",
+                role=request.role,
+                count=10,
+                db_session=db,
+                job_description=request.jobDescription
+            )
+            response = {
+                "questions": fallback_response.get("questions", []),
+                "identifiers": {
+                    "role": request.role,
+                    "difficulty": "medium",
+                    "category": "general"
+                },
+                "embedding_vectors": {}
+            }
+            logger.info(f"Using fallback questions: {fallback_response.get('metadata', {}).get('source', 'unknown')}")
         
         # Extract questions data
         questions_data = response.get("questions", [])

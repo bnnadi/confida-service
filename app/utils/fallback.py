@@ -3,9 +3,14 @@ Centralized Fallback Manager for Confida
 
 This service consolidates all fallback logic from various services
 into a single, comprehensive fallback management system.
+
+Enhanced with database-backed fallback questions system that queries
+the question database when AI service fails.
 """
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 from app.utils.logger import get_logger
+from sqlalchemy import select, or_, func
+from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
 
@@ -102,11 +107,17 @@ class FallbackService:
             "token_optimization": self._fallback_token_optimization
         }
     
-    def get_fallback_response(self, operation: str, **kwargs) -> Dict[str, Any]:
+    async def get_fallback_response(self, operation: str, **kwargs) -> Dict[str, Any]:
         """Get fallback response for a specific operation."""
         try:
             if operation in self.fallback_strategies:
-                return self.fallback_strategies[operation](**kwargs)
+                strategy = self.fallback_strategies[operation]
+                # Check if strategy is async using inspect
+                import inspect
+                if inspect.iscoroutinefunction(strategy):
+                    return await strategy(**kwargs)
+                else:
+                    return strategy(**kwargs)
             elif operation in self.fallback_responses:
                 return self.fallback_responses[operation].copy()
             else:
@@ -115,8 +126,161 @@ class FallbackService:
             logger.error(f"Error generating fallback for {operation}: {e}")
             return self._generic_fallback(operation, **kwargs)
     
-    def _fallback_questions(self, role: str = "Software Engineer", count: int = 10, **kwargs) -> Dict[str, Any]:
-        """Generate fallback questions based on role."""
+    async def _fallback_questions(
+        self, 
+        role: str = "Software Engineer", 
+        count: int = 10, 
+        db_session: Optional[Any] = None,
+        job_description: Optional[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Enhanced fallback questions that queries database first, then falls back to hardcoded.
+        
+        Args:
+            role: Job role/title
+            count: Number of questions to return
+            db_session: Database session (sync or async)
+            job_description: Optional job description for context
+            **kwargs: Additional parameters
+            
+        Returns:
+            Dict with questions list and metadata
+        """
+        # Try to get questions from database first
+        if db_session:
+            try:
+                db_questions = await self._get_questions_from_database(
+                    db_session=db_session,
+                    role=role,
+                    count=count,
+                    job_description=job_description
+                )
+                
+                if db_questions:
+                    logger.info(f"Retrieved {len(db_questions)} questions from database for fallback (role: {role})")
+                    return {
+                        "questions": db_questions,
+                        "metadata": {
+                            "source": "database_fallback",
+                            "reason": "ai_service_unavailable",
+                            "role": role,
+                            "count": len(db_questions)
+                        }
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to retrieve questions from database: {e}. Falling back to hardcoded questions.")
+        
+        # Fallback to hardcoded questions
+        return self._get_hardcoded_fallback_questions(role=role, count=count)
+    
+    async def _get_questions_from_database(
+        self,
+        db_session: Any,
+        role: str,
+        count: int,
+        job_description: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Query database for relevant questions based on role and criteria.
+        
+        Args:
+            db_session: Database session (sync or async)
+            role: Job role to match
+            count: Number of questions to retrieve
+            job_description: Optional job description for additional context
+            
+        Returns:
+            List of question dictionaries in format expected by AI service
+        """
+        try:
+            from app.database.models import Question
+            
+            # Determine if session is async
+            is_async = hasattr(db_session, 'execute')
+            
+            # Build query to find questions matching role
+            # Try to match compatible_roles JSONB field
+            role_lower = role.lower()
+            
+            if is_async:
+                # Async query
+                query = select(Question).where(
+                    or_(
+                        Question.compatible_roles.contains([role]),
+                        Question.compatible_roles.contains([role_lower]),
+                        func.lower(Question.category).contains(role_lower),
+                        Question.question_text.ilike(f"%{role}%")
+                    )
+                ).order_by(
+                    Question.usage_count.desc(),
+                    Question.average_score.desc().nulls_last()
+                ).limit(count)
+                
+                result = await db_session.execute(query)
+                questions = result.scalars().all()
+            else:
+                # Sync query
+                questions = db_session.query(Question).filter(
+                    or_(
+                        Question.compatible_roles.contains([role]),
+                        Question.compatible_roles.contains([role_lower]),
+                        func.lower(Question.category).contains(role_lower),
+                        Question.question_text.ilike(f"%{role}%")
+                    )
+                ).order_by(
+                    Question.usage_count.desc(),
+                    Question.average_score.desc().nulls_last()
+                ).limit(count).all()
+            
+            # If no role-specific questions found, try general questions
+            if not questions:
+                logger.info(f"No role-specific questions found for {role}, trying general questions")
+                if is_async:
+                    general_query = select(Question).order_by(
+                        Question.usage_count.desc(),
+                        Question.average_score.desc().nulls_last()
+                    ).limit(count)
+                    result = await db_session.execute(general_query)
+                    questions = result.scalars().all()
+                else:
+                    questions = db_session.query(Question).order_by(
+                        Question.usage_count.desc(),
+                        Question.average_score.desc().nulls_last()
+                    ).limit(count).all()
+            
+            # Convert to expected format
+            question_list = []
+            for q in questions:
+                question_dict = {
+                    "text": q.question_text,
+                    "question_text": q.question_text,
+                    "question_id": str(q.id),
+                    "source": "from_library",
+                    "metadata": {
+                        "difficulty_level": q.difficulty_level,
+                        "category": q.category,
+                        "subcategory": q.subcategory,
+                        "compatible_roles": q.compatible_roles or [],
+                        "required_skills": q.required_skills or [],
+                        "industry_tags": q.industry_tags or []
+                    },
+                    "identifiers": {
+                        "difficulty": q.difficulty_level,
+                        "category": q.category,
+                        "role": role
+                    }
+                }
+                question_list.append(question_dict)
+            
+            return question_list
+            
+        except Exception as e:
+            logger.error(f"Error querying database for fallback questions: {e}")
+            raise
+    
+    def _get_hardcoded_fallback_questions(self, role: str, count: int) -> Dict[str, Any]:
+        """Get hardcoded fallback questions when database query fails."""
         base_questions = self.fallback_responses["question_generation"]["questions"]
         
         # Role-specific question modifications
@@ -138,13 +302,35 @@ class FallbackService:
         all_questions = base_questions + role_questions
         selected_questions = all_questions[:count]
         
+        # Convert to expected format (list of dicts matching database format)
+        question_list = []
+        for q_text in selected_questions:
+            question_dict = {
+                "text": q_text,
+                "question_text": q_text,
+                "source": "hardcoded_fallback",
+                "metadata": {
+                    "difficulty_level": "medium",
+                    "category": "general",
+                    "compatible_roles": [role] if role else [],
+                    "required_skills": [],
+                    "industry_tags": []
+                },
+                "identifiers": {
+                    "difficulty": "medium",
+                    "category": "general",
+                    "role": role
+                }
+            }
+            question_list.append(question_dict)
+        
         return {
-            "questions": selected_questions,
+            "questions": question_list,
             "metadata": {
-                "source": "fallback",
+                "source": "hardcoded_fallback",
                 "reason": "service_unavailable",
                 "role": role,
-                "count": len(selected_questions)
+                "count": len(question_list)
             }
         }
     
@@ -200,9 +386,9 @@ class FallbackService:
 fallback_service = FallbackService()
 
 # Convenience functions
-def get_fallback_response(operation: str, **kwargs) -> Dict[str, Any]:
+async def get_fallback_response(operation: str, **kwargs) -> Dict[str, Any]:
     """Get fallback response for an operation."""
-    return fallback_service.get_fallback_response(operation, **kwargs)
+    return await fallback_service.get_fallback_response(operation, **kwargs)
 
 def register_fallback_strategy(operation: str, strategy: Callable) -> None:
     """Register a custom fallback strategy."""
