@@ -6,7 +6,7 @@ and session handling into a single, comprehensive database service.
 """
 import asyncio
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable, AsyncGenerator
-from sqlalchemy import create_engine, text, select, update, delete, func
+from sqlalchemy import create_engine, text, select, update, delete, func, JSON
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, selectinload, joinedload
@@ -15,6 +15,34 @@ from sqlalchemy.pool import StaticPool
 from datetime import datetime
 from app.config import get_settings
 from app.utils.logger import get_logger
+
+# Patch JSONB for SQLite compatibility before importing models
+try:
+    from sqlalchemy.dialects.postgresql import JSONB
+    import sqlalchemy.dialects.sqlite.base
+    
+    # Patch JSONB class to handle SQLite
+    if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
+        original_impl = JSONB.load_dialect_impl
+        
+        def _patched_load_dialect_impl(self, dialect):
+            if dialect.name == 'sqlite':
+                return dialect.type_descriptor(JSON())
+            return original_impl(self, dialect)
+        
+        JSONB.load_dialect_impl = _patched_load_dialect_impl
+        JSONB._patched_for_sqlite = True
+    
+    # Patch SQLite compiler to handle JSONB
+    if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_jsonb'):
+        def visit_JSONB(self, type_, **kw):
+            return self.visit_JSON(type_, **kw)
+        
+        sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_JSONB = visit_JSONB
+        sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_jsonb = True
+except ImportError:
+    # JSONB not available, skip patching
+    pass
 
 logger = get_logger(__name__)
 settings = get_settings()
