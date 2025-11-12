@@ -9,7 +9,7 @@ the question database when AI service fails.
 """
 from typing import Dict, Any, List, Callable, Optional
 from app.utils.logger import get_logger
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
@@ -184,6 +184,12 @@ class FallbackService:
         """
         Query database for relevant questions based on role and criteria.
         
+        Optimized for performance:
+        - Prioritizes JSONB contains() queries (uses GIN indexes)
+        - Uses efficient category matching (case-insensitive with index support)
+        - Minimizes expensive text search operations
+        - Uses proper ordering by indexed columns
+        
         Args:
             db_session: Database session (sync or async)
             role: Job role to match
@@ -199,20 +205,28 @@ class FallbackService:
             # Determine if session is async
             is_async = hasattr(db_session, 'execute')
             
-            # Build query to find questions matching role
-            # Try to match compatible_roles JSONB field
+            # Normalize role for matching (lowercase for consistency)
             role_lower = role.lower()
+            role_normalized = role_lower.strip()
             
+            # Build optimized query prioritizing index-friendly operations
+            # Strategy: Use JSONB contains first (GIN index), then category prefix (B-tree index),
+            # avoid expensive substring text search
             if is_async:
-                # Async query
+                # Async query - optimized order: JSONB first, then indexed category prefix
                 query = select(Question).where(
                     or_(
+                        # JSONB contains queries (uses GIN index efficiently)
                         Question.compatible_roles.contains([role]),
                         Question.compatible_roles.contains([role_lower]),
-                        func.lower(Question.category).contains(role_lower),
-                        Question.question_text.ilike(f"%{role}%")
+                        Question.compatible_roles.contains([role_normalized]),
+                        # Category prefix matching (uses B-tree index efficiently)
+                        Question.category.ilike(f"{role_normalized}%"),
+                        # Subcategory prefix matching (uses B-tree index efficiently)
+                        Question.subcategory.ilike(f"{role_normalized}%"),
                     )
                 ).order_by(
+                    # Order by indexed columns for performance
                     Question.usage_count.desc(),
                     Question.average_score.desc().nulls_last()
                 ).limit(count)
@@ -220,20 +234,26 @@ class FallbackService:
                 result = await db_session.execute(query)
                 questions = result.scalars().all()
             else:
-                # Sync query
+                # Sync query - same optimization strategy
                 questions = db_session.query(Question).filter(
                     or_(
+                        # JSONB contains queries (uses GIN index efficiently)
                         Question.compatible_roles.contains([role]),
                         Question.compatible_roles.contains([role_lower]),
-                        func.lower(Question.category).contains(role_lower),
-                        Question.question_text.ilike(f"%{role}%")
+                        Question.compatible_roles.contains([role_normalized]),
+                        # Category prefix matching (uses B-tree index efficiently)
+                        Question.category.ilike(f"{role_normalized}%"),
+                        # Subcategory prefix matching (uses B-tree index efficiently)
+                        Question.subcategory.ilike(f"{role_normalized}%"),
                     )
                 ).order_by(
+                    # Order by indexed columns for performance
                     Question.usage_count.desc(),
                     Question.average_score.desc().nulls_last()
                 ).limit(count).all()
             
             # If no role-specific questions found, try general questions
+            # This fallback uses indexed columns for fast retrieval
             if not questions:
                 logger.info(f"No role-specific questions found for {role}, trying general questions")
                 if is_async:
