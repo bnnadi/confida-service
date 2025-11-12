@@ -6,10 +6,15 @@ Handles persistence of questions to PostgreSQL and synchronization with Qdrant v
 from typing import List, Dict, Optional
 from sqlalchemy import select
 from app.database.models import Question
-from app.database.qdrant_config import QdrantConfig
+from app.database.qdrant_config import QdrantConfig, QDRANT_AVAILABLE
 from app.utils.logger import get_logger
-from qdrant_client.http.models import PointStruct
 from datetime import datetime
+
+# Optional Qdrant imports
+if QDRANT_AVAILABLE:
+    from qdrant_client.http.models import PointStruct
+else:
+    PointStruct = None
 
 logger = get_logger(__name__)
 
@@ -183,6 +188,10 @@ class QuestionStoreService:
         Returns:
             bool: True if sync successful, False otherwise
         """
+        if not QDRANT_AVAILABLE:
+            logger.warning(f"Qdrant not available, skipping sync for question {question.id}")
+            return False
+        
         try:
             client = self._get_qdrant_client()
             
@@ -220,6 +229,9 @@ class QuestionStoreService:
             logger.info(f"Synced question {question.id} to Qdrant successfully")
             return True
             
+        except ImportError as e:
+            logger.warning(f"Qdrant client not available: {e}")
+            return False
         except Exception as e:
             logger.error(f"Qdrant sync failed for {question.id}: {e}")
             return False

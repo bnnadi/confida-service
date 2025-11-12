@@ -6,9 +6,23 @@ enabling semantic search capabilities for Confida.
 """
 import os
 from typing import Dict, Any, Optional
-from qdrant_client import QdrantClient
-from qdrant_client.http import models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+
+# Optional Qdrant imports - gracefully handle if package is not installed
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models
+    from qdrant_client.http.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QdrantClient = None
+    Distance = None
+    VectorParams = None
+    PointStruct = None
+    Filter = None
+    FieldCondition = None
+    MatchValue = None
+    QDRANT_AVAILABLE = False
+
 from app.config import get_settings
 from app.utils.logger import get_logger
 
@@ -21,7 +35,7 @@ class QdrantConfig:
     # Base collection template
     BASE_COLLECTION_CONFIG = {
         "vector_size": 1536,  # OpenAI embedding size
-        "distance": Distance.COSINE
+        "distance": Distance.COSINE if QDRANT_AVAILABLE and Distance is not None else "cosine"
     }
     
     # Collection-specific payload schemas
@@ -83,14 +97,24 @@ class QdrantConfig:
         self.client: Optional[QdrantClient] = None
         self._initialized = False
     
-    def get_client(self) -> QdrantClient:
+    def get_client(self) -> Optional[QdrantClient]:
         """Get or create Qdrant client."""
+        if not QDRANT_AVAILABLE:
+            raise ImportError(
+                "qdrant-client package is not installed. "
+                "Install it with: pip install qdrant-client"
+            )
         if not self._initialized:
             self._initialize_client()
         return self.client
     
     def _initialize_client(self):
         """Initialize Qdrant client connection."""
+        if not QDRANT_AVAILABLE:
+            raise ImportError(
+                "qdrant-client package is not installed. "
+                "Install it with: pip install qdrant-client"
+            )
         try:
             if self.qdrant_api_key:
                 self.client = QdrantClient(
@@ -109,6 +133,10 @@ class QdrantConfig:
     
     async def create_collections(self):
         """Create all required vector collections."""
+        if not QDRANT_AVAILABLE:
+            logger.warning("Qdrant client not available, skipping collection creation")
+            return
+        
         if not self._initialized:
             self._initialize_client()
         
@@ -124,11 +152,19 @@ class QdrantConfig:
                     pass
                 
                 # Create collection
+                distance = config["distance"]
+                if isinstance(distance, str) and QDRANT_AVAILABLE and Distance is not None:
+                    # Convert string to Distance enum if needed
+                    if distance.lower() == "cosine":
+                        distance = Distance.COSINE
+                    else:
+                        distance = Distance.COSINE  # Default to cosine
+                
                 self.client.create_collection(
                     collection_name=collection_name,
                     vectors_config=VectorParams(
                         size=config["vector_size"],
-                        distance=config["distance"]
+                        distance=distance
                     )
                 )
                 logger.info(f"✅ Created collection '{collection_name}'")
@@ -141,6 +177,10 @@ class QdrantConfig:
     
     async def delete_collections(self):
         """Delete all collections (for testing/cleanup)."""
+        if not QDRANT_AVAILABLE:
+            logger.warning("Qdrant client not available, skipping collection deletion")
+            return
+        
         if not self._initialized:
             self._initialize_client()
         
@@ -160,6 +200,12 @@ class QdrantConfig:
     
     def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
         """Get information about a specific collection."""
+        if not QDRANT_AVAILABLE:
+            return {
+                "name": collection_name,
+                "error": "qdrant-client package is not installed"
+            }
+        
         if not self._initialized:
             self._initialize_client()
         
@@ -181,6 +227,12 @@ class QdrantConfig:
     
     def get_all_collections_info(self) -> Dict[str, Any]:
         """Get information about all collections."""
+        if not QDRANT_AVAILABLE:
+            return {
+                "error": "qdrant-client package is not installed",
+                "collections": {}
+            }
+        
         collections_info = {}
         for collection_name in self.COLLECTIONS.keys():
             collections_info[collection_name] = self.get_collection_info(collection_name)
@@ -188,6 +240,13 @@ class QdrantConfig:
     
     def health_check(self) -> Dict[str, Any]:
         """Check Qdrant service health."""
+        if not QDRANT_AVAILABLE:
+            return {
+                "status": "unavailable",
+                "url": self.qdrant_url,
+                "error": "qdrant-client package is not installed"
+            }
+        
         try:
             if not self._initialized:
                 self._initialize_client()
