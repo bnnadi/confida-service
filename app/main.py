@@ -115,7 +115,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Include routers with simplified error handling
 def load_routers():
     """Load routers with simplified error handling."""
-    from app.routers import interview, sessions, auth, files, speech, cache, health, analytics, scoring
+    from app.routers import interview, sessions, auth, files, speech, cache, health, analytics, scoring, dashboard
     from app.utils.logger import get_logger
     logger = get_logger(__name__)
     
@@ -130,7 +130,8 @@ def load_routers():
         ("cache", cache.router),
         ("health", health.router),
         ("analytics", analytics.router),
-        ("scoring", scoring.router)
+        ("scoring", scoring.router),
+        ("dashboard", dashboard.router)
     ]
     
     # Conditional routers based on environment variables

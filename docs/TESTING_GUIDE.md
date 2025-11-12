@@ -41,10 +41,13 @@ tests/
 ├── unit/                       # Unit tests
 │   ├── test_question_bank_service.py
 │   ├── test_hybrid_ai_service.py
-│   └── test_database_models.py
+│   ├── test_database_models.py
+│   ├── test_data_aggregator.py      # Dashboard data aggregation tests
+│   └── test_dashboard_service.py    # Dashboard service tests
 ├── integration/                # Integration tests
 │   ├── test_interview_endpoints.py
-│   └── test_session_endpoints.py
+│   ├── test_session_endpoints.py
+│   └── test_dashboard_endpoints.py  # Dashboard API endpoint tests
 ├── e2e/                       # End-to-end tests
 │   └── test_complete_interview_flow.py
 ├── fixtures/                  # Test fixtures and utilities
@@ -83,6 +86,12 @@ python scripts/run_tests.py --marker performance
 
 # Run specific test file
 python scripts/run_tests.py --test tests/unit/test_question_bank_service.py
+
+# Run dashboard tests
+pytest tests/unit/test_data_aggregator.py tests/unit/test_dashboard_service.py tests/integration/test_dashboard_endpoints.py -v
+
+# Run dashboard tests with coverage
+pytest tests/unit/test_data_aggregator.py --cov=app.services.data_aggregator --cov-report=term-missing
 
 # Run with verbose output
 python scripts/run_tests.py --type all --verbose
@@ -138,6 +147,38 @@ def test_question_bank_service_get_questions():
 **Markers**: `@pytest.mark.unit`
 **Focus**: Individual functions, methods, and classes
 
+#### Dashboard Service Tests
+
+Dashboard service tests verify data aggregation and formatting logic:
+
+```python
+@pytest.mark.unit
+def test_get_user_sessions_summary_with_sessions(db_session, sample_user):
+    """Test getting session summary with multiple sessions."""
+    aggregator = DataAggregator(db_session)
+    
+    # Create test sessions
+    session1 = InterviewSession(
+        user_id=sample_user.id,
+        role="Python Developer",
+        status="completed",
+        overall_score={"overall": 8.5}
+    )
+    # ... add sessions
+    
+    result = aggregator.get_user_sessions_summary(str(sample_user.id))
+    
+    assert result["total_sessions"] == 2
+    assert result["average_score"] == 8.0
+```
+
+**Location**: 
+- `tests/unit/test_data_aggregator.py` - Data aggregation logic
+- `tests/unit/test_dashboard_service.py` - Dashboard service formatting
+
+**Markers**: `@pytest.mark.unit`
+**Focus**: Data aggregation, progress tracking, trend analysis, insights generation
+
 ### Integration Tests
 
 Integration tests verify component interactions and API endpoints:
@@ -161,6 +202,31 @@ def test_parse_job_description_success(client, sample_parse_request, mock_ai_ser
 **Location**: `tests/integration/`
 **Markers**: `@pytest.mark.integration`
 **Focus**: API endpoints, service interactions, database operations
+
+#### Dashboard API Tests
+
+Dashboard API tests verify the dashboard data aggregation endpoints:
+
+```python
+@pytest.mark.integration
+def test_get_dashboard_overview_success(client, sample_user, sample_sessions, mock_current_user):
+    """Test successful dashboard overview retrieval."""
+    with patch('app.routers.dashboard.get_current_user_required', return_value=mock_current_user):
+        response = client.get(
+            f"/api/v1/dashboard/overview/{sample_user.id}",
+            params={"days": 30}
+        )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_id"] == str(sample_user.id)
+    assert "total_sessions" in data
+    assert "average_score" in data
+```
+
+**Location**: `tests/integration/test_dashboard_endpoints.py`
+**Markers**: `@pytest.mark.integration`
+**Focus**: Dashboard endpoints, data aggregation, authentication, authorization
 
 ### End-to-End Tests
 
@@ -242,6 +308,37 @@ def test_sql_injection_protection(client):
 - **Minimum Coverage**: 85%
 - **Target Coverage**: 90%
 - **Critical Components**: 95%
+
+### Dashboard Test Coverage
+
+The dashboard functionality includes comprehensive test coverage:
+
+- **Data Aggregator Service**: 11 unit tests covering:
+  - Session summary aggregation
+  - User progress tracking
+  - Recent activity retrieval
+  - Streak calculation
+  - Skill breakdown analysis
+  - Performance metrics calculation
+  - Trend data analysis
+  - User insights generation
+
+- **Dashboard Service**: 7 unit tests covering:
+  - Overview data formatting
+  - Progress data formatting
+  - Analytics data formatting
+  - Performance metrics formatting
+  - Trends formatting
+  - Insights formatting
+
+- **Dashboard API Endpoints**: 11 integration tests covering:
+  - All 6 dashboard endpoints (overview, progress, analytics, metrics, trends, insights)
+  - Authentication and authorization
+  - Input validation
+  - Error handling
+  - Empty data scenarios
+
+**Total Dashboard Tests**: 29 test cases
 
 ### Coverage Reports
 
@@ -555,6 +652,62 @@ python scripts/run_tests.py --type all --no-cleanup
 5. **Write descriptive test names** and docstrings
 6. **Ensure test isolation** and proper cleanup
 
+### Dashboard Testing Examples
+
+#### Testing Data Aggregation
+
+```python
+def test_get_user_sessions_summary_with_date_range(db_session, sample_user):
+    """Test getting session summary with date filtering."""
+    aggregator = DataAggregator(db_session)
+    
+    # Create old and recent sessions
+    old_session = InterviewSession(
+        user_id=sample_user.id,
+        status="completed",
+        overall_score={"overall": 6.0},
+        created_at=datetime.utcnow() - timedelta(days=60)
+    )
+    recent_session = InterviewSession(
+        user_id=sample_user.id,
+        status="completed",
+        overall_score={"overall": 9.0},
+        created_at=datetime.utcnow() - timedelta(days=5)
+    )
+    
+    # Test with date range
+    start_date = datetime.utcnow() - timedelta(days=30)
+    result = aggregator.get_user_sessions_summary(
+        str(sample_user.id),
+        start_date=start_date
+    )
+    
+    assert result["total_sessions"] == 1
+    assert result["average_score"] == 9.0
+```
+
+#### Testing Dashboard Endpoints
+
+```python
+@pytest.mark.integration
+def test_get_dashboard_overview_unauthorized(client, sample_user):
+    """Test dashboard overview with unauthorized access."""
+    other_user_id = str(uuid.uuid4())
+    mock_user = {
+        "user_id": other_user_id,
+        "email": "other@example.com",
+        "is_admin": False
+    }
+    
+    with patch('app.routers.dashboard.get_current_user_required', return_value=mock_user):
+        response = client.get(
+            f"/api/v1/dashboard/overview/{sample_user.id}",
+            params={"days": 30}
+        )
+    
+    assert response.status_code == 403
+```
+
 ### Test Review Checklist
 
 - [ ] Test covers the intended functionality
@@ -597,5 +750,119 @@ python scripts/run_tests.py --type all --no-cleanup
 - **Docker**: Containerized testing
 - **PostgreSQL**: Test database
 - **Redis**: Test cache
+
+## Dashboard Testing Guide
+
+### Overview
+
+The dashboard functionality includes comprehensive testing for data aggregation, service logic, and API endpoints. All dashboard tests follow the same patterns as other tests in the codebase.
+
+### Running Dashboard Tests
+
+```bash
+# Run all dashboard tests
+pytest tests/unit/test_data_aggregator.py tests/unit/test_dashboard_service.py tests/integration/test_dashboard_endpoints.py -v
+
+# Run specific dashboard test file
+pytest tests/unit/test_data_aggregator.py -v
+
+# Run with coverage
+pytest tests/unit/test_data_aggregator.py --cov=app.services.data_aggregator --cov-report=term-missing
+
+# Run specific test
+pytest tests/unit/test_data_aggregator.py::TestDataAggregator::test_get_user_sessions_summary_with_sessions -v
+```
+
+### Test Files
+
+1. **`tests/unit/test_data_aggregator.py`** - Tests for `DataAggregator` service
+   - Session summary aggregation
+   - Progress tracking
+   - Activity retrieval
+   - Streak calculation
+   - Skill breakdown
+   - Performance metrics
+   - Trend analysis
+   - User insights
+
+2. **`tests/unit/test_dashboard_service.py`** - Tests for `DashboardService`
+   - Overview data formatting
+   - Progress data formatting
+   - Analytics data formatting
+   - Metrics formatting
+   - Trends formatting
+   - Insights formatting
+
+3. **`tests/integration/test_dashboard_endpoints.py`** - Tests for dashboard API endpoints
+   - All 6 dashboard endpoints
+   - Authentication and authorization
+   - Input validation
+   - Error handling
+   - Edge cases
+
+### Test Fixtures
+
+Dashboard tests use standard fixtures from `conftest.py`:
+- `db_session` - Database session
+- `sample_user` - Test user
+- `sample_sessions` - Test interview sessions
+- `mock_current_user` - Mock authenticated user
+- `mock_admin_user` - Mock admin user
+
+### Common Test Patterns
+
+#### Testing Data Aggregation
+
+```python
+def test_aggregation_method(db_session, sample_user):
+    """Test aggregation method with sample data."""
+    aggregator = DataAggregator(db_session)
+    
+    # Create test data
+    session = InterviewSession(
+        user_id=sample_user.id,
+        status="completed",
+        overall_score={"overall": 8.0}
+    )
+    db_session.add(session)
+    db_session.commit()
+    
+    # Test aggregation
+    result = aggregator.get_method(str(sample_user.id))
+    
+    # Assert results
+    assert result["key"] == expected_value
+```
+
+#### Testing API Endpoints
+
+```python
+@pytest.mark.integration
+def test_endpoint_success(client, sample_user, mock_current_user):
+    """Test successful endpoint call."""
+    with patch('app.routers.dashboard.get_current_user_required', return_value=mock_current_user):
+        response = client.get(
+            f"/api/v1/dashboard/endpoint/{sample_user.id}",
+            params={"days": 30}
+        )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "expected_field" in data
+```
+
+### Test Coverage
+
+Dashboard tests provide comprehensive coverage:
+- **Unit Tests**: 18 tests covering service logic
+- **Integration Tests**: 11 tests covering API endpoints
+- **Total**: 29 test cases
+
+All dashboard functionality is tested with:
+- Positive cases (successful operations)
+- Negative cases (error conditions)
+- Edge cases (empty data, boundary conditions)
+- Authentication and authorization
+- Input validation
 
 For additional support, contact the development team or refer to the project's issue tracker.
