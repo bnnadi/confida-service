@@ -13,21 +13,21 @@ from app.main import app
 
 # Replace JSONB with JSON for SQLite compatibility
 # This must happen before importing models
-import sqlalchemy.dialects.postgresql.base
 import sqlalchemy.dialects.sqlite.base
 from sqlalchemy import JSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 # Patch JSONB class to handle SQLite
-if not hasattr(sqlalchemy.dialects.postgresql.base.JSONB, '_patched_for_sqlite'):
-    original_impl = sqlalchemy.dialects.postgresql.base.JSONB.load_dialect_impl
+if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
+    original_impl = JSONB.load_dialect_impl
     
     def _patched_load_dialect_impl(self, dialect):
         if dialect.name == 'sqlite':
             return dialect.type_descriptor(JSON())
         return original_impl(self, dialect)
     
-    sqlalchemy.dialects.postgresql.base.JSONB.load_dialect_impl = _patched_load_dialect_impl
-    sqlalchemy.dialects.postgresql.base.JSONB._patched_for_sqlite = True
+    JSONB.load_dialect_impl = _patched_load_dialect_impl
+    JSONB._patched_for_sqlite = True
 
 # Patch SQLite compiler to handle JSONB
 if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_jsonb'):
