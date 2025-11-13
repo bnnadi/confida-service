@@ -40,12 +40,23 @@ class ParseJDResponse(BaseModel):
     questions: List[str] = Field(..., description="Generated interview questions")
 
 class Score(BaseModel):
-    clarity: int = Field(..., ge=1, le=10, description="Clarity score 1-10")
-    confidence: int = Field(..., ge=1, le=10, description="Confidence score 1-10")
+    """Legacy score model - maintained for backward compatibility."""
+    clarity: int = Field(..., ge=1, le=10, description="Clarity score 1-10 (legacy)")
+    confidence: int = Field(..., ge=1, le=10, description="Confidence score 1-10 (legacy)")
+    
+class EnhancedScore(BaseModel):
+    """Enhanced 100-point scoring system."""
+    total_score: float = Field(..., ge=0.0, le=100.0, description="Total score out of 100")
+    grade_tier: str = Field(..., description="Grade tier: Excellent, Strong, Average, or At Risk")
+    verbal_communication: float = Field(..., ge=0.0, le=40.0, description="Verbal Communication score (0-40)")
+    interview_readiness: float = Field(..., ge=0.0, le=20.0, description="Interview Readiness score (0-20)")
+    non_verbal_communication: float = Field(..., ge=0.0, le=25.0, description="Non-verbal Communication score (0-25)")
+    adaptability_engagement: float = Field(..., ge=0.0, le=15.0, description="Adaptability & Engagement score (0-15)")
 
 class AnalyzeAnswerResponse(BaseModel):
     analysis: str = Field(..., description="Analysis of the answer")
-    score: Dict[str, Any] = Field(..., description="Score breakdown")
+    score: Dict[str, Any] = Field(..., description="Score breakdown (legacy format)")
+    enhanced_score: Optional[Dict[str, Any]] = Field(None, description="Enhanced 100-point scoring rubric")
     suggestions: List[str] = Field(default_factory=list, description="Suggested improvements")
     jobDescription: str = Field(..., description="Job description used for analysis")
     answer: str = Field(..., description="The analyzed answer")

@@ -388,13 +388,19 @@ async def analyze_answer(
             except StopAsyncIteration:
                 pass
         
+        # Extract enhanced scoring rubric
+        from app.routers.analysis_helpers import extract_enhanced_score
+        enhanced_score = extract_enhanced_score(response)
+        
         return AnalyzeAnswerResponse(
             analysis=response.get("analysis", ""),
             score=response.get("score", {}),
+            enhanced_score=enhanced_score,
             suggestions=response.get("suggestions", []),
             jobDescription=request.jobDescription,
             answer=request.answer,
-            service_used=validated_service
+            service_used=validated_service,
+            multi_agent_analysis=response.get("multi_agent_analysis")
         )
         
     except HTTPException:
@@ -650,13 +656,19 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
         db.add(answer)
         db.commit()
     
+    # Extract enhanced scoring rubric
+    from app.routers.analysis_helpers import extract_enhanced_score
+    enhanced_score = extract_enhanced_score(response)
+    
     return AnalyzeAnswerResponse(
         analysis=response.get("analysis", ""),
         score=response.get("score", {}),
+        enhanced_score=enhanced_score,
         suggestions=response.get("suggestions", []),
         jobDescription=request.jobDescription,
         answer=request.answer,
-        service_used=validated_service
+        service_used=validated_service,
+        multi_agent_analysis=response.get("multi_agent_analysis")
     )
 
 
@@ -689,12 +701,17 @@ async def _handle_sync_analyze_answer(ai_service, db, request, validated_service
     db.add(answer)
     db.commit()
     
+    # Extract enhanced scoring rubric
+    from app.routers.analysis_helpers import extract_enhanced_score
+    enhanced_score = extract_enhanced_score(response_dict)
+    
     # Return in the expected format
     if 'multi_agent_analysis' in response_dict:
         # Create proper response object using Pydantic model
         return AnalyzeAnswerResponse(
             analysis=response_dict.get("analysis", ""),
             score=response_dict.get("score", {}),
+            enhanced_score=enhanced_score,
             suggestions=response_dict.get("suggestions", []),
             jobDescription=request.jobDescription,
             answer=request.answer,

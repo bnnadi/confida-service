@@ -2,14 +2,87 @@
 Multi-Agent Scoring Models
 
 This module defines Pydantic models for multi-agent analysis and scoring.
+Includes the enhanced 100-point scoring rubric system.
 """
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
+from enum import Enum
+
+
+class GradeTier(str, Enum):
+    """Grade tier classification based on total score."""
+    EXCELLENT = "Excellent"  # 90-100 points
+    STRONG = "Strong"  # 75-89 points
+    AVERAGE = "Average"  # 60-74 points
+    AT_RISK = "At Risk"  # 0-59 points
+
+
+class SubDimensionScore(BaseModel):
+    """Score for a single sub-dimension (1-5 scale)."""
+    score: float = Field(..., ge=1.0, le=5.0, description="Sub-dimension score from 1-5")
+    feedback: str = Field(..., description="Feedback for this sub-dimension")
+    examples: List[str] = Field(default_factory=list, description="Specific examples from the answer")
+
+
+class VerbalCommunicationScores(BaseModel):
+    """Verbal Communication category (40 points total: 5 sub-dimensions × 5 points each)."""
+    articulation: SubDimensionScore = Field(..., description="Clarity and pronunciation (5 points)")
+    content_relevance: SubDimensionScore = Field(..., description="Relevance to question (5 points)")
+    structure: SubDimensionScore = Field(..., description="Organization and flow (5 points)")
+    vocabulary: SubDimensionScore = Field(..., description="Word choice and precision (5 points)")
+    delivery_confidence: SubDimensionScore = Field(..., description="Confidence in delivery (5 points)")
+    category_score: float = Field(..., ge=0.0, le=40.0, description="Total verbal communication score (0-40)")
+    category_feedback: str = Field(..., description="Overall feedback for verbal communication")
+
+
+class InterviewReadinessScores(BaseModel):
+    """Interview Readiness category (20 points total: 4 sub-dimensions × 5 points each)."""
+    preparedness: SubDimensionScore = Field(..., description="Preparation level (5 points)")
+    example_quality: SubDimensionScore = Field(..., description="Quality of examples provided (5 points)")
+    problem_solving: SubDimensionScore = Field(..., description="Problem-solving approach (5 points)")
+    responsiveness: SubDimensionScore = Field(..., description="Directness in answering (5 points)")
+    category_score: float = Field(..., ge=0.0, le=20.0, description="Total interview readiness score (0-20)")
+    category_feedback: str = Field(..., description="Overall feedback for interview readiness")
+
+
+class NonVerbalCommunicationScores(BaseModel):
+    """Non-verbal Communication category (25 points total: 5 sub-dimensions × 5 points each)."""
+    eye_contact: SubDimensionScore = Field(..., description="Eye contact quality (5 points)")
+    body_language: SubDimensionScore = Field(..., description="Body language and posture (5 points)")
+    vocal_variety: SubDimensionScore = Field(..., description="Voice tone and variation (5 points)")
+    pacing: SubDimensionScore = Field(..., description="Speech pacing and rhythm (5 points)")
+    engagement: SubDimensionScore = Field(..., description="Overall engagement level (5 points)")
+    category_score: float = Field(..., ge=0.0, le=25.0, description="Total non-verbal communication score (0-25)")
+    category_feedback: str = Field(..., description="Overall feedback for non-verbal communication")
+
+
+class AdaptabilityEngagementScores(BaseModel):
+    """Adaptability & Engagement category (15 points total: 3 sub-dimensions × 5 points each)."""
+    adaptability: SubDimensionScore = Field(..., description="Ability to adapt responses (5 points)")
+    enthusiasm: SubDimensionScore = Field(..., description="Enthusiasm and energy (5 points)")
+    active_listening: SubDimensionScore = Field(..., description="Active listening indicators (5 points)")
+    category_score: float = Field(..., ge=0.0, le=15.0, description="Total adaptability & engagement score (0-15)")
+    category_feedback: str = Field(..., description="Overall feedback for adaptability & engagement")
+
+
+class EnhancedScoringRubric(BaseModel):
+    """Complete 100-point scoring rubric with all 5 categories."""
+    verbal_communication: VerbalCommunicationScores = Field(..., description="Verbal Communication (40 points)")
+    interview_readiness: InterviewReadinessScores = Field(..., description="Interview Readiness (20 points)")
+    non_verbal_communication: NonVerbalCommunicationScores = Field(..., description="Non-verbal Communication (25 points)")
+    adaptability_engagement: AdaptabilityEngagementScores = Field(..., description="Adaptability & Engagement (15 points)")
+    total_score: float = Field(..., ge=0.0, le=100.0, description="Total score out of 100")
+    grade_tier: GradeTier = Field(..., description="Grade tier classification")
+    overall_feedback: str = Field(..., description="Comprehensive overall feedback")
+    top_strengths: List[str] = Field(default_factory=list, description="Top 3-5 strengths identified")
+    improvement_areas: List[str] = Field(default_factory=list, description="Top 3-5 areas for improvement")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Scoring timestamp")
+
 
 class AgentScore(BaseModel):
     """Score and feedback from an individual agent."""
-    score: float = Field(..., ge=0.0, le=10.0, description="Agent score from 0-10")
+    score: float = Field(..., ge=0.0, le=100.0, description="Agent score from 0-100")
     feedback: str = Field(..., description="Detailed feedback from the agent")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Agent confidence in the analysis")
     details: Dict[str, Any] = Field(default_factory=dict, description="Additional agent-specific details")
@@ -30,7 +103,7 @@ class ScoringWeights(BaseModel):
 
 class ContentAnalysis(BaseModel):
     """Content analysis results from the content agent."""
-    score: float = Field(..., ge=0.0, le=10.0, description="Overall content score")
+    score: float = Field(..., ge=0.0, le=100.0, description="Overall content score (0-100)")
     feedback: str = Field(..., description="Content analysis feedback")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Analysis confidence")
     details: Dict[str, Any] = Field(default_factory=dict, description="Detailed analysis data")
@@ -39,7 +112,7 @@ class ContentAnalysis(BaseModel):
 
 class DeliveryAnalysis(BaseModel):
     """Delivery analysis results from the delivery agent."""
-    score: float = Field(..., ge=0.0, le=10.0, description="Overall delivery score")
+    score: float = Field(..., ge=0.0, le=100.0, description="Overall delivery score (0-100)")
     feedback: str = Field(..., description="Delivery analysis feedback")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Analysis confidence")
     details: Dict[str, Any] = Field(default_factory=dict, description="Detailed analysis data")
@@ -48,7 +121,7 @@ class DeliveryAnalysis(BaseModel):
 
 class TechnicalAnalysis(BaseModel):
     """Technical analysis results from the technical agent."""
-    score: float = Field(..., ge=0.0, le=10.0, description="Overall technical score")
+    score: float = Field(..., ge=0.0, le=100.0, description="Overall technical score (0-100)")
     feedback: str = Field(..., description="Technical analysis feedback")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Analysis confidence")
     details: Dict[str, Any] = Field(default_factory=dict, description="Detailed analysis data")
@@ -60,7 +133,9 @@ class MultiAgentAnalysis(BaseModel):
     content_agent: AgentScore = Field(..., description="Content analysis results")
     delivery_agent: AgentScore = Field(..., description="Delivery analysis results")
     technical_agent: AgentScore = Field(..., description="Technical analysis results")
-    overall_score: float = Field(..., ge=0.0, le=10.0, description="Weighted overall score")
+    overall_score: float = Field(..., ge=0.0, le=100.0, description="Weighted overall score (0-100)")
+    grade_tier: Optional[GradeTier] = Field(default=None, description="Grade tier classification")
+    enhanced_rubric: Optional[EnhancedScoringRubric] = Field(default=None, description="Enhanced 100-point scoring rubric")
     recommendations: List[str] = Field(default_factory=list, description="Comprehensive recommendations")
     strengths: List[str] = Field(default_factory=list, description="Identified strengths")
     areas_for_improvement: List[str] = Field(default_factory=list, description="Areas needing improvement")
