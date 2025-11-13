@@ -150,7 +150,41 @@ Analyze a candidate's answer and provide comprehensive feedback with 100-point s
   - Non-verbal Communication (25 points)
   - Adaptability & Engagement (15 points)
 
-### 3. Health Check
+### 3. Real-Time Feedback WebSocket
+**WebSocket** `/ws/feedback/{session_id}`
+
+Real-time feedback endpoint for live speech analysis during interviews.
+
+**Connection:**
+```
+ws://localhost:8000/ws/feedback/{session_id}?token={access_token}
+```
+
+**Message Types (Client → Server):**
+- `{"type": "audio_chunk", "data": "base64_encoded_audio", "chunk_index": 0, "is_final": false}`
+- `{"type": "transcript", "data": "transcript text"}`
+- `{"type": "ping"}` - Keepalive
+
+**Response (Server → Client):**
+```json
+{
+  "session_id": "session-123",
+  "feedback_type": "speech_analysis",
+  "message": "Keep going! Your speech is clear and well-paced.",
+  "confidence": 0.85,
+  "suggestions": ["Try speaking a bit faster"],
+  "metrics": {
+    "filler_words": 2,
+    "pace": 150,
+    "clarity": 0.8,
+    "volume": 0.7,
+    "pauses": 3,
+    "confidence": 0.85
+  }
+}
+```
+
+### 4. Health Check
 **GET** `/health`
 
 Returns API health status.
@@ -180,6 +214,7 @@ Returns API health status.
 - ✅ Answer analysis via AI service microservice
 - ✅ **Enhanced 100-Point Scoring Rubric System** - Comprehensive scoring with 5 categories and 17 sub-dimensions
 - ✅ Speech-to-text transcription via AI service microservice
+- ✅ **Real-Time Feedback WebSocket API** - WebSocket endpoints for live speech analysis and real-time feedback
 - ✅ Rate limiting and admin endpoints
 - ✅ Comprehensive error handling
 - ✅ Centralized logging and configuration
@@ -189,7 +224,7 @@ Returns API health status.
 - [ ] Progress tracking across scoring dimensions
 - [ ] Analytics for dimension improvement over time
 - [ ] Dimension-specific coaching tips
-- [ ] Real-time collaboration features
+- [ ] Redis integration for WebSocket message queuing and scaling
 
 ### Adding New Endpoints
 1. Create new router in `app/routers/`
