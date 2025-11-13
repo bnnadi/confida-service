@@ -9,85 +9,94 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from app.models.scoring_models import (
     MultiAgentAnalysisRequest, MultiAgentAnalysisResponse,
     MultiAgentStatusResponse, AgentTestRequest, AgentTestResponse,
-    ScoringConfiguration, MultiAgentPerformanceMetrics, AnalysisHistory
+    ScoringConfiguration, MultiAgentPerformanceMetrics, AnalysisHistory,
+    GradeTier
 )
 from app.dependencies import get_ai_client_dependency
 from app.middleware.auth_middleware import get_current_user
 from app.utils.logger import get_logger
+from app.utils.scoring_utils import (
+    convert_10_to_100, parse_enhanced_rubric_from_ai_response,
+    create_enhanced_rubric_from_legacy_scores, calculate_grade_tier
+)
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/scoring", tags=["multi-agent-scoring"])
 
+# Constants
+DEFAULT_AGENT_CONFIDENCE = 0.8
+
 
 def _convert_to_multi_agent_analysis(result: Dict[str, Any]):
-    """Convert AI service result to MultiAgentAnalysis format."""
+    """Convert AI service result to MultiAgentAnalysis format with 100-point scoring."""
     from app.models.scoring_models import MultiAgentAnalysis, AgentScore, ContentAnalysis, DeliveryAnalysis, TechnicalAnalysis
     
-    # Extract scores from result
+    # Extract scores from result (legacy 0-10 scale)
     score = result.get("score", {})
-    clarity = score.get("clarity", 0)
-    confidence = score.get("confidence", 0)
+    clarity = float(score.get("clarity", 0))
+    confidence = float(score.get("confidence", 0))
     
-    # Create agent scores
+    # Convert to 100-point scale
+    clarity_100 = convert_10_to_100(clarity)
+    confidence_100 = convert_10_to_100(confidence)
+    avg_score_100 = (clarity_100 + confidence_100) / 2
+    
+    # Try to parse enhanced rubric from AI response
+    enhanced_rubric = parse_enhanced_rubric_from_ai_response(result)
+    
+    # If enhanced rubric not found, create from legacy scores
+    if not enhanced_rubric:
+        enhanced_rubric = create_enhanced_rubric_from_legacy_scores(
+            clarity=clarity,
+            confidence=confidence,
+            analysis=result.get("analysis", ""),
+            suggestions=result.get("suggestions", [])
+        )
+    
+    # Calculate overall score and grade tier from enhanced rubric
+    overall_score = enhanced_rubric.total_score
+    grade_tier = enhanced_rubric.grade_tier
+    
+    # Create agent scores (on 100-point scale)
     content_score = AgentScore(
-        score=clarity,
+        score=clarity_100,
         feedback=result.get("analysis", ""),
-        strengths=result.get("suggestions", [])[:2],  # First 2 suggestions as strengths
-        improvements=result.get("suggestions", [])[2:]  # Rest as improvements
+        confidence=DEFAULT_AGENT_CONFIDENCE,
+        details={"source": "legacy_clarity_score"}
     )
     
     delivery_score = AgentScore(
-        score=confidence,
+        score=confidence_100,
         feedback="Communication clarity and confidence assessment",
-        strengths=[],
-        improvements=[]
+        confidence=DEFAULT_AGENT_CONFIDENCE,
+        details={"source": "legacy_confidence_score"}
     )
     
     technical_score = AgentScore(
-        score=(clarity + confidence) / 2,  # Average score
+        score=avg_score_100,
         feedback="Technical accuracy and domain knowledge assessment",
-        strengths=[],
-        improvements=[]
+        confidence=DEFAULT_AGENT_CONFIDENCE,
+        details={"source": "calculated_average"}
     )
-    
-    # Create analysis objects
-    content_analysis = ContentAnalysis(
-        score=clarity,
-        feedback=result.get("analysis", ""),
-        strengths=result.get("suggestions", [])[:2],
-        improvements=result.get("suggestions", [])[2:]
-    )
-    
-    delivery_analysis = DeliveryAnalysis(
-        score=confidence,
-        feedback="Communication style and clarity assessment",
-        strengths=[],
-        improvements=[]
-    )
-    
-    technical_analysis = TechnicalAnalysis(
-        score=(clarity + confidence) / 2,
-        feedback="Technical accuracy assessment",
-        strengths=[],
-        improvements=[]
-    )
-    
-    # Calculate overall score
-    overall_score = (clarity + confidence) / 2
     
     return MultiAgentAnalysis(
         content_agent=content_score,
         delivery_agent=delivery_score,
         technical_agent=technical_score,
         overall_score=overall_score,
+        grade_tier=grade_tier,
+        enhanced_rubric=enhanced_rubric,
         recommendations=result.get("suggestions", []),
-        strengths=result.get("suggestions", [])[:2],
-        areas_for_improvement=result.get("suggestions", [])[2:],
+        strengths=enhanced_rubric.top_strengths or result.get("suggestions", [])[:2],
+        areas_for_improvement=enhanced_rubric.improvement_areas or result.get("suggestions", [])[2:],
         analysis_metadata={
             "source": "ai_service_microservice",
             "response_length": len(result.get("answer", "")),
-            "converted_from": "ai_service_result"
+            "converted_from": "ai_service_result",
+            "scoring_system": "100_point_enhanced",
+            "legacy_clarity": clarity,
+            "legacy_confidence": confidence
         }
     )
 
