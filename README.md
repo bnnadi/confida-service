@@ -96,7 +96,7 @@ Generate interview questions based on job description.
 ### 2. Analyze Answer
 **POST** `/api/v1/analyze-answer`
 
-Analyze a candidate's answer and provide feedback.
+Analyze a candidate's answer and provide comprehensive feedback with 100-point scoring rubric.
 
 **Request:**
 ```json
@@ -110,21 +110,81 @@ Analyze a candidate's answer and provide feedback.
 **Response:**
 ```json
 {
+  "analysis": "Detailed analysis of the answer...",
   "score": {
     "clarity": 7,
     "confidence": 6
   },
-  "missingKeywords": ["WCAG", "ARIA", "accessibility compliance", "design systems"],
-  "improvements": [
+  "enhanced_score": {
+    "total_score": 75.5,
+    "grade_tier": "Strong",
+    "verbal_communication": 32.0,
+    "interview_readiness": 16.0,
+    "non_verbal_communication": 18.5,
+    "adaptability_engagement": 9.0,
+    "verbal_communication_details": {
+      "articulation": {"score": 4.0, "feedback": "Clear articulation"},
+      "content_relevance": {"score": 4.5, "feedback": "Highly relevant"},
+      "structure": {"score": 3.5, "feedback": "Well organized"},
+      "vocabulary": {"score": 4.0, "feedback": "Appropriate word choice"},
+      "delivery_confidence": {"score": 4.0, "feedback": "Confident delivery"}
+    },
+    "top_strengths": ["Clear communication", "Good preparation"],
+    "improvement_areas": ["Could improve pacing", "More examples needed"]
+  },
+  "suggestions": [
     "Mention accessibility compliance",
     "Highlight design system experience",
     "Provide specific examples of React projects"
-  ],
-  "idealAnswer": "I've built accessible React apps following WCAG guidelines, implemented ARIA attributes for screen readers, and worked extensively with design systems to ensure consistency across applications..."
+  ]
 }
 ```
 
-### 3. Health Check
+**Enhanced Scoring System:**
+- **100-Point Scale**: Comprehensive scoring across 5 categories
+- **17 Sub-Dimensions**: Detailed evaluation of specific skills
+- **Grade Tiers**: Excellent (90-100), Strong (75-89), Average (60-74), At Risk (0-59)
+- **Category Breakdown**:
+  - Verbal Communication (40 points)
+  - Interview Readiness (20 points)
+  - Non-verbal Communication (25 points)
+  - Adaptability & Engagement (15 points)
+
+### 3. Real-Time Feedback WebSocket
+**WebSocket** `/ws/feedback/{session_id}`
+
+Real-time feedback endpoint for live speech analysis during interviews.
+
+**Connection:**
+```
+ws://localhost:8000/ws/feedback/{session_id}?token={access_token}
+```
+
+**Message Types (Client → Server):**
+- `{"type": "audio_chunk", "data": "base64_encoded_audio", "chunk_index": 0, "is_final": false}`
+- `{"type": "transcript", "data": "transcript text"}`
+- `{"type": "ping"}` - Keepalive
+
+**Response (Server → Client):**
+```json
+{
+  "session_id": "session-123",
+  "feedback_type": "speech_analysis",
+  "message": "Keep going! Your speech is clear and well-paced.",
+  "confidence": 0.85,
+  "suggestions": ["Try speaking a bit faster"],
+  "metrics": {
+    "filler_words": 2,
+    "pace": 150,
+    "clarity": 0.8,
+    "volume": 0.7,
+    "pauses": 3,
+    "confidence": 0.85
+  }
+}
+```
+
+### 4. Health Check
 **GET** `/health`
 
 Returns API health status.
@@ -152,16 +212,19 @@ Returns API health status.
 - ✅ Clean microservice architecture with proper separation
 - ✅ Question generation via AI service microservice
 - ✅ Answer analysis via AI service microservice
+- ✅ **Enhanced 100-Point Scoring Rubric System** - Comprehensive scoring with 5 categories and 17 sub-dimensions
 - ✅ Speech-to-text transcription via AI service microservice
+- ✅ **Real-Time Feedback WebSocket API** - WebSocket endpoints for live speech analysis and real-time feedback
 - ✅ Rate limiting and admin endpoints
 - ✅ Comprehensive error handling
 - ✅ Centralized logging and configuration
 
 ### Future Enhancements
-- [ ] Database integration for storing interview sessions
-- [ ] Authentication and user management
-- [ ] Advanced analytics and reporting
-- [ ] Real-time collaboration features
+- [ ] Database schema migration for enhanced scoring data
+- [ ] Progress tracking across scoring dimensions
+- [ ] Analytics for dimension improvement over time
+- [ ] Dimension-specific coaching tips
+- [ ] Redis integration for WebSocket message queuing and scaling
 
 ### Adding New Endpoints
 1. Create new router in `app/routers/`
