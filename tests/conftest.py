@@ -245,3 +245,33 @@ def generate_test_sessions():
             })
         return sessions
     return _generate
+
+@pytest.fixture
+def admin_user(db_session):
+    """Create an admin user for testing."""
+    from app.database.models import User
+    from werkzeug.security import generate_password_hash
+    user = User(
+        email="admin@example.com",
+        name="Admin User",
+        password_hash=generate_password_hash("adminpass123"),
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+@pytest.fixture
+def admin_user_token(db_session, admin_user):
+    """Create an admin user token for testing."""
+    from app.services.auth_service import AuthService
+    
+    auth_service = AuthService(db_session)
+    # Create token directly
+    token = auth_service.create_access_token(
+        user_id=str(admin_user.id),
+        email=admin_user.email,
+        role="admin"
+    )
+    return token
