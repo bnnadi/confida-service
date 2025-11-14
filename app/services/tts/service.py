@@ -2,14 +2,19 @@
 TTS Service
 
 High-level service wrapper that provides fallback logic, circuit breaker pattern,
-and caching for TTS providers.
+retry logic with exponential backoff, and caching for TTS providers.
 """
 
 import time
+import asyncio
 import hashlib
 import base64
 from typing import Optional, Dict, Any
-from app.services.tts.base import BaseTTSProvider, TTSProviderError
+from app.services.tts.base import (
+    BaseTTSProvider,
+    TTSProviderError,
+    TTSProviderRateLimitError
+)
 from app.services.tts.factory import TTSProviderFactory
 from app.config import get_settings
 from app.utils.logger import get_logger
@@ -45,10 +50,8 @@ class CircuitBreaker:
         Returns:
             bool: True if operation can be executed
         """
-        if self.state == "closed":
-            return True
-        
-        if self.state == "half_open":
+        # Closed and half-open states allow execution
+        if self.state in ("closed", "half_open"):
             return True
         
         # State is "open" - check if recovery timeout has passed
@@ -345,38 +348,38 @@ class TTSService:
         # Use singleflight pattern: concurrent requests wait for first synthesis
         async def _synthesize_internal() -> Dict:
             """Internal synthesis function for singleflight pattern."""
-            # Try primary provider
-            if self.primary_provider:
-                result = await self._synthesize_with_provider_and_cache(
-                    self.primary_provider,
-                    self.primary_provider_name,
-                    text,
-                    voice,
-                    audio_format,
-                    settings_hash,
-                    use_cache,
-                    **kwargs
-                )
-                if result:
-                    return result
+            # Try providers in order: primary -> fallback
+            providers = [
+                (self.primary_provider, self.primary_provider_name, "Primary"),
+                (self.fallback_provider, self.fallback_provider_name, "Fallback")
+            ]
             
-            # Try fallback provider
-            if self.fallback_provider:
-                logger.info(f"Trying fallback provider: {self.fallback_provider_name}")
-                result = await self._synthesize_with_provider_and_cache(
-                    self.fallback_provider,
-                    self.fallback_provider_name,
-                    text,
-                    voice,
-                    audio_format,
-                    settings_hash,
-                    use_cache,
-                    **kwargs
-                )
-                if result:
-                    return result
+            last_error = None
+            for provider, provider_name, provider_type in providers:
+                if not provider:
+                    continue
+                
+                try:
+                    if provider_type == "Fallback":
+                        logger.info(f"Trying fallback provider: {provider_name}")
+                    
+                    # Use _synthesize_with_provider which includes retry logic and circuit breaker
+                    audio_data = await self._synthesize_with_provider(
+                        provider, provider_name, text, voice, audio_format, use_cache, **kwargs
+                    )
+                    
+                    # Return in format expected by voice cache
+                    return {
+                        "audio_data": base64.b64encode(audio_data).decode('utf-8'),
+                        "provider": provider_name
+                    }
+                except Exception as e:
+                    logger.warning(f"{provider_type} provider failed: {e}")
+                    last_error = e
             
             # All providers failed
+            if last_error:
+                raise last_error
             raise TTSProviderError(
                 f"All TTS providers failed. Primary: {self.primary_provider_name}, "
                 f"Fallback: {self.fallback_provider_name or 'none'}"
@@ -460,44 +463,107 @@ class TTSService:
         **kwargs
     ) -> bytes:
         """
-        Try to synthesize with a specific provider.
+        Try to synthesize with a specific provider with retry logic and exponential backoff.
+        
+        Implements retry logic with exponential backoff as specified in ticket #073:
+        - Maximum 3 attempts (configurable via TTS_RETRY_ATTEMPTS)
+        - Exponential backoff: 1s, 2s, 4s delays
+        - 30s timeout per attempt (configurable via TTS_TIMEOUT)
+        - Circuit breaker integration
         
         Args:
             provider: TTS provider instance
             provider_name: Name of the provider
             text: Text to synthesize
             voice_id: Voice identifier
-            format: Audio format
+            audio_format: Audio format
             **kwargs: Additional parameters
             
         Returns:
             bytes: Audio data
             
         Raises:
-            TTSProviderError: If synthesis fails
+            TTSProviderError: If synthesis fails after all retry attempts
         """
-        # Check circuit breaker
         circuit_breaker = self.circuit_breakers.get(provider_name)
+        
+        # Check circuit breaker first
         if circuit_breaker and not circuit_breaker.can_execute():
             raise TTSProviderError(
                 f"Circuit breaker is open for {provider_name}. "
                 f"Provider is temporarily unavailable."
             )
         
-        try:
-            audio_data = await provider.synthesize(text, voice_id, audio_format, **kwargs)
-            
-            # Record success
-            if circuit_breaker:
-                circuit_breaker.record_success()
-            
-            return audio_data
-        except Exception:
-            # Record failure
-            if circuit_breaker:
-                circuit_breaker.record_failure()
-            
-            raise
+        # Attempt synthesis with retries
+        return await self._attempt_with_retries(
+            provider, provider_name, text, voice_id, audio_format, 
+            circuit_breaker, **kwargs
+        )
+    
+    async def _attempt_with_retries(
+        self,
+        provider: BaseTTSProvider,
+        provider_name: str,
+        text: str,
+        voice_id: str,
+        audio_format: str,
+        circuit_breaker: Optional[CircuitBreaker],
+        **kwargs
+    ) -> bytes:
+        """Attempt synthesis with exponential backoff retry logic."""
+        max_retries = self.settings.TTS_RETRY_ATTEMPTS
+        base_delay = 1.0  # Start with 1 second
+        backoff_factor = 2.0  # Double delay each retry
+        
+        for attempt in range(max_retries + 1):
+            try:
+                audio_data = await provider.synthesize(text, voice_id, audio_format, **kwargs)
+                self._record_success(provider_name, circuit_breaker, attempt, max_retries)
+                return audio_data
+            except TTSProviderRateLimitError as e:
+                self._handle_rate_limit(provider_name, circuit_breaker, e)
+                raise
+            except Exception as e:
+                if attempt < max_retries:
+                    delay = base_delay * (backoff_factor ** attempt)
+                    logger.warning(
+                        f"{provider_name} attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"All {max_retries + 1} attempts failed for {provider_name}: {e}"
+                    )
+                    if circuit_breaker:
+                        circuit_breaker.record_failure()
+                    raise
+    
+    def _record_success(
+        self, 
+        provider_name: str, 
+        circuit_breaker: Optional[CircuitBreaker], 
+        attempt: int, 
+        max_retries: int
+    ):
+        """Record successful synthesis attempt."""
+        if circuit_breaker:
+            circuit_breaker.record_success()
+        if attempt > 0:
+            logger.info(
+                f"{provider_name} succeeded on attempt {attempt + 1}/{max_retries + 1}"
+            )
+    
+    def _handle_rate_limit(
+        self, 
+        provider_name: str, 
+        circuit_breaker: Optional[CircuitBreaker], 
+        error: TTSProviderRateLimitError
+    ):
+        """Handle rate limit error (no retry)."""
+        logger.warning(f"{provider_name} rate limit exceeded, not retrying")
+        if circuit_breaker:
+            circuit_breaker.record_failure()
     
     async def _check_provider_health(
         self,

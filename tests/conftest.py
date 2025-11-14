@@ -275,3 +275,57 @@ def admin_user_token(db_session, admin_user):
         role="admin"
     )
     return token
+
+# TTS Test Fixtures
+@pytest.fixture
+def mock_tts_settings():
+    """Fixture for TTS service settings."""
+    from unittest.mock import patch, MagicMock
+    
+    with patch("app.services.tts.service.get_settings") as mock_settings:
+        settings = MagicMock()
+        settings.TTS_PROVIDER = "coqui"
+        settings.TTS_FALLBACK_PROVIDER = ""
+        settings.TTS_RETRY_ATTEMPTS = 3
+        settings.TTS_DEFAULT_VOICE_ID = "test-voice"
+        settings.TTS_DEFAULT_FORMAT = "mp3"
+        settings.CACHE_ENABLED = False
+        settings.TTS_CACHE_TTL = 604800
+        settings.TTS_TIMEOUT = 30
+        settings.TTS_VOICE_VERSION = 1
+        settings.ELEVENLABS_API_KEY = ""
+        settings.PLAYHT_API_KEY = ""
+        settings.PLAYHT_USER_ID = ""
+        mock_settings.return_value = settings
+        yield settings
+
+@pytest.fixture
+def tts_service_with_providers(mock_tts_settings):
+    """Fixture that creates TTSService with mocked providers."""
+    from unittest.mock import patch
+    from app.services.tts.service import TTSService, CircuitBreaker
+    
+    def _create(primary_provider, fallback_provider=None, primary_name="coqui", fallback_name="elevenlabs"):
+        with patch("app.services.tts.service.TTSProviderFactory.create_provider") as mock_factory:
+            def create_provider_side_effect(provider_name):
+                if provider_name == primary_name:
+                    return primary_provider
+                elif fallback_provider and provider_name == fallback_name:
+                    return fallback_provider
+                raise ValueError(f"Unknown provider: {provider_name}")
+            
+            mock_factory.side_effect = create_provider_side_effect
+            
+            service = TTSService()
+            service.primary_provider = primary_provider
+            service.primary_provider_name = primary_name
+            service.circuit_breakers[primary_name] = CircuitBreaker()
+            
+            if fallback_provider:
+                service.fallback_provider = fallback_provider
+                service.fallback_provider_name = fallback_name
+                service.circuit_breakers[fallback_name] = CircuitBreaker()
+            
+            return service
+    
+    return _create
