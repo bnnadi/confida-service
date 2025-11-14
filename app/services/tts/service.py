@@ -8,12 +8,13 @@ and caching for TTS providers.
 import time
 import hashlib
 import base64
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from app.services.tts.base import BaseTTSProvider, TTSProviderError
 from app.services.tts.factory import TTSProviderFactory
 from app.config import get_settings
 from app.utils.logger import get_logger
 from app.utils.cache import cache_manager
+from app.services.voice_cache import get_voice_cache_service, VoiceCacheService
 
 logger = get_logger(__name__)
 
@@ -83,12 +84,20 @@ class TTSService:
     High-level TTS service with fallback and circuit breaker support.
     """
     
-    def __init__(self):
-        """Initialize TTS service."""
+    def __init__(self, voice_cache_service: Optional[VoiceCacheService] = None):
+        """
+        Initialize TTS service.
+        
+        Args:
+            voice_cache_service: Optional VoiceCacheService instance (uses global if not provided)
+        """
         self.settings = get_settings()
         self.cache = cache_manager
         self.cache_enabled = self.settings.CACHE_ENABLED
         self.cache_ttl = self.settings.TTS_CACHE_TTL
+        
+        # Initialize voice cache service (with singleflight pattern)
+        self.voice_cache = voice_cache_service or get_voice_cache_service()
         
         # Initialize primary provider
         self.primary_provider_name = self.settings.TTS_PROVIDER
@@ -106,7 +115,8 @@ class TTSService:
         
         logger.info(
             f"TTS Service initialized: primary={self.primary_provider_name}, "
-            f"fallback={self.fallback_provider_name or 'none'}"
+            f"fallback={self.fallback_provider_name or 'none'}, "
+            f"voice_cache_enabled={self.cache_enabled}"
         )
     
     def _initialize_provider(self, provider_name: str, is_required: bool = False) -> Optional[BaseTTSProvider]:
@@ -289,7 +299,10 @@ class TTSService:
         **kwargs
     ) -> bytes:
         """
-        Synthesize text to speech with fallback support.
+        Synthesize text to speech with fallback support and singleflight pattern.
+        
+        This method uses the VoiceCacheService with singleflight pattern to prevent
+        duplicate synthesis requests for concurrent requests with the same text/voice.
         
         Args:
             text: Text to convert to speech
@@ -307,50 +320,135 @@ class TTSService:
         voice = voice_id or self.settings.TTS_DEFAULT_VOICE_ID
         audio_format = audio_format or self.settings.TTS_DEFAULT_FORMAT
         
-        # Try cache first
-        if use_cache:
-            cached_audio = await self._get_cached_audio(
-                text, voice, audio_format, self.primary_provider_name
+        # Use voice cache service with singleflight pattern if enabled
+        if use_cache and self.cache_enabled:
+            # Check cache first (quick path for cache hits)
+            cached_voice = await self.voice_cache.get_cached_voice(
+                text, voice, audio_format
             )
-            if cached_audio:
-                return cached_audio
+            
+            if cached_voice:
+                # If cached data includes audio_data, return it (backward compatibility)
+                if "audio_data" in cached_voice:
+                    logger.debug("TTS cache hit (with audio data)")
+                    return base64.b64decode(cached_voice["audio_data"])
+                # Otherwise, we need to synthesize (metadata-only cache)
+                # This path is for when file_id is cached but we still need audio bytes
+                # For now, fall through to synthesis
         
-        # Try primary provider
-        if self.primary_provider:
-            try:
-                return await self._synthesize_with_provider(
+        # Generate cache key for singleflight pattern
+        settings_hash = self.voice_cache.generate_settings_hash()
+        cache_key = self.voice_cache.generate_cache_key(
+            text, voice, audio_format, settings_hash
+        )
+        
+        # Use singleflight pattern: concurrent requests wait for first synthesis
+        async def _synthesize_internal() -> Dict:
+            """Internal synthesis function for singleflight pattern."""
+            # Try primary provider
+            if self.primary_provider:
+                result = await self._synthesize_with_provider_and_cache(
                     self.primary_provider,
                     self.primary_provider_name,
                     text,
                     voice,
                     audio_format,
+                    settings_hash,
                     use_cache,
                     **kwargs
                 )
-            except Exception as e:
-                logger.warning(f"Primary provider failed: {e}")
-        
-        # Try fallback provider
-        if self.fallback_provider:
-            try:
+                if result:
+                    return result
+            
+            # Try fallback provider
+            if self.fallback_provider:
                 logger.info(f"Trying fallback provider: {self.fallback_provider_name}")
-                return await self._synthesize_with_provider(
+                result = await self._synthesize_with_provider_and_cache(
                     self.fallback_provider,
                     self.fallback_provider_name,
                     text,
                     voice,
                     audio_format,
+                    settings_hash,
                     use_cache,
                     **kwargs
                 )
-            except Exception as e:
-                logger.warning(f"Fallback provider failed: {e}")
+                if result:
+                    return result
+            
+            # All providers failed
+            raise TTSProviderError(
+                f"All TTS providers failed. Primary: {self.primary_provider_name}, "
+                f"Fallback: {self.fallback_provider_name or 'none'}"
+            )
         
-        # All providers failed
-        raise TTSProviderError(
-            f"All TTS providers failed. Primary: {self.primary_provider_name}, "
-            f"Fallback: {self.fallback_provider_name or 'none'}"
-        )
+        # Use singleflight pattern if cache is enabled
+        if use_cache and self.cache_enabled:
+            try:
+                result = await self.voice_cache.get_or_synthesize(
+                    cache_key, _synthesize_internal
+                )
+                return base64.b64decode(result["audio_data"])
+            except Exception as e:
+                logger.error(f"Singleflight synthesis failed: {e}")
+                raise
+        else:
+            # No cache, synthesize directly
+            result = await _synthesize_internal()
+            return base64.b64decode(result["audio_data"])
+    
+    async def _synthesize_with_provider_and_cache(
+        self,
+        provider: BaseTTSProvider,
+        provider_name: str,
+        text: str,
+        voice: str,
+        audio_format: str,
+        settings_hash: str,
+        use_cache: bool,
+        **kwargs
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Try to synthesize with a provider and cache the result.
+        
+        Args:
+            provider: TTS provider instance
+            provider_name: Name of the provider
+            text: Text to synthesize
+            voice: Voice identifier
+            audio_format: Audio format
+            settings_hash: Settings hash for cache key
+            use_cache: Whether to cache the result
+            **kwargs: Additional parameters
+            
+        Returns:
+            Dict with audio_data and provider name, or None if synthesis failed
+        """
+        try:
+            audio_data = await self._try_provider(
+                provider, provider_name, text, voice, audio_format, **kwargs
+            )
+            
+            # Cache the result (with audio data for backward compatibility)
+            if use_cache:
+                await self.voice_cache.cache_voice(
+                    text=text,
+                    voice_id=voice,
+                    format=audio_format,
+                    file_id="",  # Will be set when file is saved
+                    duration=0.0,  # Will be calculated if available
+                    version=self.settings.TTS_VOICE_VERSION,
+                    settings_hash=settings_hash,
+                    audio_data=audio_data  # Include for backward compatibility
+                )
+            
+            return {
+                "audio_data": base64.b64encode(audio_data).decode('utf-8'),
+                "provider": provider_name
+            }
+        except Exception as e:
+            logger.warning(f"{provider_name} provider failed: {e}")
+            return None
     
     async def _try_provider(
         self,

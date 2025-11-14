@@ -43,7 +43,9 @@ tests/
 │   ├── test_hybrid_ai_service.py
 │   ├── test_database_models.py
 │   ├── test_data_aggregator.py      # Dashboard data aggregation tests
-│   └── test_dashboard_service.py    # Dashboard service tests
+│   ├── test_dashboard_service.py    # Dashboard service tests
+│   ├── test_tts_configuration.py    # TTS configuration validation tests
+│   └── test_voice_cache.py          # Voice cache service tests
 ├── integration/                # Integration tests
 │   ├── test_interview_endpoints.py
 │   ├── test_session_endpoints.py
@@ -178,6 +180,38 @@ def test_get_user_sessions_summary_with_sessions(db_session, sample_user):
 
 **Markers**: `@pytest.mark.unit`
 **Focus**: Data aggregation, progress tracking, trend analysis, insights generation
+
+#### TTS and Voice Cache Tests
+
+TTS and voice cache tests verify text-to-speech functionality and caching:
+
+```python
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_singleflight_pattern(voice_cache):
+    """Test singleflight pattern prevents duplicate synthesis."""
+    call_count = 0
+    
+    async def mock_synthesize():
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.1)
+        return {"audio_data": "encoded_audio", "provider": "test"}
+    
+    # Simulate concurrent requests
+    cache_key = voice_cache.generate_cache_key(...)
+    results = await asyncio.gather(*[request() for _ in range(5)])
+    
+    # Should only call synthesize once
+    assert call_count == 1
+```
+
+**Location**: 
+- `tests/unit/test_tts_configuration.py` - TTS configuration validation
+- `tests/unit/test_voice_cache.py` - Voice cache service tests
+
+**Markers**: `@pytest.mark.unit`
+**Focus**: Cache key generation, cache hits/misses, singleflight pattern, settings hash, statistics tracking
 
 ### Integration Tests
 
@@ -339,6 +373,33 @@ The dashboard functionality includes comprehensive test coverage:
   - Empty data scenarios
 
 **Total Dashboard Tests**: 29 test cases
+
+### TTS and Voice Cache Test Coverage
+
+The TTS and voice cache functionality includes comprehensive test coverage:
+
+- **TTS Configuration Tests**: 20+ unit tests covering:
+  - Default TTS settings validation
+  - Environment variable configuration
+  - Provider validation (Coqui, ElevenLabs, PlayHT)
+  - API key validation
+  - Format and version validation
+  - Startup validation
+
+- **Voice Cache Service Tests**: 12 unit tests covering:
+  - Settings hash generation (deterministic)
+  - Cache key generation (deterministic)
+  - Cache hit/miss behavior
+  - Cache storage and retrieval
+  - Audio data caching
+  - Singleflight pattern (prevents duplicate synthesis)
+  - Error propagation
+  - Statistics tracking
+  - Cache disabled behavior
+  - Helper methods
+  - Singleton pattern
+
+**Total TTS/Voice Cache Tests**: 32+ test cases
 
 ### Coverage Reports
 
@@ -864,5 +925,157 @@ All dashboard functionality is tested with:
 - Edge cases (empty data, boundary conditions)
 - Authentication and authorization
 - Input validation
+
+For additional support, contact the development team or refer to the project's issue tracker.
+
+## TTS and Voice Cache Testing Guide
+
+### Overview
+
+The TTS (Text-to-Speech) and voice cache functionality includes comprehensive testing for configuration validation, cache behavior, and singleflight pattern implementation. All TTS tests follow the same patterns as other tests in the codebase.
+
+### Running TTS and Voice Cache Tests
+
+```bash
+# Run all TTS-related tests
+pytest tests/unit/test_tts_configuration.py tests/unit/test_voice_cache.py -v
+
+# Run voice cache tests only
+pytest tests/unit/test_voice_cache.py -v
+
+# Run TTS configuration tests only
+pytest tests/unit/test_tts_configuration.py -v
+
+# Run with coverage
+pytest tests/unit/test_voice_cache.py --cov=app.services.voice_cache --cov-report=term-missing
+
+# Run specific test
+pytest tests/unit/test_voice_cache.py::TestVoiceCacheService::test_singleflight_pattern -v
+```
+
+### Test Files
+
+1. **`tests/unit/test_tts_configuration.py`** - Tests for TTS configuration validation
+   - Default settings validation
+   - Environment variable configuration
+   - Provider validation (Coqui, ElevenLabs, PlayHT)
+   - API key validation
+   - Format and version validation
+   - Startup validation
+
+2. **`tests/unit/test_voice_cache.py`** - Tests for VoiceCacheService
+   - Settings hash generation
+   - Cache key generation
+   - Cache hit/miss behavior
+   - Singleflight pattern
+   - Statistics tracking
+   - Error handling
+
+### Test Fixtures
+
+Voice cache tests use standard fixtures:
+- `voice_cache` - VoiceCacheService instance for testing
+
+### Common Test Patterns
+
+#### Testing Cache Key Generation
+
+```python
+@pytest.mark.unit
+def test_cache_key_generation(voice_cache):
+    """Test cache key generation is deterministic."""
+    settings_hash = voice_cache.generate_settings_hash()
+    
+    key1 = voice_cache.generate_cache_key("test text", "voice1", "mp3", settings_hash)
+    key2 = voice_cache.generate_cache_key("test text", "voice1", "mp3", settings_hash)
+    
+    # Same inputs should produce same key
+    assert key1 == key2
+    
+    # Different inputs should produce different keys
+    key3 = voice_cache.generate_cache_key("different text", "voice1", "mp3", settings_hash)
+    assert key1 != key3
+```
+
+#### Testing Singleflight Pattern
+
+```python
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_singleflight_pattern(voice_cache):
+    """Test singleflight pattern prevents duplicate synthesis."""
+    call_count = 0
+    
+    async def mock_synthesize():
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.1)  # Simulate synthesis time
+        return {"audio_data": "encoded_audio", "provider": "test"}
+    
+    cache_key = voice_cache.generate_cache_key(
+        "test text", "voice1", "mp3", voice_cache.generate_settings_hash()
+    )
+    
+    # Run 5 concurrent requests
+    results = await asyncio.gather(*[
+        voice_cache.get_or_synthesize(cache_key, mock_synthesize) 
+        for _ in range(5)
+    ])
+    
+    # Should only call synthesize once
+    assert call_count == 1
+    assert voice_cache.stats["singleflight_hits"] == 4
+```
+
+#### Testing Cache Behavior
+
+```python
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cache_voice_and_get(voice_cache):
+    """Test caching and retrieving voice data."""
+    # Cache voice data
+    success = await voice_cache.cache_voice(
+        text="test text",
+        voice_id="voice1",
+        format="mp3",
+        file_id="file123",
+        duration=5.5,
+        version=1
+    )
+    
+    assert success is True
+    
+    # Retrieve cached data
+    cached = await voice_cache.get_cached_voice("test text", "voice1", "mp3")
+    
+    assert cached is not None
+    assert cached["file_id"] == "file123"
+    assert cached["duration"] == 5.5
+    assert voice_cache.stats["hits"] == 1
+```
+
+### Test Coverage
+
+TTS and voice cache tests provide comprehensive coverage:
+- **Configuration Tests**: 20+ tests covering all TTS settings and validation
+- **Voice Cache Tests**: 12 tests covering cache functionality
+- **Total**: 32+ test cases
+
+All TTS and voice cache functionality is tested with:
+- Positive cases (successful operations)
+- Negative cases (error conditions)
+- Edge cases (cache disabled, concurrent requests)
+- Deterministic behavior (cache keys, settings hash)
+- Performance patterns (singleflight)
+
+### Key Test Scenarios
+
+1. **Cache Key Determinism**: Same inputs always produce same cache key
+2. **Settings Hash**: Settings changes invalidate cache correctly
+3. **Singleflight Pattern**: Concurrent requests share one synthesis
+4. **Cache Statistics**: Hits, misses, errors tracked correctly
+5. **Error Propagation**: Errors propagate to waiting requests
+6. **Cache Disabled**: Graceful handling when cache is disabled
 
 For additional support, contact the development team or refer to the project's issue tracker.
