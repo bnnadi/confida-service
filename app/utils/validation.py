@@ -45,8 +45,16 @@ class ValidationService:
         # API key patterns
         self.API_KEY_PATTERNS = {
             'openai': ('sk-', 20),
-            'anthropic': ('sk-ant-', 30)
+            'anthropic': ('sk-ant-', 30),
+            'elevenlabs': ('', 20),  # ElevenLabs keys don't have a fixed prefix
+            'playht': ('', 20)  # PlayHT keys don't have a fixed prefix
         }
+        
+        # Valid TTS providers
+        self.VALID_TTS_PROVIDERS = ['coqui', 'elevenlabs', 'playht']
+        
+        # Valid audio formats
+        self.VALID_TTS_FORMATS = ['mp3', 'wav', 'ogg', 'm4a', 'aac']
         
         # Valid models
         self.VALID_MODELS = {
@@ -259,5 +267,127 @@ class ValidationService:
             errors.append(tokens_error)
         elif self.settings.MAX_TOKENS > 4000:
             warnings.append(f"MAX_TOKENS is very high ({self.settings.MAX_TOKENS}) - this may cause performance issues")
+        
+        # Validate TTS configuration
+        tts_errors, tts_warnings = self._validate_tts_configuration()
+        errors.extend(tts_errors)
+        warnings.extend(tts_warnings)
+        
+        return errors, warnings
+    
+    def _validate_tts_configuration(self) -> Tuple[List[str], List[str]]:
+        """Validate TTS configuration settings."""
+        errors = []
+        warnings = []
+        
+        # Validate TTS provider
+        if self.settings.TTS_PROVIDER not in self.VALID_TTS_PROVIDERS:
+            errors.append(
+                f"Invalid TTS_PROVIDER '{self.settings.TTS_PROVIDER}'. "
+                f"Valid options: {', '.join(self.VALID_TTS_PROVIDERS)}"
+            )
+        
+        # Validate fallback provider if set
+        if self.settings.TTS_FALLBACK_PROVIDER:
+            if self.settings.TTS_FALLBACK_PROVIDER not in self.VALID_TTS_PROVIDERS:
+                errors.append(
+                    f"Invalid TTS_FALLBACK_PROVIDER '{self.settings.TTS_FALLBACK_PROVIDER}'. "
+                    f"Valid options: {', '.join(self.VALID_TTS_PROVIDERS)}"
+                )
+            elif self.settings.TTS_FALLBACK_PROVIDER == self.settings.TTS_PROVIDER:
+                warnings.append(
+                    f"TTS_FALLBACK_PROVIDER is the same as TTS_PROVIDER ({self.settings.TTS_PROVIDER})"
+                )
+        
+        # Validate TTS format
+        if self.settings.TTS_DEFAULT_FORMAT.lower() not in self.VALID_TTS_FORMATS:
+            errors.append(
+                f"Invalid TTS_DEFAULT_FORMAT '{self.settings.TTS_DEFAULT_FORMAT}'. "
+                f"Valid options: {', '.join(self.VALID_TTS_FORMATS)}"
+            )
+        
+        # Validate numeric TTS settings
+        voice_version_valid, voice_version_error = self.validate_numeric_value(
+            self.settings.TTS_VOICE_VERSION, 1, 10, "TTS_VOICE_VERSION"
+        )
+        if not voice_version_valid:
+            errors.append(voice_version_error)
+        
+        cache_ttl_valid, cache_ttl_error = self.validate_numeric_value(
+            self.settings.TTS_CACHE_TTL, 0, 31536000, "TTS_CACHE_TTL"  # Max 1 year
+        )
+        if not cache_ttl_valid:
+            errors.append(cache_ttl_error)
+        elif self.settings.TTS_CACHE_TTL > 2592000:  # 30 days
+            warnings.append(
+                f"TTS_CACHE_TTL is very high ({self.settings.TTS_CACHE_TTL} seconds = "
+                f"{self.settings.TTS_CACHE_TTL / 86400:.1f} days) - consider shorter cache duration"
+            )
+        
+        timeout_valid, timeout_error = self.validate_numeric_value(
+            self.settings.TTS_TIMEOUT, 1, 300, "TTS_TIMEOUT"  # Max 5 minutes
+        )
+        if not timeout_valid:
+            errors.append(timeout_error)
+        
+        retry_valid, retry_error = self.validate_numeric_value(
+            self.settings.TTS_RETRY_ATTEMPTS, 0, 10, "TTS_RETRY_ATTEMPTS"
+        )
+        if not retry_valid:
+            errors.append(retry_error)
+        
+        concurrent_valid, concurrent_error = self.validate_numeric_value(
+            self.settings.TTS_MAX_CONCURRENT, 1, 50, "TTS_MAX_CONCURRENT"
+        )
+        if not concurrent_valid:
+            errors.append(concurrent_error)
+        elif self.settings.TTS_MAX_CONCURRENT > 20:
+            warnings.append(
+                f"TTS_MAX_CONCURRENT is high ({self.settings.TTS_MAX_CONCURRENT}) - "
+                "may cause resource exhaustion"
+            )
+        
+        # Validate vendor API keys (only required if vendor provider is selected)
+        if self.settings.TTS_PROVIDER == "elevenlabs":
+            if not self.settings.ELEVENLABS_API_KEY:
+                errors.append(
+                    "ELEVENLABS_API_KEY is required when TTS_PROVIDER=elevenlabs"
+                )
+            else:
+                # Basic validation - ElevenLabs keys are typically 20+ characters
+                if len(self.settings.ELEVENLABS_API_KEY) < 20:
+                    warnings.append(
+                        "ELEVENLABS_API_KEY appears to be too short - verify it's correct"
+                    )
+        
+        if self.settings.TTS_PROVIDER == "playht":
+            if not self.settings.PLAYHT_API_KEY:
+                errors.append(
+                    "PLAYHT_API_KEY is required when TTS_PROVIDER=playht"
+                )
+            if not self.settings.PLAYHT_USER_ID:
+                errors.append(
+                    "PLAYHT_USER_ID is required when TTS_PROVIDER=playht"
+                )
+            if self.settings.PLAYHT_API_KEY and len(self.settings.PLAYHT_API_KEY) < 20:
+                warnings.append(
+                    "PLAYHT_API_KEY appears to be too short - verify it's correct"
+                )
+        
+        # Warn if vendor keys are set but not used
+        if self.settings.TTS_PROVIDER != "elevenlabs" and self.settings.ELEVENLABS_API_KEY:
+            warnings.append(
+                "ELEVENLABS_API_KEY is set but TTS_PROVIDER is not 'elevenlabs'"
+            )
+        
+        if self.settings.TTS_PROVIDER != "playht":
+            if self.settings.PLAYHT_API_KEY:
+                warnings.append(
+                    "PLAYHT_API_KEY is set but TTS_PROVIDER is not 'playht'"
+                )
+            if self.settings.PLAYHT_USER_ID:
+                warnings.append(
+                    "PLAYHT_USER_ID is set but TTS_PROVIDER is not 'playht'"
+                )
         
         return errors, warnings
