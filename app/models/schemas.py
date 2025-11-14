@@ -311,9 +311,13 @@ class FileInfoResponse(BaseModel):
     file_type: FileType
     file_size: int
     status: FileStatus
-    created_at: str
-    expires_at: str
+    created_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    upload_url: Optional[str] = None
     download_url: Optional[str] = None
+    mime_type: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    processing_result: Optional[Dict[str, Any]] = None
 
 class FileListResponse(BaseModel):
     files: List[FileInfoResponse]
