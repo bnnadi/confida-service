@@ -183,42 +183,77 @@ async def generate_questions(
             session_id=None
         )
         
-        # Step 3: Build final structured response
+        # Step 3: Build final structured response with optional voice synthesis
         from app.models.schemas import StructuredQuestion, QuestionIdentifier
+        from app.services.file_service import FileService
+        from app.config import get_settings
+        
+        settings = get_settings()
         
         structured_questions = []
         # Ensure we have matching counts
         if len(questions_data) != len(persisted_questions):
             logger.warning(f"Mismatch: {len(questions_data)} questions_data vs {len(persisted_questions)} persisted")
         
-        for q_data, persisted_q in zip(questions_data, persisted_questions):
-            question_text = q_data.get("text") or q_data.get("question_text", "")
-            if not question_text:
-                continue
+        # Get file service for saving audio files (use sync session for FileService)
+        sync_db = next(get_db())
+        try:
+            file_service = FileService(sync_db)
             
-            # Extract identifiers if present
-            identifiers_data = q_data.get("identifiers", {})
-            question_identifier = None
-            if identifiers_data:
-                question_identifier = QuestionIdentifier(**identifiers_data) if isinstance(identifiers_data, dict) else identifiers_data
-            
-            # Get source - ensure source is valid literal
-            source_raw = q_data.get("source", "newly_generated")
-            if source_raw not in ["from_library", "newly_generated"]:
-                source = "newly_generated"
-            else:
-                source = source_raw
-            
-            # Always use persisted question ID - guaranteed to exist
-            question_id = str(persisted_q.id)
-            
-            structured_questions.append(StructuredQuestion(
-                text=question_text,
-                source=source,
-                question_id=question_id,  # Always use persisted UUID
-                metadata=q_data.get("metadata", {}),
-                identifiers=question_identifier
-            ))
+            for q_data, persisted_q in zip(questions_data, persisted_questions):
+                question_text = q_data.get("text") or q_data.get("question_text", "")
+                if not question_text:
+                    continue
+                
+                # Extract identifiers
+                identifiers_data = q_data.get("identifiers", {})
+                question_identifier = (
+                    QuestionIdentifier(**identifiers_data)
+                    if identifiers_data and isinstance(identifiers_data, dict)
+                    else None
+                )
+                
+                # Validate source with set lookup
+                valid_sources = {"from_library", "newly_generated"}
+                source = q_data.get("source", "newly_generated")
+                if source not in valid_sources:
+                    source = "newly_generated"
+                
+                # Always use persisted question ID - guaranteed to exist
+                question_id = str(persisted_q.id)
+                
+                # Synthesize voice if requested
+                voice_payload = None
+                if request.include_voice:
+                    from app.utils.tts_helper import synthesize_and_save_voice
+                    
+                    voice_id = request.voice_id or settings.TTS_DEFAULT_VOICE_ID
+                    audio_format = request.format or settings.TTS_DEFAULT_FORMAT
+                    
+                    voice_payload = await synthesize_and_save_voice(
+                        question_text=question_text,
+                        question_id=question_id,
+                        voice_id=voice_id,
+                        audio_format=audio_format,
+                        file_service=file_service,
+                        settings=settings
+                    )
+                    
+                    if voice_payload:
+                        logger.info(f"Voice synthesized for question {question_id}")
+                    else:
+                        logger.warning(f"Voice synthesis failed for question {question_id}, returning text-only")
+                
+                structured_questions.append(StructuredQuestion(
+                    text=question_text,
+                    source=source,
+                    question_id=question_id,  # Always use persisted UUID
+                    metadata=q_data.get("metadata", {}),
+                    identifiers=question_identifier,
+                    voice=voice_payload
+                ))
+        finally:
+            sync_db.close()
         
         response = StructuredQuestionResponse(
             identifiers=identifiers,
