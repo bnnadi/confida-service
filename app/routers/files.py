@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
+from datetime import datetime
 from app.services.database_service import get_db
 from app.services.file_service import FileService
 from app.models.schemas import (
@@ -86,15 +87,22 @@ async def get_file_info(
             detail="File not found"
         )
     
+    # Format created_at as string if it's a datetime
+    created_at = file_info.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+    elif created_at is None:
+        created_at = None
+    
     return FileInfoResponse(
         file_id=file_info["file_id"],
         filename=file_info["filename"],
         file_type=file_info["file_type"],
         file_size=file_info["file_size"],
-        mime_type=file_info["mime_type"],
+        mime_type=file_info.get("mime_type"),
         status=file_info["status"],
         upload_url=f"/api/v1/files/{file_id}",
-        created_at=file_info["created_at"],
+        created_at=created_at,
         expires_at=None,
         metadata=file_info.get("metadata"),
         processing_result=file_info.get("processing_result")

@@ -71,28 +71,38 @@ async def transcribe_audio_endpoint(
             elif isinstance(result, dict) and "text" in result:
                 transcript = result["text"]
             else:
-                # Fallback to direct speech service
-                logger.warning("AI service returned unexpected format, falling back to direct speech service")
-                transcript = speech_service.transcribe_audio(audio_data, language)
+                # Fallback - return error if AI service format is unexpected
+                logger.error("AI service returned unexpected format")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Unexpected response format from AI service"
+                )
             
             # Save file if requested
             if save_file:
-                saved_file = file_service.save_file(
-                    filename=filename,
-                    content=audio_data,
+                file_id = file_service.generate_file_id()
+                saved_file_info = file_service.save_file_from_bytes(
+                    audio_data=audio_data,
                     file_type=FileType.AUDIO,
-                    user_id=current_user["id"]
+                    file_id=file_id,
+                    filename=filename,
+                    mime_type=mime_type,
+                    metadata={
+                        "uploaded_by": current_user["id"],
+                        "description": f"Transcribed audio: {filename}"
+                    }
                 )
-                file_id = saved_file.id
             else:
                 file_id = None
             
             return TranscribeResponse(
-                transcript=transcript,
+                transcription=transcript,
                 language=language,
-                filename=filename,
+                confidence=result.get("confidence", 0.0) if isinstance(result, dict) else 0.0,
                 file_id=file_id,
-                confidence=result.get("confidence", 0.0) if isinstance(result, dict) else 0.0
+                metadata={
+                    "filename": filename
+                }
             )
             
         finally:
@@ -114,13 +124,16 @@ async def transcribe_saved_audio(
     file_id: str,
     language: str = Query("en-US", description="Language code for transcription"),
     current_user: dict = Depends(get_current_user_required),
-    # Note: speech_service removed - using AI service microservice
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    ai_client = Depends(get_ai_client_dependency)
 ):
     """
     Transcribe a previously uploaded audio file.
     """
     try:
+        if not ai_client:
+            raise HTTPException(status_code=503, detail="AI service unavailable")
+        
         # Get file info
         file_info = file_service.get_file_info(file_id)
         if not file_info:
@@ -137,24 +150,52 @@ async def transcribe_saved_audio(
             )
         
         # Read audio data from saved file
+        import tempfile
+        import os
         with open(file_info["file_path"], "rb") as f:
             audio_data = f.read()
         
-        # Transcribe audio
-        transcription = speech_service.transcribe_audio(audio_data, language)
+        # Save file temporarily for AI service
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            temp_file.write(audio_data)
+            temp_file_path = temp_file.name
         
-        return TranscribeResponse(
-            transcription=transcription,
-            language=language,
-            confidence=0.95,  # Placeholder confidence score
-            file_id=file_id,
-            metadata={
-                "filename": file_info["filename"],
-                "mime_type": file_info["mime_type"],
-                "file_size": file_info["file_size"],
-                "saved": True
-            }
-        )
+        try:
+            # Use AI service microservice for transcription
+            session_id = f"transcription_{current_user['id']}_{file_id}"
+            result = await ai_client.transcribe_audio(
+                audio_file_path=temp_file_path,
+                session_id=session_id,
+                language=language
+            )
+            
+            # Extract transcription from result
+            if isinstance(result, dict) and "transcript" in result:
+                transcript = result["transcript"]
+            elif isinstance(result, dict) and "text" in result:
+                transcript = result["text"]
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Unexpected response format from AI service"
+                )
+            
+            return TranscribeResponse(
+                transcription=transcript,
+                language=language,
+                confidence=result.get("confidence", 0.95) if isinstance(result, dict) else 0.95,
+                file_id=file_id,
+                metadata={
+                    "filename": file_info["filename"],
+                    "mime_type": file_info.get("mime_type"),
+                    "file_size": file_info["file_size"],
+                    "saved": True
+                }
+            )
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
         
     except HTTPException:
         raise
