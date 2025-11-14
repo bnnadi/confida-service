@@ -242,7 +242,7 @@ class MigrationValidator:
             
             logger.info(f"  Average query time: {query_time:.2f}ms")
             logger.info(f"  Queried {len(questions)} questions")
-            
+                
         except Exception as e:
             logger.warning(f"⚠️  Could not measure performance: {e}")
             performance_results["error"] = str(e)
