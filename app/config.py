@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from functools import lru_cache
 
 load_dotenv()
@@ -86,6 +86,19 @@ class Settings:
     CACHE_TTL_EMBEDDINGS: int = int(os.getenv("CACHE_TTL_EMBEDDINGS", "86400"))  # 24 hours
     CACHE_TTL_SERVICE_STATUS: int = int(os.getenv("CACHE_TTL_SERVICE_STATUS", "300"))  # 5 minutes
     CACHE_TTL_DEFAULT: int = int(os.getenv("CACHE_TTL_DEFAULT", "3600"))  # 1 hour
+    
+    # TTS Settings
+    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "coqui")
+    TTS_FALLBACK_PROVIDER: Optional[str] = os.getenv("TTS_FALLBACK_PROVIDER")
+    TTS_VOICE_VERSION: int = int(os.getenv("TTS_VOICE_VERSION", "1"))
+    TTS_DEFAULT_VOICE_ID: str = os.getenv("TTS_DEFAULT_VOICE_ID", "confida-default-en")
+    TTS_DEFAULT_FORMAT: str = os.getenv("TTS_DEFAULT_FORMAT", "mp3")
+    TTS_CACHE_TTL: int = int(os.getenv("TTS_CACHE_TTL", "604800"))  # 7 days
+    TTS_TIMEOUT: float = float(os.getenv("TTS_TIMEOUT", "30.0"))
+    TTS_RETRY_ATTEMPTS: int = int(os.getenv("TTS_RETRY_ATTEMPTS", "3"))
+    TTS_MAX_CONCURRENT: int = int(os.getenv("TTS_MAX_CONCURRENT", "5"))
+    ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+    PLAYHT_API_KEY: str = os.getenv("PLAYHT_API_KEY", "")
     
     # Monitoring and Metrics Settings
     MONITORING_ENABLED: bool = os.getenv("MONITORING_ENABLED", "true").lower() == "true"

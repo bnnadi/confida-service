@@ -180,37 +180,29 @@ class FileService:
     
     def save_file_from_bytes(
         self,
-        audio_data: bytes,
+        content: bytes,
         file_type: FileType,
         file_id: str,
-        filename: Optional[str] = None,
-        mime_type: Optional[str] = None,
+        filename: str,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Save audio file from bytes (e.g., TTS output).
+        Save file from bytes with metadata.
         
         Args:
-            audio_data: Audio data as bytes
+            content: File content as bytes
             file_type: Type of file (should be FileType.AUDIO for voice files)
             file_id: Unique file identifier
-            filename: Optional filename (will be generated if not provided)
-            mime_type: Optional MIME type (will be guessed from filename if not provided)
+            filename: Filename for the file
             metadata: Optional metadata dict with voice information:
                 - question_id: Question ID for voice file
                 - voice_id: Voice identifier
                 - version: Version number (defaults to "1")
-                - synthesis_settings_hash: Hash of synthesis settings
         
         Returns:
             Dict with file information including file_id, filename, file_path, etc.
         """
         try:
-            # Normalize filename and mime_type
-            filename, mime_type = self._normalize_audio_filename_and_mime(
-                file_id, filename, mime_type
-            )
-            
             # Get file path (with metadata support for voice files)
             file_path = self.get_file_path(file_id, file_type, filename, metadata)
             
@@ -219,13 +211,16 @@ class FileService:
             
             # Save file to disk
             with open(file_path, "wb") as f:
-                f.write(audio_data)
+                f.write(content)
             
             # Calculate file hash
-            file_hash = self.calculate_file_hash(audio_data)
+            file_hash = self.calculate_file_hash(content)
             
             # Get file size
-            file_size = len(audio_data)
+            file_size = len(content)
+            
+            # Get MIME type
+            mime_type = self._get_mime_type_from_filename(filename)
             
             # Save metadata if provided (ensure file_id is included)
             if metadata:
@@ -242,7 +237,8 @@ class FileService:
                 "file_hash": file_hash,
                 "file_path": str(file_path),
                 "status": FileStatus.COMPLETED,
-                "created_at": datetime.now()
+                "created_at": datetime.now(),
+                "metadata": metadata or {}
             }
             
         except Exception as e:

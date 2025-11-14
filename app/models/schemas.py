@@ -374,6 +374,9 @@ class JobRequest(BaseModel):
     job_description: str = Field(..., min_length=10, max_length=10000, description="The full job description")
     resume: Optional[str] = Field(None, max_length=50000, description="Optional resume text for context")
     limit: Optional[int] = Field(10, ge=1, le=50, description="Maximum number of questions to generate")
+    voice_id: Optional[str] = Field("confida-default-en", description="Voice identifier for TTS synthesis")
+    format: Optional[str] = Field("mp3", pattern="^(mp3|wav)$", description="Audio format for voice synthesis")
+    include_voice: Optional[bool] = Field(True, description="Whether to include voice synthesis for questions")
     
     @field_validator('role_name')
     @classmethod
@@ -399,6 +402,19 @@ class QuestionIdentifier(BaseModel):
     role: Optional[str] = None
     tags: Optional[List[str]] = Field(default_factory=list)
 
+class VoiceFile(BaseModel):
+    """Voice audio file reference."""
+    file_id: str = Field(..., description="File ID for the audio file")
+    mime_type: str = Field(..., description="MIME type of the audio file")
+    download_url: str = Field(..., description="URL to download the audio file")
+
+class VoicePayload(BaseModel):
+    """Voice synthesis payload for a question."""
+    voice_id: str = Field(..., description="Voice identifier used for synthesis")
+    version: int = Field(..., description="Voice version number")
+    duration: float = Field(..., ge=0.0, description="Audio duration in seconds")
+    files: List[VoiceFile] = Field(..., description="List of audio file references")
+
 class StructuredQuestion(BaseModel):
     """Structured question with metadata."""
     text: str = Field(..., description="The question text")
@@ -406,6 +422,7 @@ class StructuredQuestion(BaseModel):
     question_id: Optional[str] = Field(None, description="Question ID from database or ai-service")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Question metadata")
     identifiers: Optional[QuestionIdentifier] = None
+    voice: Optional[VoicePayload] = Field(None, description="Voice synthesis payload if include_voice=true")
 
 class StructuredQuestionResponse(BaseModel):
     """Response model for structured question generation."""
