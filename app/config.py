@@ -101,6 +101,22 @@ class Settings:
     # Security Headers Settings
     SECURITY_HEADERS_ENABLED: bool = os.getenv("SECURITY_HEADERS_ENABLED", "true").lower() == "true"
     
+    # TTS (Text-to-Speech) Settings
+    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "coqui")
+    TTS_FALLBACK_PROVIDER: str = os.getenv("TTS_FALLBACK_PROVIDER", "")
+    TTS_VOICE_VERSION: int = int(os.getenv("TTS_VOICE_VERSION", "1"))
+    TTS_DEFAULT_VOICE_ID: str = os.getenv("TTS_DEFAULT_VOICE_ID", "confida-default-en")
+    TTS_DEFAULT_FORMAT: str = os.getenv("TTS_DEFAULT_FORMAT", "mp3")
+    TTS_CACHE_TTL: int = int(os.getenv("TTS_CACHE_TTL", "604800"))  # 7 days in seconds
+    TTS_TIMEOUT: int = int(os.getenv("TTS_TIMEOUT", "30"))  # seconds
+    TTS_RETRY_ATTEMPTS: int = int(os.getenv("TTS_RETRY_ATTEMPTS", "3"))
+    TTS_MAX_CONCURRENT: int = int(os.getenv("TTS_MAX_CONCURRENT", "5"))
+    
+    # TTS Vendor API Keys (optional - only required if vendor provider is used)
+    ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+    PLAYHT_API_KEY: str = os.getenv("PLAYHT_API_KEY", "")
+    PLAYHT_USER_ID: str = os.getenv("PLAYHT_USER_ID", "")
+    
     # Development/Debug Routes Settings
     ENABLE_DEBUG_ROUTES: bool = os.getenv("ENABLE_DEBUG_ROUTES", "false").lower() == "true"
     ENABLE_SECURITY_ROUTES: bool = os.getenv("ENABLE_SECURITY_ROUTES", "false").lower() == "true"

@@ -103,6 +103,76 @@ This document describes the environment variables used to configure the Confida 
 - **Production**: Set to your Ollama instance
 - **Development**: Can be localhost
 
+## 🎤 TTS (Text-to-Speech) Configuration
+
+### `TTS_PROVIDER`
+- **Default**: `coqui`
+- **Description**: Primary TTS provider (`coqui`, `elevenlabs`, `playht`)
+- **Production**: Use vendor provider (`elevenlabs` or `playht`) for quality
+- **Development**: Use `coqui` (local, no API keys needed)
+
+### `TTS_FALLBACK_PROVIDER`
+- **Default**: `` (empty)
+- **Description**: Optional fallback provider if primary fails
+- **Production**: Recommended to set a fallback (e.g., `coqui`)
+- **Development**: Optional
+
+### `TTS_DEFAULT_VOICE_ID`
+- **Default**: `confida-default-en`
+- **Description**: Default voice identifier for synthesis
+- **Production**: Set based on your voice requirements
+- **Development**: Default is fine
+
+### `TTS_DEFAULT_FORMAT`
+- **Default**: `mp3`
+- **Description**: Audio format (`mp3`, `wav`, `ogg`, `m4a`, `aac`)
+- **Production**: `mp3` recommended for compatibility
+- **Development**: Default is fine
+
+### `TTS_CACHE_TTL`
+- **Default**: `604800` (7 days)
+- **Description**: Cache TTL in seconds for synthesized audio
+- **Production**: 7 days recommended
+- **Development**: Shorter TTL (e.g., `3600` = 1 hour) for faster iteration
+
+### `TTS_TIMEOUT`
+- **Default**: `30`
+- **Description**: Request timeout in seconds (1-300)
+- **Production**: 30 seconds recommended
+- **Development**: Default is fine
+
+### `TTS_RETRY_ATTEMPTS`
+- **Default**: `3`
+- **Description**: Number of retry attempts on failure (0-10)
+- **Production**: 3 recommended
+- **Development**: Default is fine
+
+### `TTS_MAX_CONCURRENT`
+- **Default**: `5`
+- **Description**: Maximum concurrent synthesis requests (1-50)
+- **Production**: Set based on server capacity (10-20 recommended)
+- **Development**: Lower value (3-5) for resource conservation
+
+### `ELEVENLABS_API_KEY`
+- **Default**: `` (empty)
+- **Description**: ElevenLabs API key (required if `TTS_PROVIDER=elevenlabs`)
+- **Production**: Set to your production API key
+- **Development**: Not needed if using `coqui`
+
+### `PLAYHT_API_KEY`
+- **Default**: `` (empty)
+- **Description**: PlayHT API key (required if `TTS_PROVIDER=playht`)
+- **Production**: Set to your production API key
+- **Development**: Not needed if using `coqui`
+
+### `PLAYHT_USER_ID`
+- **Default**: `` (empty)
+- **Description**: PlayHT user identifier (required if `TTS_PROVIDER=playht`)
+- **Production**: Set to your PlayHT user ID
+- **Development**: Not needed if using `coqui`
+
+**See [TTS Configuration Guide](./TTS_CONFIGURATION.md) for detailed provider information and setup instructions.**
+
 ## 🗄️ Database Configuration
 
 ### `DATABASE_URL`

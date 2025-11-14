@@ -11,9 +11,19 @@ logger = get_logger(__name__)
 
 def validate_startup():
     """Validate configuration on startup."""
-    issues = settings.validate_configuration()
-    if issues:
-        logger.warning(f"Configuration issues: {issues}")
+    validation_result = settings.validate_configuration_with_warnings()
+    errors = validation_result.get("errors", [])
+    warnings = validation_result.get("warnings", [])
+    
+    if errors:
+        logger.error(f"Configuration errors found: {errors}")
+    if warnings:
+        logger.warning(f"Configuration warnings: {warnings}")
+    
+    if not errors and not warnings:
+        logger.info("✅ Configuration validation passed")
+    elif not errors:
+        logger.info("✅ Configuration validation passed with warnings")
     
     # Test critical services
     try:
