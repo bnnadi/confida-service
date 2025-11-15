@@ -372,7 +372,7 @@ async def analyze_answer(
     
     try:
         # Verify question exists and belongs to user (async)
-        from app.database.models import Question, InterviewSession, Answer
+        from app.database.models import Question, InterviewSession, Answer, SessionQuestion
         from sqlalchemy import select
         
         async_db_gen = get_async_db()
@@ -411,10 +411,28 @@ async def analyze_answer(
                 analysis_result=response,
                 score={"clarity": response.get("score", {}).get("clarity", 0), 
                       "confidence": response.get("score", {}).get("confidence", 0)},
-                multi_agent_scores=response.get("multi_agent_analysis")
+                multi_agent_scores=response.get("multi_agent_analysis"),
+                audio_file_id=request.audio_file_id
             )
             
             session.add(answer)
+            
+            # Update SessionQuestion.session_specific_context to store answer audio file ID
+            if request.audio_file_id:
+                session_question_result = await session.execute(
+                    select(SessionQuestion)
+                    .where(SessionQuestion.question_id == question_id)
+                )
+                session_question = session_question_result.scalar_one_or_none()
+                
+                if session_question:
+                    # Update session_specific_context with answer audio file ID
+                    context = session_question.session_specific_context or {}
+                    if not isinstance(context, dict):
+                        context = {}
+                    context["answer_audio_file_id"] = request.audio_file_id
+                    session_question.session_specific_context = context
+            
             await session.commit()
         finally:
             await session.close()
@@ -666,7 +684,7 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
     response = await perform_analysis_with_fallback(ai_service, request, question_text, role)
     
     # Store answer and analysis in database directly
-    from app.database.models import Answer
+    from app.database.models import Answer, SessionQuestion
     
     if hasattr(db, 'execute'):  # Async session
         answer = Answer(
@@ -675,9 +693,26 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
             analysis_result=response,
             score={"clarity": response.get("score", {}).get("clarity", 0), 
                   "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis")
+            multi_agent_scores=response.get("multi_agent_analysis"),
+            audio_file_id=getattr(request, 'audio_file_id', None)
         )
         db.add(answer)
+        
+        # Update SessionQuestion.session_specific_context to store answer audio file ID
+        if hasattr(request, 'audio_file_id') and request.audio_file_id:
+            from sqlalchemy import select
+            session_question_result = await db.execute(
+                select(SessionQuestion).where(SessionQuestion.question_id == question_id)
+            )
+            session_question = session_question_result.scalar_one_or_none()
+            
+            if session_question:
+                context = session_question.session_specific_context or {}
+                if not isinstance(context, dict):
+                    context = {}
+                context["answer_audio_file_id"] = request.audio_file_id
+                session_question.session_specific_context = context
+        
         await db.commit()
     else:  # Sync session
         answer = Answer(
@@ -686,9 +721,24 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
             analysis_result=response,
             score={"clarity": response.get("score", {}).get("clarity", 0), 
                   "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis")
+            multi_agent_scores=response.get("multi_agent_analysis"),
+            audio_file_id=getattr(request, 'audio_file_id', None)
         )
         db.add(answer)
+        
+        # Update SessionQuestion.session_specific_context to store answer audio file ID
+        if hasattr(request, 'audio_file_id') and request.audio_file_id:
+            session_question = db.query(SessionQuestion).filter(
+                SessionQuestion.question_id == question_id
+            ).first()
+            
+            if session_question:
+                context = session_question.session_specific_context or {}
+                if not isinstance(context, dict):
+                    context = {}
+                context["answer_audio_file_id"] = request.audio_file_id
+                session_question.session_specific_context = context
+        
         db.commit()
     
     # Extract enhanced scoring rubric

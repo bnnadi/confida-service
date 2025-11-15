@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.services.database_service import get_db
 from app.services.session_service import SessionService
-from app.database.models import InterviewSession, Question
+from app.database.models import InterviewSession, Question, SessionQuestion
 from app.models.schemas import (
     CreateSessionRequest, 
     InterviewSessionResponse, 
@@ -116,7 +116,7 @@ async def add_answer_to_question(
     db: Session = Depends(get_db)
 ):
     """Add an answer to a question."""
-    session_service = SessionService(db)
+    from app.database.models import Answer, SessionQuestion
     
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
@@ -127,12 +127,33 @@ async def add_answer_to_question(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    answer = session_service.add_answer(
+    # Create answer
+    answer = Answer(
         question_id=question_id,
         answer_text=request.answer_text,
         analysis_result=request.analysis_result,
-        score=request.score
+        score=request.score,
+        audio_file_id=request.audio_file_id
     )
+    db.add(answer)
+    
+    # Update SessionQuestion.session_specific_context to store answer audio file ID
+    if request.audio_file_id:
+        session_question = db.query(SessionQuestion).filter(
+            SessionQuestion.question_id == question_id
+        ).first()
+        
+        if session_question:
+            # Update session_specific_context with answer audio file ID
+            context = session_question.session_specific_context or {}
+            if not isinstance(context, dict):
+                context = {}
+            context["answer_audio_file_id"] = request.audio_file_id
+            session_question.session_specific_context = context
+    
+    db.commit()
+    db.refresh(answer)
+    
     return answer
 
 @router.get("/questions/{question_id}/answers", response_model=List[AnswerResponse])
@@ -142,7 +163,7 @@ async def get_question_answers(
     db: Session = Depends(get_db)
 ):
     """Get all answers for a question."""
-    session_service = SessionService(db)
+    from app.database.models import Answer
     
     # Verify question exists and belongs to user's session
     question = db.query(Question).join(InterviewSession).filter(
@@ -153,7 +174,8 @@ async def get_question_answers(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    answers = session_service.get_question_answers(question_id)
+    # Get all answers for the question
+    answers = db.query(Answer).filter(Answer.question_id == question_id).all()
     return answers
 
 @router.patch("/{session_id}/status")
