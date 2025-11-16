@@ -45,11 +45,13 @@ tests/
 │   ├── test_data_aggregator.py      # Dashboard data aggregation tests
 │   ├── test_dashboard_service.py    # Dashboard service tests
 │   ├── test_tts_configuration.py    # TTS configuration validation tests
-│   └── test_voice_cache.py          # Voice cache service tests
+│   ├── test_voice_cache.py          # Voice cache service tests
+│   └── test_answer_audio_file_persistence.py  # Answer audio file ID persistence tests
 ├── integration/                # Integration tests
 │   ├── test_interview_endpoints.py
 │   ├── test_session_endpoints.py
-│   └── test_dashboard_endpoints.py  # Dashboard API endpoint tests
+│   ├── test_dashboard_endpoints.py  # Dashboard API endpoint tests
+│   └── test_answer_audio_file_persistence.py  # Answer audio file ID persistence integration tests
 ├── e2e/                       # End-to-end tests
 │   └── test_complete_interview_flow.py
 ├── fixtures/                  # Test fixtures and utilities
@@ -400,6 +402,34 @@ The TTS and voice cache functionality includes comprehensive test coverage:
   - Singleton pattern
 
 **Total TTS/Voice Cache Tests**: 32+ test cases
+
+### Answer Audio File Persistence Test Coverage
+
+The answer audio file persistence functionality (Ticket #082) includes comprehensive test coverage:
+
+- **Unit Tests**: 5 unit tests covering:
+  - Answer model with audio_file_id field
+  - Answer model without audio_file_id (backward compatibility)
+  - SessionQuestion.session_specific_context storage
+  - Context update preserving existing data
+  - Linked storage in both Answer and SessionQuestion
+
+- **Integration Tests**: 5 integration tests covering:
+  - `/analyze-answer` endpoint with audio_file_id
+  - `/analyze-answer` endpoint without audio_file_id (backward compatibility)
+  - `/sessions/questions/{id}/answers` endpoint with audio_file_id
+  - GET `/sessions/questions/{id}/answers` endpoint returning audio_file_id
+  - Deterministic audio file ID persistence
+
+**Total Answer Audio File Persistence Tests**: 10 test cases
+
+**Location**: 
+- `tests/unit/test_answer_audio_file_persistence.py` - Unit tests for model persistence
+- `tests/integration/test_answer_audio_file_persistence.py` - Integration tests for API endpoints
+
+**Markers**: `@pytest.mark.unit`, `@pytest.mark.integration`
+
+**Focus**: Audio file ID storage, session persistence, backward compatibility, deterministic behavior
 
 ### Coverage Reports
 
@@ -1077,5 +1107,188 @@ All TTS and voice cache functionality is tested with:
 4. **Cache Statistics**: Hits, misses, errors tracked correctly
 5. **Error Propagation**: Errors propagate to waiting requests
 6. **Cache Disabled**: Graceful handling when cache is disabled
+
+For additional support, contact the development team or refer to the project's issue tracker.
+
+## Answer Audio File Persistence Testing Guide
+
+### Overview
+
+The answer audio file persistence functionality (Ticket #082) includes comprehensive testing for storing and retrieving user answer audio file IDs. This feature enables deterministic playback of user answers by persisting audio file IDs in both the `Answer` model and `SessionQuestion.session_specific_context`.
+
+### Running Answer Audio File Persistence Tests
+
+```bash
+# Run all answer audio file persistence tests
+pytest tests/unit/test_answer_audio_file_persistence.py tests/integration/test_answer_audio_file_persistence.py -v
+
+# Run unit tests only
+pytest tests/unit/test_answer_audio_file_persistence.py -v
+
+# Run integration tests only
+pytest tests/integration/test_answer_audio_file_persistence.py -v
+
+# Run with coverage
+pytest tests/unit/test_answer_audio_file_persistence.py --cov=app.database.models --cov-report=term-missing
+
+# Run specific test
+pytest tests/unit/test_answer_audio_file_persistence.py::TestAnswerAudioFilePersistence::test_answer_with_audio_file_id -v
+```
+
+### Test Files
+
+1. **`tests/unit/test_answer_audio_file_persistence.py`** - Unit tests for answer audio file ID persistence
+   - Answer model with audio_file_id
+   - Answer model without audio_file_id (backward compatibility)
+   - SessionQuestion context storage
+   - Context update preserving existing data
+   - Linked storage verification
+
+2. **`tests/integration/test_answer_audio_file_persistence.py`** - Integration tests for API endpoints
+   - `/analyze-answer` endpoint with audio_file_id
+   - `/analyze-answer` endpoint without audio_file_id
+   - `/sessions/questions/{id}/answers` POST endpoint
+   - `/sessions/questions/{id}/answers` GET endpoint
+   - Deterministic persistence verification
+
+### Test Fixtures
+
+Answer audio file persistence tests use standard fixtures from `conftest.py`:
+- `test_db_session` - Database session for unit tests
+- `db_session` - Database session for integration tests
+- `sample_user` - Test user
+- `sample_question` - Test question
+- `sample_interview_session` - Test interview session
+- `sample_question_with_session` - Question linked to session (integration tests)
+- `mock_current_user` - Mock authenticated user
+- `mock_ai_client` - Mock AI client for answer analysis
+
+### Common Test Patterns
+
+#### Testing Answer Model with Audio File ID
+
+```python
+@pytest.mark.unit
+def test_answer_with_audio_file_id(test_db_session, sample_question):
+    """Test creating an answer with audio_file_id."""
+    audio_file_id = "audio_file_123"
+    answer = Answer(
+        question_id=sample_question.id,
+        answer_text="Test answer",
+        audio_file_id=audio_file_id
+    )
+    test_db_session.add(answer)
+    test_db_session.commit()
+    
+    assert answer.audio_file_id == audio_file_id
+```
+
+#### Testing SessionQuestion Context Update
+
+```python
+@pytest.mark.unit
+def test_session_question_context_update_audio_file_id(
+    test_db_session, sample_interview_session, sample_question
+):
+    """Test updating SessionQuestion.session_specific_context with answer_audio_file_id."""
+    session_question = SessionQuestion(
+        session_id=sample_interview_session.id,
+        question_id=sample_question.id,
+        question_order=1,
+        session_specific_context={"role": "senior_developer"}
+    )
+    test_db_session.add(session_question)
+    test_db_session.commit()
+    
+    # Update with audio file ID
+    audio_file_id = "audio_file_789"
+    context = session_question.session_specific_context or {}
+    context["answer_audio_file_id"] = audio_file_id
+    session_question.session_specific_context = context
+    test_db_session.commit()
+    
+    assert session_question.session_specific_context["answer_audio_file_id"] == audio_file_id
+    assert session_question.session_specific_context["role"] == "senior_developer"  # Preserved
+```
+
+#### Testing API Endpoint Integration
+
+```python
+@pytest.mark.integration
+def test_analyze_answer_with_audio_file_id(
+    client, db_session, sample_user, mock_current_user, 
+    sample_question_with_session, mock_ai_client
+):
+    """Test analyze_answer endpoint stores audio_file_id."""
+    sample_question, session = sample_question_with_session
+    audio_file_id = "test_audio_file_123"
+    
+    request_data = {
+        "jobDescription": "Software Engineer position",
+        "question": "What is your experience?",
+        "answer": "I have 5 years of experience",
+        "audio_file_id": audio_file_id
+    }
+    
+    mock_ai_client.analyze_answer = AsyncMock(return_value={
+        "analysis": "Good answer",
+        "score": {"clarity": 8, "confidence": 7},
+        "suggestions": []
+    })
+    
+    with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client), \
+         patch('app.routers.interview.get_current_user_required', return_value=mock_current_user):
+        response = client.post(
+            f"/api/v1/interview/analyze-answer?question_id={sample_question.id}",
+            json=request_data
+        )
+    
+    assert response.status_code == 200
+    
+    # Verify answer was stored with audio_file_id
+    answer = db_session.query(Answer).filter(
+        Answer.question_id == sample_question.id
+    ).first()
+    assert answer.audio_file_id == audio_file_id
+    
+    # Verify SessionQuestion was updated
+    session_question = db_session.query(SessionQuestion).filter(
+        SessionQuestion.question_id == sample_question.id
+    ).first()
+    assert session_question.session_specific_context.get("answer_audio_file_id") == audio_file_id
+```
+
+### Test Coverage
+
+Answer audio file persistence tests provide comprehensive coverage:
+- **Unit Tests**: 5 tests covering model persistence and context storage
+- **Integration Tests**: 5 tests covering API endpoints and deterministic behavior
+- **Total**: 10 test cases
+
+All answer audio file persistence functionality is tested with:
+- Positive cases (successful storage and retrieval)
+- Negative cases (backward compatibility without audio_file_id)
+- Edge cases (context preservation, linked storage)
+- Deterministic behavior (same question uses same audio file ID)
+- API integration (both sync and async endpoints)
+
+### Key Test Scenarios
+
+1. **Answer Model Storage**: Audio file ID stored in `Answer.audio_file_id` field
+2. **SessionQuestion Context**: Audio file ID stored in `SessionQuestion.session_specific_context["answer_audio_file_id"]`
+3. **Backward Compatibility**: Answers without audio_file_id still work correctly
+4. **Context Preservation**: Updating context preserves existing context data
+5. **Linked Storage**: Both Answer and SessionQuestion store the same audio file ID
+6. **Deterministic Behavior**: Same question in same session uses same audio file ID
+7. **API Integration**: Both `/analyze-answer` and `/sessions/questions/{id}/answers` endpoints support audio_file_id
+
+### Related Features
+
+- **Ticket #082**: Sessions Persist Voice File IDs with Questions
+- **Answer Model**: `app/database/models.py` - Answer model with `audio_file_id` field
+- **SessionQuestion Model**: `app/database/models.py` - SessionQuestion model with `session_specific_context` JSONB field
+- **API Endpoints**: 
+  - `app/routers/interview.py` - `/analyze-answer` endpoint
+  - `app/routers/sessions.py` - `/sessions/questions/{id}/answers` endpoints
 
 For additional support, contact the development team or refer to the project's issue tracker.

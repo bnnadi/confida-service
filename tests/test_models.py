@@ -127,7 +127,8 @@ def test_answer_model_creation(db_session: Session):
         question_id=question.id,
         answer_text="I have 5 years of experience with Python",
         analysis_result={"clarity": 8, "relevance": 9},
-        score={"overall": 8.5}
+        score={"overall": 8.5},
+        audio_file_id="test_audio_file_123"  # Test audio_file_id field
     )
     
     db_session.add(answer)
@@ -139,3 +140,4 @@ def test_answer_model_creation(db_session: Session):
     assert answer.answer_text == "I have 5 years of experience with Python"
     assert answer.analysis_result == {"clarity": 8, "relevance": 9}
     assert answer.score == {"overall": 8.5}
+    assert answer.audio_file_id == "test_audio_file_123"
