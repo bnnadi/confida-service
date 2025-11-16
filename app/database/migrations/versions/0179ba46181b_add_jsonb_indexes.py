@@ -25,39 +25,54 @@ def _table_exists(connection, table_name: str) -> bool:
     return table_name in inspector.get_table_names()
 
 
+def _index_exists(connection, table_name: str, index_name: str) -> bool:
+    """Check if an index exists on a table."""
+    try:
+        inspector = inspect(connection)
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+
 def upgrade() -> None:
     # Create JSONB indexes for flexible queries
-    # Only create indexes if the tables exist
+    # Only create indexes if the tables exist and indexes don't exist
     connection = op.get_bind()
     
     if _table_exists(connection, 'interview_sessions'):
-        try:
-            op.create_index('idx_sessions_overall_score', 'interview_sessions', ['overall_score'], postgresql_using='gin')
-        except Exception:
-            # Index might already exist, skip
-            pass
+        if not _index_exists(connection, 'interview_sessions', 'idx_sessions_overall_score'):
+            try:
+                op.create_index('idx_sessions_overall_score', 'interview_sessions', ['overall_score'], postgresql_using='gin')
+            except Exception:
+                # Index might already exist, skip
+                pass
     
     if _table_exists(connection, 'answers'):
-        try:
-            op.create_index('idx_answers_analysis_result', 'answers', ['analysis_result'], postgresql_using='gin')
-        except Exception:
-            pass
-        try:
-            op.create_index('idx_answers_multi_agent_scores', 'answers', ['multi_agent_scores'], postgresql_using='gin')
-        except Exception:
-            pass
+        if not _index_exists(connection, 'answers', 'idx_answers_analysis_result'):
+            try:
+                op.create_index('idx_answers_analysis_result', 'answers', ['analysis_result'], postgresql_using='gin')
+            except Exception:
+                pass
+        if not _index_exists(connection, 'answers', 'idx_answers_multi_agent_scores'):
+            try:
+                op.create_index('idx_answers_multi_agent_scores', 'answers', ['multi_agent_scores'], postgresql_using='gin')
+            except Exception:
+                pass
     
     if _table_exists(connection, 'analytics_events'):
-        try:
-            op.create_index('idx_analytics_event_data', 'analytics_events', ['event_data'], postgresql_using='gin')
-        except Exception:
-            pass
+        if not _index_exists(connection, 'analytics_events', 'idx_analytics_event_data'):
+            try:
+                op.create_index('idx_analytics_event_data', 'analytics_events', ['event_data'], postgresql_using='gin')
+            except Exception:
+                pass
     
     if _table_exists(connection, 'agent_configurations'):
-        try:
-            op.create_index('idx_agent_configuration', 'agent_configurations', ['configuration'], postgresql_using='gin')
-        except Exception:
-            pass
+        if not _index_exists(connection, 'agent_configurations', 'idx_agent_configuration'):
+            try:
+                op.create_index('idx_agent_configuration', 'agent_configurations', ['configuration'], postgresql_using='gin')
+            except Exception:
+                pass
 
 
 def downgrade() -> None:

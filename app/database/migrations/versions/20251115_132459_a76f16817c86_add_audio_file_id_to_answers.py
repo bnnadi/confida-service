@@ -20,13 +20,65 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add audio_file_id column to answers table
-    op.add_column("answers", sa.Column("audio_file_id", sa.String(255), nullable=True))
-    # Create index on audio_file_id for faster lookups
-    op.create_index("ix_answers_audio_file_id", "answers", ["audio_file_id"])
+    from sqlalchemy import inspect
+    
+    connection = op.get_bind()
+    inspector = inspect(connection)
+    
+    # Helper functions
+    def table_exists(table_name):
+        try:
+            return table_name in inspector.get_table_names()
+        except Exception:
+            return False
+    
+    def column_exists(table_name, column_name):
+        try:
+            columns = [col['name'] for col in inspector.get_columns(table_name)]
+            return column_name in columns
+        except Exception:
+            return False
+    
+    def index_exists(table_name, index_name):
+        try:
+            indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+            return index_name in indexes
+        except Exception:
+            return False
+    
+    # Add audio_file_id column to answers table if it doesn't exist
+    if table_exists("answers"):
+        if not column_exists("answers", "audio_file_id"):
+            op.add_column("answers", sa.Column("audio_file_id", sa.String(255), nullable=True))
+        
+        # Create index on audio_file_id for faster lookups if it doesn't exist
+        if not index_exists("answers", "ix_answers_audio_file_id"):
+            op.create_index("ix_answers_audio_file_id", "answers", ["audio_file_id"])
 
 
 def downgrade() -> None:
-    # Drop index and column
-    op.drop_index("ix_answers_audio_file_id", table_name="answers")
-    op.drop_column("answers", "audio_file_id")
+    from sqlalchemy import inspect
+    
+    connection = op.get_bind()
+    inspector = inspect(connection)
+    
+    # Helper functions
+    def index_exists(table_name, index_name):
+        try:
+            indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+            return index_name in indexes
+        except Exception:
+            return False
+    
+    def column_exists(table_name, column_name):
+        try:
+            columns = [col['name'] for col in inspector.get_columns(table_name)]
+            return column_name in columns
+        except Exception:
+            return False
+    
+    # Drop index and column if they exist
+    if index_exists("answers", "ix_answers_audio_file_id"):
+        op.drop_index("ix_answers_audio_file_id", table_name="answers")
+    if column_exists("answers", "audio_file_id"):
+        op.drop_column("answers", "audio_file_id")
