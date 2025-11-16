@@ -41,17 +41,38 @@ def upgrade() -> None:
     drop_index_if_exists('idx_answers_analysis_result', 'answers')
     drop_index_if_exists('idx_answers_multi_agent_scores', 'answers')
     
-    # Add new columns with default values
-    op.add_column('interview_sessions', sa.Column('mode', sa.String(length=20), nullable=False, server_default='interview'))
-    op.add_column('interview_sessions', sa.Column('scenario_id', sa.String(length=100), nullable=True))
-    op.add_column('interview_sessions', sa.Column('question_source', sa.String(length=50), nullable=False, server_default='generated'))
-    op.add_column('interview_sessions', sa.Column('question_ids', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
-    op.add_column('interview_sessions', sa.Column('job_context', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    # Helper to check if column exists
+    def column_exists(table_name, column_name):
+        try:
+            columns = [col['name'] for col in inspector.get_columns(table_name)]
+            return column_name in columns
+        except Exception:
+            return False
     
-    # Make job_description nullable
-    op.alter_column('interview_sessions', 'job_description',
-               existing_type=sa.TEXT(),
-               nullable=True)
+    # Add new columns with default values (only if they don't exist)
+    if not column_exists('interview_sessions', 'mode'):
+        op.add_column('interview_sessions', sa.Column('mode', sa.String(length=20), nullable=False, server_default='interview'))
+    if not column_exists('interview_sessions', 'scenario_id'):
+        op.add_column('interview_sessions', sa.Column('scenario_id', sa.String(length=100), nullable=True))
+    if not column_exists('interview_sessions', 'question_source'):
+        op.add_column('interview_sessions', sa.Column('question_source', sa.String(length=50), nullable=False, server_default='generated'))
+    if not column_exists('interview_sessions', 'question_ids'):
+        op.add_column('interview_sessions', sa.Column('question_ids', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    if not column_exists('interview_sessions', 'job_context'):
+        op.add_column('interview_sessions', sa.Column('job_context', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    
+    # Make job_description nullable (only if column exists and is not already nullable)
+    if column_exists('interview_sessions', 'job_description'):
+        try:
+            # Check current nullable status
+            job_desc_col = next((col for col in inspector.get_columns('interview_sessions') if col['name'] == 'job_description'), None)
+            if job_desc_col and not job_desc_col.get('nullable', False):
+                op.alter_column('interview_sessions', 'job_description',
+                           existing_type=sa.TEXT(),
+                           nullable=True)
+        except Exception:
+            # Skip if we can't determine or alter
+            pass
     
     # Drop and recreate indexes
     # Drop index if it exists
@@ -62,30 +83,120 @@ def upgrade() -> None:
     except Exception:
         # Index doesn't exist, skip
         pass
-    op.create_index(op.f('ix_interview_sessions_mode'), 'interview_sessions', ['mode'], unique=False)
-    op.create_index(op.f('ix_interview_sessions_scenario_id'), 'interview_sessions', ['scenario_id'], unique=False)
     
-    # Remove server defaults after adding columns
-    op.alter_column('interview_sessions', 'mode', server_default=None)
-    op.alter_column('interview_sessions', 'question_source', server_default=None)
+    # Create indexes only if they don't exist
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes('interview_sessions')]
+        if 'ix_interview_sessions_mode' not in indexes and column_exists('interview_sessions', 'mode'):
+            op.create_index(op.f('ix_interview_sessions_mode'), 'interview_sessions', ['mode'], unique=False)
+        if 'ix_interview_sessions_scenario_id' not in indexes and column_exists('interview_sessions', 'scenario_id'):
+            op.create_index(op.f('ix_interview_sessions_scenario_id'), 'interview_sessions', ['scenario_id'], unique=False)
+    except Exception:
+        # Skip index creation if there's an issue
+        pass
+    
+    # Remove server defaults after adding columns (only try if columns exist)
+    # Note: This is safe to run even if columns already existed, as it just removes the default
+    try:
+        if column_exists('interview_sessions', 'mode'):
+            op.alter_column('interview_sessions', 'mode', server_default=None)
+    except Exception:
+        pass
+    try:
+        if column_exists('interview_sessions', 'question_source'):
+            op.alter_column('interview_sessions', 'question_source', server_default=None)
+    except Exception:
+        pass
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_index(op.f('ix_interview_sessions_scenario_id'), table_name='interview_sessions')
-    op.drop_index(op.f('ix_interview_sessions_mode'), table_name='interview_sessions')
-    op.create_index('idx_sessions_overall_score', 'interview_sessions', ['overall_score'], unique=False, postgresql_using='gin')
-    op.alter_column('interview_sessions', 'job_description',
-               existing_type=sa.TEXT(),
-               nullable=False)
-    op.drop_column('interview_sessions', 'job_context')
-    op.drop_column('interview_sessions', 'question_ids')
-    op.drop_column('interview_sessions', 'question_source')
-    op.drop_column('interview_sessions', 'scenario_id')
-    op.drop_column('interview_sessions', 'mode')
-    op.create_index('idx_answers_multi_agent_scores', 'answers', ['multi_agent_scores'], unique=False, postgresql_using='gin')
-    op.create_index('idx_answers_analysis_result', 'answers', ['analysis_result'], unique=False, postgresql_using='gin')
-    op.create_index('idx_analytics_event_data', 'analytics_events', ['event_data'], unique=False, postgresql_using='gin')
-    op.create_index('idx_agent_configuration', 'agent_configurations', ['configuration'], unique=False, postgresql_using='gin')
+    from sqlalchemy import inspect
+    
+    connection = op.get_bind()
+    inspector = inspect(connection)
+    
+    # Helper functions
+    def table_exists(table_name):
+        try:
+            return table_name in inspector.get_table_names()
+        except Exception:
+            return False
+    
+    def column_exists(table_name, column_name):
+        try:
+            columns = [col['name'] for col in inspector.get_columns(table_name)]
+            return column_name in columns
+        except Exception:
+            return False
+    
+    def index_exists(table_name, index_name):
+        try:
+            indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+            return index_name in indexes
+        except Exception:
+            return False
+    
+    # Drop indexes if they exist
+    if table_exists('interview_sessions'):
+        if index_exists('interview_sessions', 'ix_interview_sessions_scenario_id'):
+            try:
+                op.drop_index(op.f('ix_interview_sessions_scenario_id'), table_name='interview_sessions')
+            except Exception:
+                pass
+        if index_exists('interview_sessions', 'ix_interview_sessions_mode'):
+            try:
+                op.drop_index(op.f('ix_interview_sessions_mode'), table_name='interview_sessions')
+            except Exception:
+                pass
+        if not index_exists('interview_sessions', 'idx_sessions_overall_score'):
+            try:
+                op.create_index('idx_sessions_overall_score', 'interview_sessions', ['overall_score'], unique=False, postgresql_using='gin')
+            except Exception:
+                pass
+        if column_exists('interview_sessions', 'job_description'):
+            try:
+                op.alter_column('interview_sessions', 'job_description',
+                           existing_type=sa.TEXT(),
+                           nullable=False)
+            except Exception:
+                pass
+        if column_exists('interview_sessions', 'job_context'):
+            op.drop_column('interview_sessions', 'job_context')
+        if column_exists('interview_sessions', 'question_ids'):
+            op.drop_column('interview_sessions', 'question_ids')
+        if column_exists('interview_sessions', 'question_source'):
+            op.drop_column('interview_sessions', 'question_source')
+        if column_exists('interview_sessions', 'scenario_id'):
+            op.drop_column('interview_sessions', 'scenario_id')
+        if column_exists('interview_sessions', 'mode'):
+            op.drop_column('interview_sessions', 'mode')
+    
+    # Recreate indexes if tables exist and indexes don't exist
+    if table_exists('answers'):
+        if not index_exists('answers', 'idx_answers_multi_agent_scores'):
+            try:
+                op.create_index('idx_answers_multi_agent_scores', 'answers', ['multi_agent_scores'], unique=False, postgresql_using='gin')
+            except Exception:
+                pass
+        if not index_exists('answers', 'idx_answers_analysis_result'):
+            try:
+                op.create_index('idx_answers_analysis_result', 'answers', ['analysis_result'], unique=False, postgresql_using='gin')
+            except Exception:
+                pass
+    
+    if table_exists('analytics_events'):
+        if not index_exists('analytics_events', 'idx_analytics_event_data'):
+            try:
+                op.create_index('idx_analytics_event_data', 'analytics_events', ['event_data'], unique=False, postgresql_using='gin')
+            except Exception:
+                pass
+    
+    if table_exists('agent_configurations'):
+        if not index_exists('agent_configurations', 'idx_agent_configuration'):
+            try:
+                op.create_index('idx_agent_configuration', 'agent_configurations', ['configuration'], unique=False, postgresql_using='gin')
+            except Exception:
+                pass
     # ### end Alembic commands ###

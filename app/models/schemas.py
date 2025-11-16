@@ -27,6 +27,7 @@ class AnalyzeAnswerRequest(BaseModel):
     jobDescription: str = Field(..., min_length=10, max_length=10000, description="The job description")
     question: str = Field(..., min_length=5, max_length=1000, description="The interview question")
     answer: str = Field(..., min_length=1, max_length=5000, description="The candidate's answer")
+    audio_file_id: Optional[str] = Field(None, description="File ID of the user's answer audio recording")
     
     @field_validator('jobDescription', 'question', 'answer')
     @classmethod
@@ -78,6 +79,7 @@ class AnswerResponse(BaseModel):
     answer_text: str
     analysis_result: Optional[Dict[str, Any]] = None
     score: Optional[Dict[str, Any]] = None
+    audio_file_id: Optional[str] = None
     created_at: str
     
     class Config:
@@ -174,6 +176,7 @@ class AddAnswerRequest(BaseModel):
     answer_text: str = Field(..., min_length=1, max_length=5000, description="Answer text")
     analysis_result: Optional[Dict[str, Any]] = Field(None, description="AI analysis result")
     score: Optional[Dict[str, Any]] = Field(None, description="Scoring data")
+    audio_file_id: Optional[str] = Field(None, description="File ID of the user's answer audio recording")
     
     @field_validator('answer_text')
     @classmethod

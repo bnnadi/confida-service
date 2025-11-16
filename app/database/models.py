@@ -115,6 +115,7 @@ class Answer(Base):
     analysis_result = Column(JSONB, nullable=True)
     score = Column(JSONB, nullable=True)
     multi_agent_scores = Column(JSONB, nullable=True)
+    audio_file_id = Column(String(255), nullable=True, index=True)  # File ID of the user's answer audio recording
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
