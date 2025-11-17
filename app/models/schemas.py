@@ -211,11 +211,15 @@ class SynthesizeRequest(BaseModel):
             raise ValueError('Text cannot be empty')
         return v.strip()
 
+
 class SynthesizeResponse(BaseModel):
     """Response model for text-to-speech synthesis (admin tooling)."""
-    audio_data: str = Field(..., description="Base64-encoded audio data")
+    file_id: str = Field(..., description="Identifier of the stored audio file")
     voice_id: str = Field(..., description="Voice identifier used for synthesis")
     audio_format: str = Field(..., description="Audio format of the synthesized audio")
+    mime_type: str = Field(..., description="MIME type of the stored audio file")
+    duration: float = Field(..., ge=0.0, description="Approximate duration of the audio in seconds")
+    download_url: str = Field(..., description="API endpoint to download the synthesized audio")
     text_length: int = Field(..., description="Length of the input text")
     cached: bool = Field(False, description="Whether the result was retrieved from cache")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the synthesis")

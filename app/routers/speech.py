@@ -1,7 +1,15 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
-from typing import List
-import base64
-from app.models.schemas import TranscribeResponse, SupportedFormatsResponse, SynthesizeRequest, SynthesizeResponse
+from typing import List, Optional
+from io import BytesIO
+import wave
+from datetime import datetime
+
+from app.models.schemas import (
+    TranscribeResponse,
+    SupportedFormatsResponse,
+    SynthesizeRequest,
+    SynthesizeResponse,
+)
 from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required, get_current_admin
 from app.services.database_service import get_db
@@ -11,13 +19,21 @@ from app.utils.logger import get_logger
 from app.dependencies import get_ai_client_dependency
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
+from app.services.voice_cache import VoiceCacheService
+from app.middleware.rate_limiter import RateLimiter
+from app.exceptions import RateLimitExceededError
+from app.utils.tts_helper import cache_voice_result
+from app.config import get_settings
 
 logger = get_logger(__name__)
+settings = get_settings()
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
 
 def get_file_service(db = Depends(get_db)) -> FileService:
     return FileService(db)
+
+admin_tts_rate_limiter = RateLimiter(max_requests=10, window_seconds=3600)
 
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio_endpoint(
@@ -282,10 +298,28 @@ async def list_audio_files(
     
     return audio_files
 
+def _calculate_audio_duration(audio_bytes: Optional[bytes], audio_format: str) -> float:
+    """Best-effort duration estimate for synthesized audio."""
+    if not audio_bytes:
+        return 0.0
+    audio_format = audio_format.lower()
+    if audio_format == "wav":
+        try:
+            with wave.open(BytesIO(audio_bytes)) as wav_file:
+                frames = wav_file.getnframes()
+                framerate = wav_file.getframerate()
+                if framerate:
+                    return round(frames / float(framerate), 2)
+        except Exception:
+            return 0.0
+    return 0.0
+
+
 @router.post("/synthesize", response_model=SynthesizeResponse)
 async def synthesize_speech(
     request: SynthesizeRequest,
-    current_user: dict = Depends(get_current_admin)
+    current_user: dict = Depends(get_current_admin),
+    file_service: FileService = Depends(get_file_service)
 ):
     """
     Synthesize text to speech (Admin Tooling Endpoint).
@@ -293,57 +327,125 @@ async def synthesize_speech(
     This endpoint allows administrators to synthesize text to speech using the TTS service.
     Requires admin authentication.
     """
+    voice_id_used = request.voice_id or settings.TTS_DEFAULT_VOICE_ID
+    audio_format_used = (request.audio_format or settings.TTS_DEFAULT_FORMAT).lower()
+    if audio_format_used not in {"mp3", "wav"}:
+        raise HTTPException(status_code=422, detail="audio_format must be 'mp3' or 'wav'")
+    
+    client_id = f"admin-tts:{current_user.get('id', 'unknown')}"
     try:
-        # Initialize TTS service
-        tts_service = TTSService()
-        
-        # Synthesize text to speech
-        audio_bytes = await tts_service.synthesize(
-            text=request.text,
-            voice_id=request.voice_id,
-            audio_format=request.audio_format,
-            use_cache=request.use_cache
-        )
-        
-        # Encode audio data as base64
-        audio_data_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        
-        # Get the voice ID that was actually used (default if not provided)
-        voice_id_used = request.voice_id or tts_service.settings.TTS_DEFAULT_VOICE_ID
-        audio_format_used = request.audio_format or tts_service.settings.TTS_DEFAULT_FORMAT
-        
-        # Determine if result was cached (simplified - actual cache check would require more logic)
-        # For now, we'll set cached to False since we can't easily determine this from the service
-        cached = False
-        
-        return SynthesizeResponse(
-            audio_data=audio_data_base64,
-            voice_id=voice_id_used,
-            audio_format=audio_format_used,
-            text_length=len(request.text),
-            cached=cached,
-            metadata={
-                "audio_size_bytes": len(audio_bytes),
-                "synthesized_by": current_user.get("id"),
-                "synthesized_by_email": current_user.get("email")
-            }
-        )
-        
-    except TTSProviderRateLimitError as e:
-        logger.warning(f"TTS rate limit exceeded: {e}")
+        admin_tts_rate_limiter.check_rate_limit(client_id)
+    except RateLimitExceededError:
         raise HTTPException(
             status_code=429,
-            detail=f"TTS service rate limit exceeded: {str(e)}"
+            detail="Admin TTS endpoint is limited to 10 requests per hour."
         )
-    except TTSProviderError as e:
-        logger.error(f"TTS provider error: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"TTS service error: {str(e)}"
+    
+    mime_type = "audio/mpeg" if audio_format_used == "mp3" else "audio/wav"
+    file_id: Optional[str] = None
+    cached = False
+    duration = 0.0
+    file_size = None
+    
+    voice_cache = VoiceCacheService()
+    settings_hash = voice_cache.generate_settings_hash()
+    
+    cached_voice = await voice_cache.get_cached_voice(
+        text=request.text,
+        voice_id=voice_id_used,
+        format=audio_format_used,
+        settings_hash=settings_hash
+    )
+    
+    if cached_voice and cached_voice.get("file_id"):
+        cached = True
+        file_id = cached_voice["file_id"]
+        duration = cached_voice.get("duration", 0.0)
+        file_info = file_service.get_file_info(file_id)
+        if file_info:
+            mime_type = file_info.get("mime_type", mime_type)
+            file_size = file_info.get("file_size")
+        else:
+            # Cached metadata exists but file missing - treat as cache miss
+            cached = False
+            file_id = None
+    
+    audio_bytes: Optional[bytes] = None
+    if not file_id:
+        try:
+            tts_service = TTSService()
+            audio_bytes = await tts_service.synthesize(
+                text=request.text,
+                voice_id=voice_id_used,
+                audio_format=audio_format_used,
+                use_cache=request.use_cache
+            )
+        except TTSProviderRateLimitError as e:
+            logger.warning(f"TTS rate limit exceeded: {e}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"TTS service rate limit exceeded: {str(e)}"
+            )
+        except TTSProviderError as e:
+            logger.error(f"TTS provider error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"TTS service error: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error synthesizing speech: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to synthesize speech: {str(e)}"
+            )
+        
+        file_id = FileService.generate_file_id()
+        filename = f"admin_tts_{file_id}.{audio_format_used}"
+        metadata = {
+            "voice_id": voice_id_used,
+            "format": audio_format_used,
+            "version": settings.TTS_VOICE_VERSION,
+            "usage": "admin_synthesize",
+            "generated_by": current_user.get("id"),
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        saved_file = file_service.save_file_from_bytes(
+            content=audio_bytes,
+            file_type=FileType.AUDIO,
+            file_id=file_id,
+            filename=filename,
+            metadata=metadata
         )
-    except Exception as e:
-        logger.error(f"Error synthesizing speech: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to synthesize speech: {str(e)}"
+        mime_type = saved_file.get("mime_type", mime_type)
+        file_size = saved_file.get("file_size")
+        duration = _calculate_audio_duration(audio_bytes, audio_format_used)
+        
+        await cache_voice_result(
+            text=request.text,
+            voice_id=voice_id_used,
+            format=audio_format_used,
+            file_id=file_id,
+            duration=duration,
+            question_id=None,
+            version=settings.TTS_VOICE_VERSION
         )
+    
+    download_url = f"/api/v1/files/{file_id}/download"
+    
+    response_metadata = {
+        "audio_size_bytes": file_size,
+        "synthesized_by": current_user.get("id"),
+        "synthesized_by_email": current_user.get("email"),
+    }
+    
+    return SynthesizeResponse(
+        file_id=file_id,
+        voice_id=voice_id_used,
+        audio_format=audio_format_used,
+        mime_type=mime_type,
+        duration=duration,
+        download_url=download_url,
+        text_length=len(request.text),
+        cached=cached,
+        metadata=response_metadata
+    )
