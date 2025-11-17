@@ -56,6 +56,10 @@ class AuthMiddleware:
             first_name = name_parts[0] if name_parts else ''
             last_name = name_parts[1] if len(name_parts) > 1 else ''
             
+            # Use role from database (source of truth), fallback to token payload role if database doesn't have it yet
+            # This ensures role changes in database are immediately reflected
+            user_role = user.role if hasattr(user, 'role') and user.role else (token_payload.role if hasattr(token_payload, 'role') and token_payload.role else "user")
+            
             return {
                 "id": user.id,
                 "email": user.email,
@@ -64,7 +68,7 @@ class AuthMiddleware:
                 "full_name": user.name,
                 "is_active": user.is_active,
                 "is_verified": True,  # Default to True since field doesn't exist
-                "role": "user",  # Default role, can be enhanced
+                "role": user_role,  # Use role from token payload or database
                 "created_at": user.created_at,
                 "last_login": user.last_login
             }

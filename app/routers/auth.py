@@ -78,16 +78,17 @@ async def login_user(
             detail="Invalid email or password"
         )
     
-    # Create tokens
+    # Create tokens with user's role from database
+    user_role = user.role if hasattr(user, 'role') else "user"
     access_token = auth_service.create_access_token(
         user_id=str(user.id),  # Convert UUID to string
         email=user.email,
-        role="user"  # Default role, can be enhanced later
+        role=user_role  # Use role from database
     )
     refresh_token = auth_service.create_refresh_token(
         user_id=str(user.id),  # Convert UUID to string
         email=user.email,
-        role="user"
+        role=user_role  # Use role from database
     )
     
     logger.info(f"User logged in successfully: {user.email}")
@@ -126,11 +127,12 @@ async def refresh_token(
             detail="User not found or inactive"
         )
     
-    # Create new access token
+    # Create new access token with role from database (source of truth)
+    user_role = user.role if hasattr(user, 'role') else (token_payload.role if hasattr(token_payload, 'role') else "user")
     access_token = auth_service.create_access_token(
         user_id=str(user.id),  # Convert UUID to string
         email=user.email,
-        role=token_payload.role
+        role=user_role  # Use role from database (source of truth)
     )
     
     logger.info(f"Token refreshed for user: {user.email}")

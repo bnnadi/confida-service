@@ -51,7 +51,8 @@ tests/
 │   ├── test_interview_endpoints.py
 │   ├── test_session_endpoints.py
 │   ├── test_dashboard_endpoints.py  # Dashboard API endpoint tests
-│   └── test_answer_audio_file_persistence.py  # Answer audio file ID persistence integration tests
+│   ├── test_answer_audio_file_persistence.py  # Answer audio file ID persistence integration tests
+│   └── test_speech_endpoints.py    # Admin speech synthesis endpoint tests
 ├── e2e/                       # End-to-end tests
 │   └── test_complete_interview_flow.py
 ├── fixtures/                  # Test fixtures and utilities
@@ -90,6 +91,9 @@ python scripts/run_tests.py --marker performance
 
 # Run specific test file
 python scripts/run_tests.py --test tests/unit/test_question_bank_service.py
+
+# Run the admin speech tooling endpoint tests
+pytest tests/integration/test_speech_endpoints.py -v
 
 # Run dashboard tests
 pytest tests/unit/test_data_aggregator.py tests/unit/test_dashboard_service.py tests/integration/test_dashboard_endpoints.py -v
@@ -962,7 +966,7 @@ For additional support, contact the development team or refer to the project's i
 
 ### Overview
 
-The TTS (Text-to-Speech) and voice cache functionality includes comprehensive testing for configuration validation, cache behavior, and singleflight pattern implementation. All TTS tests follow the same patterns as other tests in the codebase.
+The TTS (Text-to-Speech) and voice cache functionality includes comprehensive testing for configuration validation, cache behavior, singleflight pattern implementation, and the admin speech synthesis endpoint. All TTS-related tests follow the same patterns as other tests in the codebase.
 
 ### Running TTS and Voice Cache Tests
 
@@ -972,6 +976,9 @@ pytest tests/unit/test_tts_configuration.py tests/unit/test_voice_cache.py -v
 
 # Run voice cache tests only
 pytest tests/unit/test_voice_cache.py -v
+
+# Run admin speech tooling endpoint tests
+pytest tests/integration/test_speech_endpoints.py -v
 
 # Run TTS configuration tests only
 pytest tests/unit/test_tts_configuration.py -v
@@ -1000,6 +1007,12 @@ pytest tests/unit/test_voice_cache.py::TestVoiceCacheService::test_singleflight_
    - Singleflight pattern
    - Statistics tracking
    - Error handling
+
+3. **`tests/integration/test_speech_endpoints.py`** - Tests for the admin-only `POST /api/v1/speech/synthesize` endpoint
+   - Successful synthesis with mocked `TTSService`
+   - Base64 payload verification
+   - Rate-limit propagation (`TTSProviderRateLimitError` → HTTP 429)
+   - Admin guardrail (401 when unauthenticated or non-admin)
 
 ### Test Fixtures
 
@@ -1107,6 +1120,7 @@ All TTS and voice cache functionality is tested with:
 4. **Cache Statistics**: Hits, misses, errors tracked correctly
 5. **Error Propagation**: Errors propagate to waiting requests
 6. **Cache Disabled**: Graceful handling when cache is disabled
+7. **Admin Tooling Endpoint**: Happy-path, rate-limit, and authorization coverage for `/api/v1/speech/synthesize`
 
 For additional support, contact the development team or refer to the project's issue tracker.
 

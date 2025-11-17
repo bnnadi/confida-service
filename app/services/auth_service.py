@@ -113,7 +113,7 @@ class AuthService:
             return None
     
     def create_user(self, email: str, password: str, first_name: Optional[str] = None, 
-                   last_name: Optional[str] = None) -> User:
+                   last_name: Optional[str] = None, role: str = UserRole.USER) -> User:
         """Create a new user."""
         # Check if user already exists
         existing_user = self.get_user_by_email(email)
@@ -133,6 +133,7 @@ class AuthService:
             email=email,
             password_hash=hashed_password,
             name=full_name,
+            role=role,  # Set role from parameter, defaults to UserRole.USER
             is_active=True
         )
         

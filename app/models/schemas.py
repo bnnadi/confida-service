@@ -197,6 +197,29 @@ class SupportedFormatsResponse(BaseModel):
     formats: List[Dict[str, str]] = Field(..., description="List of supported audio formats")
     supported_languages: List[str] = Field(..., description="List of supported language codes")
 
+class SynthesizeRequest(BaseModel):
+    """Request model for text-to-speech synthesis (admin tooling)."""
+    text: str = Field(..., min_length=1, max_length=5000, description="Text to synthesize to speech")
+    voice_id: Optional[str] = Field(None, description="Voice identifier (uses default if not provided)")
+    audio_format: Optional[str] = Field("mp3", pattern="^(mp3|wav)$", description="Audio format (mp3 or wav)")
+    use_cache: Optional[bool] = Field(True, description="Whether to use cache for synthesis")
+    
+    @field_validator('text')
+    @classmethod
+    def validate_text(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Text cannot be empty')
+        return v.strip()
+
+class SynthesizeResponse(BaseModel):
+    """Response model for text-to-speech synthesis (admin tooling)."""
+    audio_data: str = Field(..., description="Base64-encoded audio data")
+    voice_id: str = Field(..., description="Voice identifier used for synthesis")
+    audio_format: str = Field(..., description="Audio format of the synthesized audio")
+    text_length: int = Field(..., description="Length of the input text")
+    cached: bool = Field(False, description="Whether the result was retrieved from cache")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the synthesis")
+
 # Optional: Enhanced models for future features (legacy)
 class InterviewSession(BaseModel):
     session_id: str

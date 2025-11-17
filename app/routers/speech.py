@@ -1,13 +1,16 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from typing import List
-from app.models.schemas import TranscribeResponse, SupportedFormatsResponse
+import base64
+from app.models.schemas import TranscribeResponse, SupportedFormatsResponse, SynthesizeRequest, SynthesizeResponse
 from app.services.file_service import FileService
-from app.middleware.auth_middleware import get_current_user_required
+from app.middleware.auth_middleware import get_current_user_required, get_current_admin
 from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
 from app.dependencies import get_ai_client_dependency
+from app.services.tts.service import TTSService
+from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
 
 logger = get_logger(__name__)
 
@@ -278,3 +281,69 @@ async def list_audio_files(
         })
     
     return audio_files
+
+@router.post("/synthesize", response_model=SynthesizeResponse)
+async def synthesize_speech(
+    request: SynthesizeRequest,
+    current_user: dict = Depends(get_current_admin)
+):
+    """
+    Synthesize text to speech (Admin Tooling Endpoint).
+    
+    This endpoint allows administrators to synthesize text to speech using the TTS service.
+    Requires admin authentication.
+    """
+    try:
+        # Initialize TTS service
+        tts_service = TTSService()
+        
+        # Synthesize text to speech
+        audio_bytes = await tts_service.synthesize(
+            text=request.text,
+            voice_id=request.voice_id,
+            audio_format=request.audio_format,
+            use_cache=request.use_cache
+        )
+        
+        # Encode audio data as base64
+        audio_data_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        
+        # Get the voice ID that was actually used (default if not provided)
+        voice_id_used = request.voice_id or tts_service.settings.TTS_DEFAULT_VOICE_ID
+        audio_format_used = request.audio_format or tts_service.settings.TTS_DEFAULT_FORMAT
+        
+        # Determine if result was cached (simplified - actual cache check would require more logic)
+        # For now, we'll set cached to False since we can't easily determine this from the service
+        cached = False
+        
+        return SynthesizeResponse(
+            audio_data=audio_data_base64,
+            voice_id=voice_id_used,
+            audio_format=audio_format_used,
+            text_length=len(request.text),
+            cached=cached,
+            metadata={
+                "audio_size_bytes": len(audio_bytes),
+                "synthesized_by": current_user.get("id"),
+                "synthesized_by_email": current_user.get("email")
+            }
+        )
+        
+    except TTSProviderRateLimitError as e:
+        logger.warning(f"TTS rate limit exceeded: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"TTS service rate limit exceeded: {str(e)}"
+        )
+    except TTSProviderError as e:
+        logger.error(f"TTS provider error: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"TTS service error: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error synthesizing speech: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to synthesize speech: {str(e)}"
+        )
