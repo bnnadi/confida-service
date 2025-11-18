@@ -11,9 +11,8 @@ def test_user_model_creation(db_session: Session):
     """Test creating a user model."""
     user = User(
         email="test@example.com",
-        hashed_password="hashed_password_here",
-        first_name="Test",
-        last_name="User"
+        password_hash="hashed_password_here",
+        name="Test User"
     )
     
     db_session.add(user)
@@ -22,9 +21,7 @@ def test_user_model_creation(db_session: Session):
     
     assert user.id is not None
     assert user.email == "test@example.com"
-    assert user.first_name == "Test"
-    assert user.last_name == "User"
-    assert user.full_name == "Test User"
+    assert user.name == "Test User"
 
 
 def test_interview_session_model_creation(db_session: Session):
@@ -32,7 +29,8 @@ def test_interview_session_model_creation(db_session: Session):
     # First create a user
     user = User(
         email="test@example.com",
-        hashed_password="hashed_password_here"
+        password_hash="hashed_password_here",
+        name="Test User"
     )
     db_session.add(user)
     db_session.commit()
@@ -58,29 +56,12 @@ def test_interview_session_model_creation(db_session: Session):
 
 def test_question_model_creation(db_session: Session):
     """Test creating a question model."""
-    # Create user and session first
-    user = User(
-        email="test@example.com",
-        hashed_password="hashed_password_here"
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    
-    session = InterviewSession(
-        user_id=user.id,
-        role="Software Engineer",
-        job_description="A great job opportunity"
-    )
-    db_session.add(session)
-    db_session.commit()
-    db_session.refresh(session)
-    
-    # Create question
+    # Create question (global question bank, not session-specific)
     question = Question(
-        session_id=session.id,
         question_text="What is your experience with Python?",
-        question_order=1
+        question_metadata={},
+        category="technical",
+        difficulty_level="medium"
     )
     
     db_session.add(question)
@@ -88,35 +69,19 @@ def test_question_model_creation(db_session: Session):
     db_session.refresh(question)
     
     assert question.id is not None
-    assert question.session_id == session.id
     assert question.question_text == "What is your experience with Python?"
-    assert question.question_order == 1
+    assert question.category == "technical"
+    assert question.difficulty_level == "medium"
 
 
 def test_answer_model_creation(db_session: Session):
     """Test creating an answer model."""
-    # Create user, session, and question first
-    user = User(
-        email="test@example.com",
-        hashed_password="hashed_password_here"
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    
-    session = InterviewSession(
-        user_id=user.id,
-        role="Software Engineer",
-        job_description="A great job opportunity"
-    )
-    db_session.add(session)
-    db_session.commit()
-    db_session.refresh(session)
-    
+    # Create question first (global question bank)
     question = Question(
-        session_id=session.id,
         question_text="What is your experience with Python?",
-        question_order=1
+        question_metadata={},
+        category="technical",
+        difficulty_level="medium"
     )
     db_session.add(question)
     db_session.commit()
