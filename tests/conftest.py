@@ -3,8 +3,13 @@ Test configuration for Confida tests.
 
 This module provides test fixtures and configuration for the testing infrastructure.
 """
-import pytest
+# Set test environment variables BEFORE any imports that might use them
 import os
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")  # Disable rate limiting in tests
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_confida.db")
+os.environ.setdefault("ENVIRONMENT", "test")
+
+import pytest
 from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -14,11 +19,15 @@ from app.main import app
 # Replace JSONB with JSON for SQLite compatibility
 # This must happen before importing models
 import sqlalchemy.dialects.sqlite.base
-from sqlalchemy import JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 # Patch JSONB class to handle SQLite
-if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
+if (
+    JSONB is not None
+    and hasattr(JSONB, 'load_dialect_impl')
+    and not hasattr(JSONB, '_patched_for_sqlite')
+):
     original_impl = JSONB.load_dialect_impl
     
     def _patched_load_dialect_impl(self, dialect):
@@ -29,13 +38,38 @@ if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
     JSONB.load_dialect_impl = _patched_load_dialect_impl
     JSONB._patched_for_sqlite = True
 
+# Patch UUID class to handle SQLite
+if (
+    UUID is not None
+    and hasattr(UUID, 'load_dialect_impl')
+    and not hasattr(UUID, '_patched_for_sqlite')
+):
+    original_uuid_impl = UUID.load_dialect_impl
+
+    def _patched_uuid_load_dialect_impl(self, dialect):
+        if dialect.name == 'sqlite':
+            return dialect.type_descriptor(String(36))
+        return original_uuid_impl(self, dialect)
+
+    UUID.load_dialect_impl = _patched_uuid_load_dialect_impl
+    UUID._patched_for_sqlite = True
+
 # Patch SQLite compiler to handle JSONB
-if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_jsonb'):
+sqlite_type_compiler = sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler
+
+if not hasattr(sqlite_type_compiler, '_patched_for_jsonb'):
     def visit_JSONB(self, type_, **kw):
         return self.visit_JSON(type_, **kw)
-    
-    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_JSONB = visit_JSONB
-    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_jsonb = True
+
+    sqlite_type_compiler.visit_JSONB = visit_JSONB
+    sqlite_type_compiler._patched_for_jsonb = True
+
+if not hasattr(sqlite_type_compiler, '_patched_for_uuid'):
+    def visit_UUID(self, type_, **kw):
+        return "CHAR(36)"
+
+    sqlite_type_compiler.visit_UUID = visit_UUID
+    sqlite_type_compiler._patched_for_uuid = True
 
 from app.database.models import Base
 
@@ -43,15 +77,17 @@ from app.database.models import Base
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
     """Set up basic test environment."""
-    # Set environment variables
-    os.environ["DATABASE_URL"] = "sqlite:///./test_confida.db"
-    os.environ["REDIS_URL"] = "redis://localhost:6379"
-    os.environ["SECRET_KEY"] = "test-secret-key"
-    os.environ["ENVIRONMENT"] = "test"
+    # Set additional environment variables (some are set at module level)
+    os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+    os.environ.setdefault("SECRET_KEY", "test-secret-key")
+    
+    # Clear settings cache to ensure new environment variables are picked up
+    from app.config import get_settings
+    get_settings.cache_clear()
     
     # Add project root to Python path
     project_root = Path(__file__).parent.parent
-    os.environ["PYTHONPATH"] = str(project_root)
+    os.environ.setdefault("PYTHONPATH", str(project_root))
     
     yield
     
@@ -93,10 +129,17 @@ def test_db_engine():
 @pytest.fixture
 def test_db_session(test_db_engine):
     """Create test database session."""
+    from app.database.models import Base, User, InterviewSession, Question, SessionQuestion, Answer
+    # Clean database before each test
+    Base.metadata.drop_all(bind=test_db_engine)
+    Base.metadata.create_all(bind=test_db_engine)
+    
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
     session = TestingSessionLocal()
     try:
         yield session
+        # Clean up after test
+        session.rollback()
     finally:
         session.close()
 
@@ -107,9 +150,15 @@ def db_session(test_db_session):
 
 # FastAPI client fixture
 @pytest.fixture
-def client():
-    """Create FastAPI test client."""
-    return TestClient(app)
+def client(db_session):
+    """Create FastAPI test client with database dependency override."""
+    from app.services.database_service import get_db
+    client = TestClient(app)
+    # Override get_db to use test database session
+    client.app.dependency_overrides[get_db] = lambda: db_session
+    yield client
+    # Clean up overrides after test
+    client.app.dependency_overrides.clear()
 
 # Test fixtures for integration tests
 @pytest.fixture
@@ -117,6 +166,9 @@ def sample_user(db_session):
     """Create a sample user for testing."""
     from app.database.models import User
     from werkzeug.security import generate_password_hash
+    existing = db_session.query(User).filter(User.email == "test@example.com").first()
+    if existing:
+        return existing
     user = User(
         email="test@example.com",
         name="Test User",

@@ -107,10 +107,10 @@ async def get_configuration():
             "features": {
                 "ai_services": {
                     "ai_service_microservice_enabled": bool(settings.AI_SERVICE_URL),
-                    "ai_service_fallback_enabled": settings.AI_SERVICE_FALLBACK_ENABLED,
-                    "ollama_enabled": bool(settings.OLLAMA_BASE_URL),
-                    "openai_enabled": settings.is_openai_configured,
-                    "anthropic_enabled": settings.is_anthropic_configured
+                    "ai_service_fallback_enabled": getattr(settings, 'AI_SERVICE_FALLBACK_ENABLED', False),
+                    "ollama_enabled": bool(getattr(settings, 'OLLAMA_BASE_URL', None)),
+                    "openai_enabled": getattr(settings, 'is_openai_configured', False),
+                    "anthropic_enabled": getattr(settings, 'is_anthropic_configured', False)
                 },
                 "database_enabled": bool(settings.DATABASE_URL),
                 "rate_limiting_enabled": getattr(settings, 'RATE_LIMIT_ENABLED', False)

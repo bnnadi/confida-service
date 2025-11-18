@@ -6,7 +6,7 @@ and session handling into a single, comprehensive database service.
 """
 import asyncio
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable, AsyncGenerator
-from sqlalchemy import create_engine, text, select, update, delete, func, JSON
+from sqlalchemy import create_engine, text, select, update, delete, func, JSON, String
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, selectinload, joinedload
@@ -18,11 +18,15 @@ from app.utils.logger import get_logger
 
 # Patch JSONB for SQLite compatibility before importing models
 try:
-    from sqlalchemy.dialects.postgresql import JSONB
+    from sqlalchemy.dialects.postgresql import JSONB, UUID
     import sqlalchemy.dialects.sqlite.base
     
     # Patch JSONB class to handle SQLite
-    if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
+    if (
+        JSONB is not None
+        and hasattr(JSONB, 'load_dialect_impl')
+        and not hasattr(JSONB, '_patched_for_sqlite')
+    ):
         original_impl = JSONB.load_dialect_impl
         
         def _patched_load_dialect_impl(self, dialect):
@@ -32,14 +36,39 @@ try:
         
         JSONB.load_dialect_impl = _patched_load_dialect_impl
         JSONB._patched_for_sqlite = True
+
+    # Patch UUID class to handle SQLite
+    if (
+        UUID is not None
+        and hasattr(UUID, 'load_dialect_impl')
+        and not hasattr(UUID, '_patched_for_sqlite')
+    ):
+        original_uuid_impl = UUID.load_dialect_impl
+
+        def _patched_uuid_load_dialect_impl(self, dialect):
+            if dialect.name == 'sqlite':
+                return dialect.type_descriptor(String(36))
+            return original_uuid_impl(self, dialect)
+
+        UUID.load_dialect_impl = _patched_uuid_load_dialect_impl
+        UUID._patched_for_sqlite = True
     
     # Patch SQLite compiler to handle JSONB
-    if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_jsonb'):
+    sqlite_type_compiler = sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler
+
+    if not hasattr(sqlite_type_compiler, '_patched_for_jsonb'):
         def visit_JSONB(self, type_, **kw):
             return self.visit_JSON(type_, **kw)
-        
-        sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_JSONB = visit_JSONB
-        sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_jsonb = True
+
+        sqlite_type_compiler.visit_JSONB = visit_JSONB
+        sqlite_type_compiler._patched_for_jsonb = True
+
+    if not hasattr(sqlite_type_compiler, '_patched_for_uuid'):
+        def visit_UUID(self, type_, **kw):
+            return "CHAR(36)"
+
+        sqlite_type_compiler.visit_UUID = visit_UUID
+        sqlite_type_compiler._patched_for_uuid = True
 except ImportError:
     # JSONB not available, skip patching
     pass

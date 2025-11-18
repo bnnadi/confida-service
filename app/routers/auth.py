@@ -213,12 +213,12 @@ async def get_auth_status(
     """
     if current_user:
         return AuthStatusResponse(
-            authenticated=True,
+            is_authenticated=True,
             user=current_user,
-            expires_at=None  # Could be calculated from token
+            token_expires_in=None  # Could be calculated from token
         )
     else:
-        return AuthStatusResponse(authenticated=False)
+        return AuthStatusResponse(is_authenticated=False)
 
 
 @router.get("/stats")

@@ -3,7 +3,7 @@ Tests for admin endpoints with consistent error handling.
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 from app.main import app
 
 
@@ -11,7 +11,7 @@ def test_admin_services_status_success(client: TestClient):
     """Test successful admin services status endpoint."""
     # Mock AI service client
     mock_ai_client = MagicMock()
-    mock_ai_client.health_check.return_value = True
+    mock_ai_client.health_check = AsyncMock(return_value=True)
     mock_ai_client.base_url = "http://localhost:8001"
     mock_ai_client.timeout = 30.0
     
@@ -55,7 +55,7 @@ def test_admin_services_test_success(client: TestClient):
     """Test successful admin services test endpoint."""
     # Mock AI service client
     mock_ai_client = MagicMock()
-    mock_ai_client.health_check.return_value = True
+    mock_ai_client.health_check = AsyncMock(return_value=True)
     mock_ai_client.base_url = "http://localhost:8001"
     mock_ai_client.timeout = 30.0
     

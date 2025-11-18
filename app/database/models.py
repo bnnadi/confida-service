@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.mutable import MutableDict
 Base = declarative_base()
 import uuid
 
@@ -96,7 +97,7 @@ class SessionQuestion(Base):
     session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
     question_order = Column(Integer, nullable=False)
-    session_specific_context = Column(JSONB, nullable=True)  # Session-specific modifications
+    session_specific_context = Column(MutableDict.as_mutable(JSONB), nullable=True)  # Session-specific modifications
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
