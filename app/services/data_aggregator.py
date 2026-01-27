@@ -23,6 +23,13 @@ class DataAggregator:
     def __init__(self, db: Session):
         self.db = db
     
+    def _to_uuid(self, user_id):
+        """Convert user_id to UUID if it's a string."""
+        import uuid as uuid_lib
+        if isinstance(user_id, str):
+            return uuid_lib.UUID(user_id)
+        return user_id
+    
     def get_user_sessions_summary(
         self, 
         user_id: str, 
@@ -30,6 +37,7 @@ class DataAggregator:
         end_date: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Get summary of user sessions."""
+        user_id = self._to_uuid(user_id)
         query = self.db.query(InterviewSession).filter(InterviewSession.user_id == user_id)
         
         if start_date:
@@ -79,6 +87,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get user progress data over time."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
@@ -173,6 +182,7 @@ class DataAggregator:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Get recent user activity."""
+        user_id = self._to_uuid(user_id)
         activities = []
         
         # Get recent sessions
@@ -211,6 +221,7 @@ class DataAggregator:
     
     def get_current_streak(self, user_id: str) -> int:
         """Calculate current consecutive days with activity."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow().date()
         current_date = end_date
         streak = 0
@@ -242,6 +253,7 @@ class DataAggregator:
     
     def get_skill_breakdown(self, user_id: str, days: int = 30) -> Dict[str, float]:
         """Get skill breakdown by category."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
@@ -273,6 +285,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get detailed performance metrics."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
@@ -334,6 +347,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get trend data for performance metrics."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         
@@ -427,6 +441,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get personalized user insights."""
+        user_id = self._to_uuid(user_id)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
         

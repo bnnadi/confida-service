@@ -43,8 +43,10 @@ class DashboardService:
             improvement_rate = 0.0
             if summary["total_sessions"] > 1:
                 # Get first and last session scores
+                import uuid as uuid_lib
+                user_uuid = uuid_lib.UUID(user_id) if isinstance(user_id, str) else user_id
                 sessions = self.db.query(InterviewSession).filter(
-                    InterviewSession.user_id == user_id
+                    InterviewSession.user_id == user_uuid
                 ).order_by(InterviewSession.created_at).all()
                 
                 if len(sessions) >= 2:

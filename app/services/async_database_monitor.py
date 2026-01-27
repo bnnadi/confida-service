@@ -94,12 +94,16 @@ class AsyncDatabaseMonitor:
             
             pool = async_db_manager.engine.pool
             
+            invalid_count = 0
+            if hasattr(pool, 'invalid'):
+                invalid_count = pool.invalid()
+            
             return {
                 "pool_size": pool.size(),
                 "checked_in": pool.checkedin(),
                 "checked_out": pool.checkedout(),
                 "overflow": pool.overflow(),
-                "invalid": pool.invalid(),
+                "invalid": invalid_count,
                 "max_overflow": pool._max_overflow,
                 "pool_timeout": pool._timeout,
                 "pool_recycle": pool._recycle,
@@ -232,12 +236,16 @@ class AsyncDatabaseMonitor:
             
             pool = async_db_manager.engine.pool
             
+            invalid_count = 0
+            if hasattr(pool, 'invalid'):
+                invalid_count = pool.invalid()
+            
             return {
                 "pool_size": pool.size(),
                 "checked_in": pool.checkedin(),
                 "checked_out": pool.checkedout(),
                 "overflow": pool.overflow(),
-                "invalid": pool.invalid(),
+                "invalid": invalid_count,
                 "max_overflow": pool._max_overflow,
                 "pool_timeout": pool._timeout,
                 "pool_recycle": pool._recycle

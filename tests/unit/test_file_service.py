@@ -61,10 +61,10 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg"
+            filename="test_audio.mp3"
         )
         
         assert result["file_id"] == file_id
@@ -86,15 +86,15 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_wav_bytes,
+            content=sample_wav_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/wav"
+            filename="test_audio.wav"
         )
         
         assert result["file_id"] == file_id
         assert result["filename"].endswith(".wav")
-        assert result["mime_type"] == "audio/wav"
+        assert result["mime_type"] in ["audio/wav", "audio/x-wav"]
         assert result["file_size"] == len(sample_wav_bytes)
         assert result["status"] == FileStatus.COMPLETED
         
@@ -115,9 +115,10 @@ class TestFileService:
         }
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename="test_audio.mp3",
             metadata=metadata
         )
         
@@ -150,10 +151,10 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg"
+            filename="test_audio.mp3"
         )
         
         assert result["filename"] == f"{file_id}.mp3"
@@ -164,7 +165,7 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
             filename="test.mp3"
@@ -185,9 +186,10 @@ class TestFileService:
         
         # Save file with metadata
         save_result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename="test_audio.mp3",
             metadata=metadata
         )
         
@@ -215,7 +217,7 @@ class TestFileService:
         
         # Save file without metadata
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id
         )
@@ -235,7 +237,7 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id
         )
@@ -257,7 +259,7 @@ class TestFileService:
         }
         
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
             metadata=metadata
@@ -378,7 +380,7 @@ class TestFileService:
         
         # Save file with metadata
         save_result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
             metadata=metadata
@@ -467,10 +469,10 @@ class TestFileServiceIntegration:
         }
         
         save_result = file_service.save_file_from_bytes(
-            audio_data=audio_data,
+            content=audio_data,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg",
+            filename="test_audio.mp3",
             metadata=metadata
         )
         
@@ -518,10 +520,10 @@ class TestFileServiceIntegration:
             file_id = file_service.generate_file_id()
             
             result = file_service.save_file_from_bytes(
-                audio_data=audio_data,
+                content=audio_data,
                 file_type=FileType.AUDIO,
                 file_id=file_id,
-                mime_type=mime_type
+                filename=f"test_audio{ext}"
             )
             
             saved_files.append((file_id, audio_data, mime_type))

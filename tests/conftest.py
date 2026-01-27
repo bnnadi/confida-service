@@ -8,6 +8,7 @@ import os
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")  # Disable rate limiting in tests
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_confida.db")
 os.environ.setdefault("ENVIRONMENT", "test")
+os.environ.setdefault("ASYNC_DATABASE_ENABLED", "false")  # Disable async database in tests
 
 import pytest
 from pathlib import Path
@@ -327,6 +328,61 @@ def admin_user_token(db_session, admin_user):
         role="admin"
     )
     return token
+
+@pytest.fixture
+def authenticated_client(client, db_session):
+    """Create an authenticated test client with auth token."""
+    from app.database.models import User
+    from app.services.auth_service import AuthService
+    from werkzeug.security import generate_password_hash
+    
+    # Create a test user
+    user = User(
+        email="testuser@example.com",
+        name="Test User",
+        password_hash=generate_password_hash("TestPassword123"),
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    
+    # Create token
+    auth_service = AuthService(db_session)
+    token = auth_service.create_access_token(
+        user_id=str(user.id),
+        email=user.email,
+        role="user"
+    )
+    
+    # Return client and token - tests should use headers={"Authorization": f"Bearer {token}"}
+    class AuthenticatedClient:
+        def __init__(self, client, token):
+            self.client = client
+            self.token = token
+            self.headers = {"Authorization": f"Bearer {token}"}
+        
+        def __getattr__(self, name):
+            # Delegate all other attributes to the underlying client
+            return getattr(self.client, name)
+        
+        def get(self, url, **kwargs):
+            kwargs.setdefault("headers", {}).update(self.headers)
+            return self.client.get(url, **kwargs)
+        
+        def post(self, url, **kwargs):
+            kwargs.setdefault("headers", {}).update(self.headers)
+            return self.client.post(url, **kwargs)
+        
+        def put(self, url, **kwargs):
+            kwargs.setdefault("headers", {}).update(self.headers)
+            return self.client.put(url, **kwargs)
+        
+        def delete(self, url, **kwargs):
+            kwargs.setdefault("headers", {}).update(self.headers)
+            return self.client.delete(url, **kwargs)
+    
+    return AuthenticatedClient(client, token)
 
 # TTS Test Fixtures
 @pytest.fixture

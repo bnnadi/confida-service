@@ -103,13 +103,22 @@ class DatabaseService:
             bind=self._sync_engine
         )
         
-        # Initialize async engine
-        self._async_engine = self._create_async_engine()
-        self._async_session_factory = async_sessionmaker(
-            self._async_engine,
-            class_=AsyncSession,
-            expire_on_commit=False
-        )
+        # Initialize async engine only if enabled
+        if self.settings.ASYNC_DATABASE_ENABLED:
+            try:
+                self._async_engine = self._create_async_engine()
+                self._async_session_factory = async_sessionmaker(
+                    self._async_engine,
+                    class_=AsyncSession,
+                    expire_on_commit=False
+                )
+            except ImportError as e:
+                logger.warning(f"Async database not available (missing dependency): {e}. Continuing with sync only.")
+                self._async_engine = None
+                self._async_session_factory = None
+        else:
+            self._async_engine = None
+            self._async_session_factory = None
         
         self._initialized = True
         logger.info("✅ Database service initialized successfully")
@@ -177,10 +186,16 @@ class DatabaseService:
         """Get asynchronous database session."""
         if not self._initialized:
             self.initialize()
+        if not self._async_session_factory:
+            raise RuntimeError("Async database is not enabled or not available")
         return self._async_session_factory()
     
     async def get_async_session_generator(self) -> AsyncGenerator[AsyncSession, None]:
         """Get async session as generator for FastAPI dependency."""
+        if not self._initialized:
+            self.initialize()
+        if not self._async_session_factory:
+            raise RuntimeError("Async database is not enabled or not available")
         async with self._async_session_factory() as session:
             try:
                 yield session
@@ -347,6 +362,13 @@ class DatabaseService:
     # Health Check
     async def health_check_async(self) -> Dict[str, Any]:
         """Check database health asynchronously."""
+        if not self._async_session_factory:
+            return {
+                "status": "disabled",
+                "async_connection": False,
+                "message": "Async database is not enabled",
+                "timestamp": datetime.now().isoformat()
+            }
         try:
             async with self._async_session_factory() as session:
                 await session.execute(text("SELECT 1"))

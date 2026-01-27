@@ -20,13 +20,11 @@ class TestUserModel:
         """Test creating a user."""
         # Arrange
         user_data = {
-            "id": str(uuid.uuid4()),
             "email": "test@example.com",
             "name": "Test User",
             "password_hash": "hashed_password_123",
             "is_active": True,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -36,7 +34,7 @@ class TestUserModel:
         test_db_session.refresh(user)
         
         # Assert
-        assert user.id == user_data["id"]
+        assert user.id is not None  # ID should be auto-generated
         assert user.email == user_data["email"]
         assert user.name == user_data["name"]
         assert user.password_hash == user_data["password_hash"]
@@ -50,22 +48,18 @@ class TestUserModel:
         # Arrange
         email = "test@example.com"
         user1_data = {
-            "id": str(uuid.uuid4()),
             "email": email,
             "name": "Test User 1",
             "password_hash": "hashed_password_123",
             "is_active": True,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         user2_data = {
-            "id": str(uuid.uuid4()),
             "email": email,  # Same email
             "name": "Test User 2",
             "password_hash": "hashed_password_456",
             "is_active": True,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -85,7 +79,6 @@ class TestUserModel:
         """Test user relationships with interview sessions."""
         # Arrange
         session_data = {
-            "id": str(uuid.uuid4()),
             "user_id": sample_user.id,
             "role": "Python Developer",
             "job_description": "Looking for Python developer",
@@ -93,7 +86,6 @@ class TestUserModel:
             "total_questions": 5,
             "completed_questions": 0,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -115,7 +107,6 @@ class TestInterviewSessionModel:
         """Test creating an interview session."""
         # Arrange
         session_data = {
-            "id": str(uuid.uuid4()),
             "user_id": sample_user.id,
             "role": "Python Developer",
             "job_description": "Looking for Python developer with Django experience",
@@ -123,7 +114,6 @@ class TestInterviewSessionModel:
             "total_questions": 5,
             "completed_questions": 0,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -133,7 +123,7 @@ class TestInterviewSessionModel:
         test_db_session.refresh(session)
         
         # Assert
-        assert session.id == session_data["id"]
+        assert session.id is not None
         assert session.user_id == session_data["user_id"]
         assert session.role == session_data["role"]
         assert session.job_description == session_data["job_description"]
@@ -148,7 +138,6 @@ class TestInterviewSessionModel:
         """Test interview session relationship with user."""
         # Arrange
         session_data = {
-            "id": str(uuid.uuid4()),
             "user_id": sample_user.id,
             "role": "Python Developer",
             "job_description": "Looking for Python developer",
@@ -156,7 +145,6 @@ class TestInterviewSessionModel:
             "total_questions": 5,
             "completed_questions": 0,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -177,7 +165,6 @@ class TestInterviewSessionModel:
         
         for status in valid_statuses:
             session_data = {
-                "id": str(uuid.uuid4()),
                 "user_id": sample_user.id,
                 "role": "Python Developer",
                 "job_description": "Looking for Python developer",
@@ -185,7 +172,6 @@ class TestInterviewSessionModel:
                 "total_questions": 5,
                 "completed_questions": 0,
                 "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
             }
             
             # Act
@@ -206,7 +192,6 @@ class TestQuestionModel:
         """Test creating a question."""
         # Arrange
         question_data = {
-            "id": str(uuid.uuid4()),
             "question_text": "What is your Python experience?",
             "question_metadata": {"role": "python_developer", "context": "web_development"},
             "difficulty_level": "medium",
@@ -221,7 +206,6 @@ class TestQuestionModel:
             "ai_service_used": "openai",
             "generation_prompt_hash": "hash_123",
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -231,7 +215,7 @@ class TestQuestionModel:
         test_db_session.refresh(question)
         
         # Assert
-        assert question.id == question_data["id"]
+        assert question.id is not None
         assert question.question_text == question_data["question_text"]
         assert question.question_metadata == question_data["question_metadata"]
         assert question.difficulty_level == question_data["difficulty_level"]
@@ -253,13 +237,11 @@ class TestQuestionModel:
         """Test that question category is required."""
         # Arrange
         question_data = {
-            "id": str(uuid.uuid4()),
             "question_text": "What is your Python experience?",
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "medium",
             # category is missing
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -278,13 +260,11 @@ class TestQuestionModel:
         
         for difficulty in difficulty_levels:
             question_data = {
-                "id": str(uuid.uuid4()),
                 "question_text": f"Test question with {difficulty} difficulty",
                 "question_metadata": {"role": "python_developer"},
                 "difficulty_level": difficulty,
                 "category": "technical",
                 "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
             }
             
             # Act
@@ -305,7 +285,6 @@ class TestSessionQuestionModel:
         """Test creating a session question."""
         # Arrange
         session_question_data = {
-            "id": str(uuid.uuid4()),
             "session_id": sample_interview_session.id,
             "question_id": sample_question.id,
             "question_order": 1,
@@ -320,7 +299,7 @@ class TestSessionQuestionModel:
         test_db_session.refresh(session_question)
         
         # Assert
-        assert session_question.id == session_question_data["id"]
+        assert session_question.id is not None
         assert session_question.session_id == session_question_data["session_id"]
         assert session_question.question_id == session_question_data["question_id"]
         assert session_question.question_order == session_question_data["question_order"]
@@ -332,7 +311,6 @@ class TestSessionQuestionModel:
         """Test session question relationships."""
         # Arrange
         session_question_data = {
-            "id": str(uuid.uuid4()),
             "session_id": sample_interview_session.id,
             "question_id": sample_question.id,
             "question_order": 1,
@@ -357,7 +335,6 @@ class TestSessionQuestionModel:
         """Test cascade delete when session is deleted."""
         # Arrange
         session_question_data = {
-            "id": str(uuid.uuid4()),
             "session_id": sample_interview_session.id,
             "question_id": sample_question.id,
             "question_order": 1,
@@ -388,7 +365,6 @@ class TestAnswerModel:
         """Test creating an answer."""
         # Arrange
         answer_data = {
-            "id": str(uuid.uuid4()),
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience with Django and Flask frameworks.",
             "analysis_result": {
@@ -398,7 +374,6 @@ class TestAnswerModel:
                 "idealAnswer": "I have extensive experience with Python web frameworks..."
             },
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -408,24 +383,21 @@ class TestAnswerModel:
         test_db_session.refresh(answer)
         
         # Assert
-        assert answer.id == answer_data["id"]
+        assert answer.id is not None
         assert answer.question_id == answer_data["question_id"]
         assert answer.answer_text == answer_data["answer_text"]
         assert answer.analysis_result == answer_data["analysis_result"]
         assert answer.created_at is not None
-        assert answer.updated_at is not None
     
     @pytest.mark.unit
     def test_answer_question_relationship(self, test_db_session, sample_question):
         """Test answer relationship with question."""
         # Arrange
         answer_data = {
-            "id": str(uuid.uuid4()),
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         # Act
@@ -443,12 +415,10 @@ class TestAnswerModel:
         """Test cascade delete when question is deleted."""
         # Arrange
         answer_data = {
-            "id": str(uuid.uuid4()),
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         
         answer = Answer(**answer_data)
@@ -475,7 +445,6 @@ class TestModelRelationships:
         # Arrange
         # Create interview session
         session_data = {
-            "id": str(uuid.uuid4()),
             "user_id": sample_user.id,
             "role": "Python Developer",
             "job_description": "Looking for Python developer",
@@ -483,7 +452,6 @@ class TestModelRelationships:
             "total_questions": 2,
             "completed_questions": 0,
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         session = InterviewSession(**session_data)
         test_db_session.add(session)
@@ -492,25 +460,21 @@ class TestModelRelationships:
         
         # Create questions
         question1_data = {
-            "id": str(uuid.uuid4()),
             "question_text": "What is your Python experience?",
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "medium",
             "category": "technical",
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         question1 = Question(**question1_data)
         test_db_session.add(question1)
         
         question2_data = {
-            "id": str(uuid.uuid4()),
             "question_text": "How do you debug Python code?",
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "easy",
             "category": "technical",
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         question2 = Question(**question2_data)
         test_db_session.add(question2)
@@ -520,7 +484,6 @@ class TestModelRelationships:
         
         # Create session questions
         session_question1_data = {
-            "id": str(uuid.uuid4()),
             "session_id": session.id,
             "question_id": question1.id,
             "question_order": 1,
@@ -531,7 +494,6 @@ class TestModelRelationships:
         test_db_session.add(session_question1)
         
         session_question2_data = {
-            "id": str(uuid.uuid4()),
             "session_id": session.id,
             "question_id": question2.id,
             "question_order": 2,
@@ -546,23 +508,19 @@ class TestModelRelationships:
         
         # Create answers
         answer1_data = {
-            "id": str(uuid.uuid4()),
             "question_id": question1.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         answer1 = Answer(**answer1_data)
         test_db_session.add(answer1)
         
         answer2_data = {
-            "id": str(uuid.uuid4()),
             "question_id": question2.id,
             "answer_text": "I use pdb and logging for debugging.",
             "analysis_result": {"score": {"overall": 7.8}},
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
         }
         answer2 = Answer(**answer2_data)
         test_db_session.add(answer2)
