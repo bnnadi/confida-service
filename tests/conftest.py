@@ -75,12 +75,15 @@ from app.database.models import Base
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
-    """Set up basic test environment."""
-    # Set environment variables
-    os.environ["DATABASE_URL"] = "sqlite:///./test_confida.db"
-    os.environ["REDIS_URL"] = "redis://localhost:6379"
-    os.environ["SECRET_KEY"] = "test-secret-key"
-    os.environ["ENVIRONMENT"] = "test"
+    """Set up basic test environment.
+    
+    Uses setdefault so CI-provided values (e.g. PostgreSQL) are respected.
+    Falls back to SQLite for local development.
+    """
+    os.environ.setdefault("DATABASE_URL", "sqlite:///./test_confida.db")
+    os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+    os.environ.setdefault("SECRET_KEY", "test-secret-key")
+    os.environ.setdefault("ENVIRONMENT", "test")
     
     # Add project root to Python path
     project_root = Path(__file__).parent.parent
@@ -88,7 +91,7 @@ def setup_test_environment():
     
     yield
     
-    # Cleanup
+    # Cleanup SQLite file if used
     test_db_path = Path("test_confida.db")
     if test_db_path.exists():
         test_db_path.unlink()
@@ -118,8 +121,12 @@ def mock_service():
 # Database fixtures
 @pytest.fixture(scope="session")
 def test_db_engine():
-    """Create test database engine."""
-    engine = create_engine("sqlite:///./test_confida.db", connect_args={"check_same_thread": False})
+    """Create test database engine using DATABASE_URL from environment."""
+    db_url = os.environ.get("DATABASE_URL", "sqlite:///./test_confida.db")
+    connect_args = {}
+    if db_url.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+    engine = create_engine(db_url, connect_args=connect_args)
     Base.metadata.create_all(bind=engine)
     return engine
 
@@ -166,7 +173,7 @@ def sample_user(db_session):
     from app.database.models import User
     from werkzeug.security import generate_password_hash
     user = User(
-        email="test@example.com",
+        email=f"test-{uuid.uuid4().hex[:8]}@example.com",
         name="Test User",
         password_hash=generate_password_hash("testpass123"),
         is_active=True
@@ -300,7 +307,7 @@ def admin_user(db_session):
     from app.database.models import User
     from werkzeug.security import generate_password_hash
     user = User(
-        email="admin@example.com",
+        email=f"admin-{uuid.uuid4().hex[:8]}@example.com",
         name="Admin User",
         password_hash=generate_password_hash("adminpass123"),
         is_active=True
