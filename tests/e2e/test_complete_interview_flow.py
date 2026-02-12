@@ -55,7 +55,7 @@ class TestCompleteInterviewFlow:
                 "answer": f"This is my answer to question {i+1}. I have experience with Python, Django, and Flask frameworks."
             }
 
-            analyze_response = client.post("/api/v1/analyze-answer", json=answer_data)
+            analyze_response = client.post(f"/api/v1/analyze-answer?question_id={question['id']}", json=answer_data)
             assert analyze_response.status_code == 200
             analysis = analyze_response.json()
             assert "score" in analysis
@@ -369,7 +369,7 @@ class TestCompleteInterviewFlow:
                 "answer": f"This is my answer to question {completed_questions + 1}."
             }
 
-            analyze_response = client.post("/api/v1/analyze-answer", json=answer_data)
+            analyze_response = client.post(f"/api/v1/analyze-answer?question_id={question['id']}", json=answer_data)
             assert analyze_response.status_code == 200
             completed_questions += 1
 
