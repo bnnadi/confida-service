@@ -400,18 +400,17 @@ class TestTTSServiceRetryLogic:
     @pytest.mark.asyncio
     async def test_retry_exponential_backoff_delays(self, mock_tts_settings):
         """Test retry logic uses exponential backoff delays."""
-        import time
-        
         mock_tts_settings.TTS_RETRY_ATTEMPTS = 2  # 2 retries = 3 total attempts
         
         mock_provider = AsyncMock()
-        call_times = []
+        mock_provider.synthesize = AsyncMock(
+            side_effect=TTSProviderError("Temporary failure")
+        )
         
-        async def mock_synthesize(*args, **kwargs):
-            call_times.append(time.time())
-            raise TTSProviderError("Temporary failure")
-        
-        mock_provider.synthesize = AsyncMock(side_effect=mock_synthesize)
+        # Access the already-mocked asyncio.sleep from the fixture
+        import app.services.tts.service as tts_module
+        mock_sleep = tts_module.asyncio.sleep
+        mock_sleep.reset_mock()
         
         service = TTSService()
         service.primary_provider = mock_provider
@@ -421,18 +420,13 @@ class TestTTSServiceRetryLogic:
         with pytest.raises(TTSProviderError):
             await service.synthesize("Hello world", use_cache=False)
         
-        # Check that delays increased exponentially
-        # First retry should be ~1s after first attempt
-        # Second retry should be ~2s after second attempt
-        if len(call_times) >= 2:
-            delay1 = call_times[1] - call_times[0]
-            assert delay1 >= 0.9  # Allow some tolerance
-            assert delay1 <= 1.5
+        # Should have tried 3 times (initial + 2 retries)
+        assert mock_provider.synthesize.call_count == 3
         
-        if len(call_times) >= 3:
-            delay2 = call_times[2] - call_times[1]
-            assert delay2 >= 1.9  # Allow some tolerance
-            assert delay2 <= 2.5
+        # Verify exponential backoff: sleep(1.0) then sleep(2.0)
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_any_call(1.0)   # base_delay * 2^0
+        mock_sleep.assert_any_call(2.0)   # base_delay * 2^1
 
 
 class TestCircuitBreaker:

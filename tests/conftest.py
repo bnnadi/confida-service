@@ -284,10 +284,16 @@ def admin_user_token(db_session, admin_user):
 # TTS Test Fixtures
 @pytest.fixture
 def mock_tts_settings():
-    """Fixture for TTS service settings."""
-    from unittest.mock import patch, MagicMock
+    """Fixture for TTS service settings.
     
-    with patch("app.services.tts.service.get_settings") as mock_settings:
+    Also mocks asyncio.sleep in the TTS service module to prevent
+    real delays during retry backoff (which cause 10+ second waits
+    and event-loop hangs under pytest-xdist).
+    """
+    from unittest.mock import patch, MagicMock, AsyncMock
+    
+    with patch("app.services.tts.service.get_settings") as mock_settings, \
+         patch("app.services.tts.service.asyncio.sleep", new_callable=AsyncMock):
         settings = MagicMock()
         settings.TTS_PROVIDER = "coqui"
         settings.TTS_FALLBACK_PROVIDER = ""
