@@ -49,6 +49,11 @@ def upgrade() -> None:
         except Exception:
             return False
     
+    # Ensure table exists before altering it
+    if 'interview_sessions' not in inspector.get_table_names():
+        # Table should have been created by initial migration; skip if missing
+        return
+    
     # Add new columns with default values (only if they don't exist)
     if not column_exists('interview_sessions', 'mode'):
         op.add_column('interview_sessions', sa.Column('mode', sa.String(length=20), nullable=False, server_default='interview'))
