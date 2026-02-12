@@ -8,6 +8,10 @@ import os
 import uuid
 import sqlite3
 from pathlib import Path
+
+# Disable rate limiting before importing the app (settings are cached on first access)
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -121,13 +125,28 @@ def test_db_engine():
 
 @pytest.fixture
 def test_db_session(test_db_engine):
-    """Create test database session."""
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+    """Create test database session with transaction rollback for isolation."""
+    connection = test_db_engine.connect()
+    transaction = connection.begin()
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     session = TestingSessionLocal()
+
+    # Start a nested savepoint so session.commit() inside tests doesn't
+    # actually commit the outer transaction
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(sess, trans):
+        nonlocal nested
+        if trans.nested and not trans._parent.nested:
+            nested = connection.begin_nested()
+
     try:
         yield session
     finally:
         session.close()
+        transaction.rollback()
+        connection.close()
 
 @pytest.fixture
 def db_session(test_db_session):
