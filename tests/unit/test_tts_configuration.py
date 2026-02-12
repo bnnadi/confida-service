@@ -36,7 +36,15 @@ class TestTTSConfigurationSettings:
     
     @pytest.mark.unit
     def test_tts_settings_from_env(self):
-        """Test TTS settings can be overridden from environment variables."""
+        """Test TTS settings can be overridden from environment variables.
+        
+        Since Settings is a plain class with os.getenv() calls resolved at class
+        definition time, we must reload the module to re-evaluate the class body
+        with the patched environment.
+        """
+        import importlib
+        import app.config
+        
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "elevenlabs",
             "TTS_FALLBACK_PROVIDER": "coqui",
@@ -51,11 +59,13 @@ class TestTTSConfigurationSettings:
             "PLAYHT_API_KEY": "playht-key-12345678901234567890",
             "PLAYHT_USER_ID": "user-123"
         }):
-            # Clear the lru_cache to force reload
+            # Reload the config module to re-evaluate class-level os.getenv() calls
+            importlib.reload(app.config)
             from app.config import get_settings
             get_settings.cache_clear()
             
-            settings = Settings()
+            ReloadedSettings = app.config.Settings
+            settings = ReloadedSettings()
             
             assert settings.TTS_PROVIDER == "elevenlabs"
             assert settings.TTS_FALLBACK_PROVIDER == "coqui"
@@ -69,9 +79,10 @@ class TestTTSConfigurationSettings:
             assert settings.ELEVENLABS_API_KEY == "test-key-12345678901234567890"
             assert settings.PLAYHT_API_KEY == "playht-key-12345678901234567890"
             assert settings.PLAYHT_USER_ID == "user-123"
-            
-            # Restore cache
-            get_settings.cache_clear()
+        
+        # Restore original module state
+        importlib.reload(app.config)
+        app.config.get_settings.cache_clear()
 
 
 class TestTTSConfigurationValidation:

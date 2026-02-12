@@ -107,8 +107,8 @@ async def get_configuration():
             "features": {
                 "ai_services": {
                     "ai_service_microservice_enabled": bool(settings.AI_SERVICE_URL),
-                    "ai_service_fallback_enabled": settings.AI_SERVICE_FALLBACK_ENABLED,
-                    "ollama_enabled": bool(settings.OLLAMA_BASE_URL),
+                    "ai_service_fallback_enabled": getattr(settings, 'AI_SERVICE_FALLBACK_ENABLED', False),
+                    "ollama_enabled": settings.is_ollama_configured,
                     "openai_enabled": settings.is_openai_configured,
                     "anthropic_enabled": settings.is_anthropic_configured
                 },

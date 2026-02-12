@@ -6,7 +6,7 @@ through the API endpoints.
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock
 from sqlalchemy.orm import Session
 
 from app.database.models import Answer, SessionQuestion, InterviewSession
@@ -49,11 +49,15 @@ class TestAnswerAudioFilePersistenceIntegration:
     
     @pytest.mark.integration
     def test_analyze_answer_with_audio_file_id(
-        self, client: TestClient, db_session: Session, 
-        sample_user, mock_current_user, sample_question_with_session, mock_ai_client
+        self, client: TestClient, db_session: Session,
+        sample_user, mock_current_user, sample_question_with_session, mock_ai_client,
+        override_auth, override_ai_client
     ):
         """Test analyze_answer endpoint stores audio_file_id."""
         sample_question, session = sample_question_with_session
+        
+        override_auth(mock_current_user)
+        override_ai_client(mock_ai_client)
         
         # Arrange
         audio_file_id = "test_audio_file_123"
@@ -72,12 +76,10 @@ class TestAnswerAudioFilePersistenceIntegration:
         })
         
         # Act
-        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client), \
-             patch('app.routers.interview.get_current_user_required', return_value=mock_current_user):
-            response = client.post(
-                f"/api/v1/interview/analyze-answer?question_id={sample_question.id}",
-                json=request_data
-            )
+        response = client.post(
+            f"/api/v1/analyze-answer?question_id={sample_question.id}",
+            json=request_data
+        )
         
         # Assert
         assert response.status_code == 200
@@ -103,10 +105,14 @@ class TestAnswerAudioFilePersistenceIntegration:
     @pytest.mark.integration
     def test_analyze_answer_without_audio_file_id(
         self, client: TestClient, db_session: Session,
-        sample_user, mock_current_user, sample_question_with_session, mock_ai_client
+        sample_user, mock_current_user, sample_question_with_session, mock_ai_client,
+        override_auth, override_ai_client
     ):
         """Test analyze_answer endpoint works without audio_file_id (backward compatibility)."""
         sample_question, session = sample_question_with_session
+        
+        override_auth(mock_current_user)
+        override_ai_client(mock_ai_client)
         
         # Arrange
         request_data = {
@@ -124,12 +130,10 @@ class TestAnswerAudioFilePersistenceIntegration:
         })
         
         # Act
-        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client), \
-             patch('app.routers.interview.get_current_user_required', return_value=mock_current_user):
-            response = client.post(
-                f"/api/v1/interview/analyze-answer?question_id={sample_question.id}",
-                json=request_data
-            )
+        response = client.post(
+            f"/api/v1/analyze-answer?question_id={sample_question.id}",
+            json=request_data
+        )
         
         # Assert
         assert response.status_code == 200
@@ -145,9 +149,12 @@ class TestAnswerAudioFilePersistenceIntegration:
     @pytest.mark.integration
     def test_add_answer_to_question_with_audio_file_id(
         self, client: TestClient, db_session: Session,
-        sample_user, mock_current_user, sample_question, sample_interview_session
+        sample_user, mock_current_user, sample_question, sample_interview_session,
+        override_auth
     ):
         """Test add_answer_to_question endpoint stores audio_file_id."""
+        override_auth(mock_current_user)
+        
         # Arrange
         audio_file_id = "test_audio_file_456"
         
@@ -167,11 +174,10 @@ class TestAnswerAudioFilePersistenceIntegration:
         }
         
         # Act
-        with patch('app.routers.sessions.get_current_user_required', return_value=mock_current_user):
-            response = client.post(
-                f"/api/v1/sessions/questions/{sample_question.id}/answers",
-                json=request_data
-            )
+        response = client.post(
+            f"/api/v1/sessions/questions/{sample_question.id}/answers",
+            json=request_data
+        )
         
         # Assert
         assert response.status_code == 200
@@ -192,9 +198,12 @@ class TestAnswerAudioFilePersistenceIntegration:
     @pytest.mark.integration
     def test_get_question_answers_includes_audio_file_id(
         self, client: TestClient, db_session: Session,
-        sample_user, mock_current_user, sample_question, sample_interview_session
+        sample_user, mock_current_user, sample_question, sample_interview_session,
+        override_auth
     ):
         """Test get_question_answers endpoint returns audio_file_id."""
+        override_auth(mock_current_user)
+        
         # Arrange
         audio_file_id = "test_audio_file_789"
         
@@ -208,10 +217,9 @@ class TestAnswerAudioFilePersistenceIntegration:
         db_session.commit()
         
         # Act
-        with patch('app.routers.sessions.get_current_user_required', return_value=mock_current_user):
-            response = client.get(
-                f"/api/v1/sessions/questions/{sample_question.id}/answers"
-            )
+        response = client.get(
+            f"/api/v1/sessions/questions/{sample_question.id}/answers"
+        )
         
         # Assert
         assert response.status_code == 200
@@ -223,9 +231,13 @@ class TestAnswerAudioFilePersistenceIntegration:
     @pytest.mark.integration
     def test_deterministic_audio_file_id_persistence(
         self, client: TestClient, db_session: Session,
-        sample_user, mock_current_user, sample_question, sample_interview_session, mock_ai_client
+        sample_user, mock_current_user, sample_question, sample_interview_session, mock_ai_client,
+        override_auth, override_ai_client
     ):
         """Test that same question uses same audio file ID (deterministic)."""
+        override_auth(mock_current_user)
+        override_ai_client(mock_ai_client)
+        
         # Arrange
         audio_file_id = "deterministic_audio_123"
         
@@ -254,12 +266,10 @@ class TestAnswerAudioFilePersistenceIntegration:
         })
         
         # Act - Submit first answer
-        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client), \
-             patch('app.routers.interview.get_current_user_required', return_value=mock_current_user):
-            response1 = client.post(
-                f"/api/v1/interview/analyze-answer?question_id={sample_question.id}",
-                json=request_data
-            )
+        response1 = client.post(
+            f"/api/v1/analyze-answer?question_id={sample_question.id}",
+            json=request_data
+        )
         
         assert response1.status_code == 200
         
@@ -271,12 +281,10 @@ class TestAnswerAudioFilePersistenceIntegration:
             "audio_file_id": audio_file_id
         }
         
-        with patch('app.routers.interview.get_ai_client_dependency', return_value=mock_ai_client), \
-             patch('app.routers.interview.get_current_user_required', return_value=mock_current_user):
-            response2 = client.post(
-                f"/api/v1/interview/analyze-answer?question_id={sample_question.id}",
-                json=request_data2
-            )
+        response2 = client.post(
+            f"/api/v1/analyze-answer?question_id={sample_question.id}",
+            json=request_data2
+        )
         
         assert response2.status_code == 200
         

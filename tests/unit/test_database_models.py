@@ -546,8 +546,7 @@ class TestModelRelationships:
             "question_id": question1.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.utcnow()
         }
         answer1 = Answer(**answer1_data)
         test_db_session.add(answer1)
@@ -557,8 +556,7 @@ class TestModelRelationships:
             "question_id": question2.id,
             "answer_text": "I use pdb and logging for debugging.",
             "analysis_result": {"score": {"overall": 7.8}},
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.utcnow()
         }
         answer2 = Answer(**answer2_data)
         test_db_session.add(answer2)

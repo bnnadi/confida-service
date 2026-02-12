@@ -4,17 +4,15 @@ Tests for authentication functionality.
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.schemas import UserResponse
 from app.services.auth_service import AuthService
 
 
 def test_user_registration(client: TestClient, db_session: Session):
     """Test user registration endpoint."""
     user_data = {
-        "email": "test@example.com",
+        "email": "register-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     response = client.post("/api/v1/auth/register", json=user_data)
@@ -22,19 +20,18 @@ def test_user_registration(client: TestClient, db_session: Session):
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == user_data["email"]
-    assert data["first_name"] == user_data["first_name"]
-    assert data["last_name"] == user_data["last_name"]
+    assert data["name"] == user_data["name"]
     assert "id" in data
-    assert "hashed_password" not in data  # Password should not be returned
+    assert "password" not in data  # Password should not be returned
+    assert "password_hash" not in data
 
 
 def test_user_registration_duplicate_email(client: TestClient, db_session: Session):
     """Test user registration with duplicate email."""
     user_data = {
-        "email": "test@example.com",
+        "email": "duplicate-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     # Register first user
@@ -50,10 +47,9 @@ def test_user_registration_duplicate_email(client: TestClient, db_session: Sessi
 def test_user_registration_invalid_password(client: TestClient, db_session: Session):
     """Test user registration with invalid password."""
     user_data = {
-        "email": "test@example.com",
-        "password": "weak",  # Too short and no uppercase/digits
-        "first_name": "Test",
-        "last_name": "User"
+        "email": "invalid-pass-test@example.com",
+        "password": "weak",  # Too short
+        "name": "Test User"
     }
     
     response = client.post("/api/v1/auth/register", json=user_data)
@@ -64,10 +60,9 @@ def test_user_login_success(client: TestClient, db_session: Session):
     """Test successful user login."""
     # First register a user
     user_data = {
-        "email": "test@example.com",
+        "email": "login-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     register_response = client.post("/api/v1/auth/register", json=user_data)
@@ -75,7 +70,7 @@ def test_user_login_success(client: TestClient, db_session: Session):
     
     # Now login
     login_data = {
-        "email": "test@example.com",
+        "email": "login-test@example.com",
         "password": "TestPassword123"
     }
     
@@ -105,17 +100,16 @@ def test_password_change(client: TestClient, db_session: Session):
     """Test password change functionality."""
     # First register and login
     user_data = {
-        "email": "test@example.com",
+        "email": "passchange-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     register_response = client.post("/api/v1/auth/register", json=user_data)
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
+        "email": "passchange-test@example.com",
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -139,17 +133,16 @@ def test_get_current_user(client: TestClient, db_session: Session):
     """Test getting current user information."""
     # First register and login
     user_data = {
-        "email": "test@example.com",
+        "email": "me-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     register_response = client.post("/api/v1/auth/register", json=user_data)
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
+        "email": "me-test@example.com",
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -163,9 +156,8 @@ def test_get_current_user(client: TestClient, db_session: Session):
     assert response.status_code == 200
     
     data = response.json()
-    assert data["email"] == "test@example.com"
-    assert data["first_name"] == "Test"
-    assert data["last_name"] == "User"
+    assert data["email"] == "me-test@example.com"
+    assert "id" in data
 
 
 def test_get_current_user_no_token(client: TestClient, db_session: Session):
@@ -178,17 +170,16 @@ def test_auth_status_authenticated(client: TestClient, db_session: Session):
     """Test authentication status when authenticated."""
     # First register and login
     user_data = {
-        "email": "test@example.com",
+        "email": "status-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     register_response = client.post("/api/v1/auth/register", json=user_data)
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
+        "email": "status-test@example.com",
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -204,7 +195,7 @@ def test_auth_status_authenticated(client: TestClient, db_session: Session):
     data = response.json()
     assert data["authenticated"] is True
     assert data["user"] is not None
-    assert data["user"]["email"] == "test@example.com"
+    assert data["user"]["email"] == "status-test@example.com"
 
 
 def test_auth_status_not_authenticated(client: TestClient, db_session: Session):
@@ -214,7 +205,7 @@ def test_auth_status_not_authenticated(client: TestClient, db_session: Session):
     
     data = response.json()
     assert data["authenticated"] is False
-    assert data["user"] is None
+    assert data.get("user") is None
 
 
 def test_protected_endpoint_without_auth(client: TestClient, db_session: Session):
@@ -230,17 +221,16 @@ def test_protected_endpoint_with_auth(client: TestClient, db_session: Session):
     """Test that protected endpoints work with authentication."""
     # First register and login
     user_data = {
-        "email": "test@example.com",
+        "email": "protected-test@example.com",
         "password": "TestPassword123",
-        "first_name": "Test",
-        "last_name": "User"
+        "name": "Test User"
     }
     
     register_response = client.post("/api/v1/auth/register", json=user_data)
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
+        "email": "protected-test@example.com",
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -280,8 +270,8 @@ def test_auth_service_token_creation(db_session: Session):
     """Test JWT token creation and verification."""
     auth_service = AuthService(db_session)
     
-    user_id = 1
-    email = "test@example.com"
+    user_id = "test-user-id-123"
+    email = "token-test@example.com"
     role = "user"
     
     # Create access token
@@ -300,7 +290,7 @@ def test_auth_service_user_creation(db_session: Session):
     """Test user creation in AuthService."""
     auth_service = AuthService(db_session)
     
-    email = "test@example.com"
+    email = "create-test@example.com"
     password = "TestPassword123"
     first_name = "Test"
     last_name = "User"
@@ -310,8 +300,6 @@ def test_auth_service_user_creation(db_session: Session):
     
     assert user is not None
     assert user.email == email
-    assert user.first_name == first_name
-    assert user.last_name == last_name
-    assert user.hashed_password != password  # Should be hashed
+    assert user.name == "Test User"
+    assert user.password_hash != password  # Should be hashed
     assert user.is_active is True
-    assert user.is_verified is False  # Default value

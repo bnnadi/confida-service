@@ -249,7 +249,7 @@ class TestEnhancedRubricParsing:
         
         assert rubric is not None
         assert rubric.total_score == 56.0  # 20 + 12 + 15 + 9
-        assert rubric.grade_tier.value == "Average"
+        assert rubric.grade_tier.value == "At Risk"  # Score 56 < 60 threshold for Average
         assert len(rubric.top_strengths) == 1
         assert len(rubric.improvement_areas) == 1
     

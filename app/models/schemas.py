@@ -295,9 +295,9 @@ class UserProfileUpdateRequest(BaseModel):
     skills: Optional[List[str]] = Field(None, description="User skills")
 
 class AuthStatusResponse(BaseModel):
-    is_authenticated: bool
-    user: Optional[UserResponse] = None
-    token_expires_in: Optional[int] = None
+    authenticated: bool
+    user: Optional[dict] = None
+    expires_at: Optional[str] = None
 
 class AuthErrorResponse(BaseModel):
     error: str

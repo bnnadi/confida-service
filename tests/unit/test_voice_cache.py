@@ -117,9 +117,10 @@ class TestVoiceCacheService:
             await asyncio.sleep(0.1)  # Simulate synthesis time
             return {"audio_data": "encoded_audio", "provider": "test"}
         
-        # Simulate 5 concurrent requests for same cache key
+        # Use unique text to avoid cache key collision with other tests
+        unique_text = "singleflight-unique-text-pattern"
         cache_key = voice_cache.generate_cache_key(
-            "test text", "voice1", "mp3", voice_cache.generate_settings_hash()
+            unique_text, "singleflight-voice", "mp3", voice_cache.generate_settings_hash()
         )
         
         async def request():
@@ -144,8 +145,10 @@ class TestVoiceCacheService:
         async def failing_synthesize():
             raise ValueError("Synthesis failed")
         
+        # Use unique text to avoid cache key collision with other tests
+        unique_text = "singleflight-unique-text-error"
         cache_key = voice_cache.generate_cache_key(
-            "test text", "voice1", "mp3", voice_cache.generate_settings_hash()
+            unique_text, "singleflight-error-voice", "mp3", voice_cache.generate_settings_hash()
         )
         
         async def request():

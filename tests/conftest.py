@@ -20,6 +20,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database.models import Base
+from app.middleware.auth_middleware import get_current_user_required, get_current_admin
+from app.dependencies import get_ai_client_dependency
 
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
@@ -116,6 +118,59 @@ def client():
     with TestClient(app) as c:
         yield c
 
+# --- Auth dependency override helpers ---
+
+@pytest.fixture
+def override_auth(client):
+    """Fixture to override auth dependency for tests.
+    
+    Usage:
+        def test_something(self, client, override_auth, sample_user):
+            override_auth({"user_id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+            response = client.get("/api/v1/...")
+    
+    Automatically clears the override after the test.
+    """
+    def _override(user_dict):
+        client.app.dependency_overrides[get_current_user_required] = lambda: user_dict
+    yield _override
+    client.app.dependency_overrides.pop(get_current_user_required, None)
+
+
+@pytest.fixture
+def override_admin_auth(client):
+    """Fixture to override get_current_admin dependency for admin-only endpoints.
+    
+    Usage:
+        def test_something(self, client, override_admin_auth, admin_user):
+            override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+            response = client.post("/api/v1/questions", json=...)
+    
+    Automatically clears the override after the test.
+    """
+    def _override(user_dict):
+        client.app.dependency_overrides[get_current_admin] = lambda: user_dict
+    yield _override
+    client.app.dependency_overrides.pop(get_current_admin, None)
+
+
+@pytest.fixture
+def override_ai_client(client):
+    """Fixture to override AI client dependency for tests.
+    
+    Usage:
+        def test_something(self, client, override_ai_client, mock_ai_client):
+            override_ai_client(mock_ai_client)
+            response = client.post("/api/v1/parse-jd", json=...)
+    
+    Automatically clears the override after the test.
+    """
+    def _override(ai_client):
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: ai_client
+    yield _override
+    client.app.dependency_overrides.pop(get_ai_client_dependency, None)
+
+
 # Test fixtures for integration tests
 @pytest.fixture
 def sample_user(db_session):
@@ -137,20 +192,26 @@ def sample_user(db_session):
 def mock_ai_client():
     """Mock AI client for testing."""
     from unittest.mock import AsyncMock
-    client = AsyncMock()
-    client.generate_questions = AsyncMock(return_value=[
+    questions_data = [
         {"text": "What is Python?", "type": "technical"},
         {"text": "Explain decorators.", "type": "technical"},
         {"text": "What is your experience with Django?", "type": "experience"},
         {"text": "How do you handle database migrations?", "type": "technical"},
         {"text": "Describe your debugging process.", "type": "behavioral"}
-    ])
-    client.analyze_answer = AsyncMock(return_value={
-        "score": 0.85,
-        "feedback": "Good answer",
-        "strengths": ["Clear explanation"],
-        "improvements": ["Could provide more detail"]
+    ]
+    client = AsyncMock()
+    client.generate_questions = AsyncMock(return_value=questions_data)
+    client.generate_questions_structured = AsyncMock(return_value={
+        "questions": questions_data,
+        "embedding_vectors": {}
     })
+    client.analyze_answer = AsyncMock(return_value={
+        "score": {"clarity": 8, "confidence": 7, "relevance": 8, "overall": 8},
+        "analysis": "Good answer",
+        "suggestions": ["Could provide more detail"]
+    })
+    client.health_check = AsyncMock(return_value=True)
+    client.base_url = "http://test-ai-service"
     return client
 
 @pytest.fixture
@@ -166,6 +227,7 @@ def sample_parse_request():
 def sample_analyze_request():
     """Sample request data for analyzing answer."""
     return {
+        "jobDescription": "Looking for a Python developer with 5+ years of experience.",
         "question": "What is Python?",
         "answer": "Python is a high-level programming language known for its simplicity and readability.",
         "service": "openai"

@@ -42,7 +42,7 @@ async def get_dashboard_overview(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -76,7 +76,7 @@ async def get_user_progress(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -110,7 +110,7 @@ async def get_analytics_data(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -144,7 +144,7 @@ async def get_performance_metrics(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -178,7 +178,7 @@ async def get_performance_trends(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -212,7 +212,7 @@ async def get_user_insights(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"

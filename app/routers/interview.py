@@ -360,7 +360,7 @@ async def parse_job_description(
 async def analyze_answer(
     request: AnalyzeAnswerRequest,
     service: Optional[str] = create_service_query_param(),
-    question_id: int = Query(..., description="Question ID to store the answer"),
+    question_id: str = Query(..., description="Question ID (UUID) to store the answer"),
     current_user: dict = Depends(get_current_user_required),
     ai_client = Depends(get_ai_client_dependency)
 ):
@@ -372,18 +372,21 @@ async def analyze_answer(
     
     try:
         # Verify question exists and belongs to user (async)
+        from uuid import UUID
         from app.database.models import Question, InterviewSession, Answer, SessionQuestion
         from sqlalchemy import select
         
+        question_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
         async_db_gen = get_async_db()
         session = await async_db_gen.__anext__()
         try:
-            # Verify question access
+            # Verify question access (join through SessionQuestion)
             result = await session.execute(
                 select(Question)
-                .join(InterviewSession)
+                .join(SessionQuestion, Question.id == SessionQuestion.question_id)
+                .join(InterviewSession, SessionQuestion.session_id == InterviewSession.id)
                 .where(
-                    Question.id == question_id,
+                    Question.id == question_uuid,
                     InterviewSession.user_id == current_user["id"]
                 )
             )
@@ -406,7 +409,7 @@ async def analyze_answer(
             
             # Store answer and analysis in database directly
             answer = Answer(
-                question_id=question_id,
+                question_id=question_uuid,
                 answer_text=request.answer,
                 analysis_result=response,
                 score={"clarity": response.get("score", {}).get("clarity", 0), 
@@ -421,7 +424,7 @@ async def analyze_answer(
             if request.audio_file_id:
                 session_question_result = await session.execute(
                     select(SessionQuestion)
-                    .where(SessionQuestion.question_id == question_id)
+                    .where(SessionQuestion.question_id == question_uuid)
                 )
                 session_question = session_question_result.scalar_one_or_none()
                 

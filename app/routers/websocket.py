@@ -6,6 +6,7 @@ import base64
 from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from fastapi.encoders import jsonable_encoder
 from app.models.real_time_models import (
     RealTimeFeedback,
     FeedbackType,
@@ -175,7 +176,7 @@ async def feedback_websocket(
         session_id=session_id,
         message="WebSocket connected successfully"
     )
-    await websocket.send_json(connection_status.dict())
+    await websocket.send_json(jsonable_encoder(connection_status.dict()))
     
     try:
         # Get session metadata for context
@@ -285,7 +286,7 @@ async def feedback_websocket(
             message="WebSocket disconnected"
         )
         try:
-            await websocket.send_json(disconnect_status.dict())
+            await websocket.send_json(jsonable_encoder(disconnect_status.dict()))
         except:
             pass
 
