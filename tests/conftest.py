@@ -8,8 +8,12 @@ import os
 import uuid
 from pathlib import Path
 
-# Disable rate limiting before importing the app (settings are cached on first access)
+# Disable rate limiting, monitoring, and async DB before importing the app
+# (settings are cached on first access)
 os.environ["RATE_LIMIT_ENABLED"] = "false"
+os.environ["MONITORING_ENABLED"] = "false"
+os.environ["ASYNC_DATABASE_ENABLED"] = "false"
+os.environ["ASYNC_DATABASE_MONITORING_ENABLED"] = "false"
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
@@ -109,7 +113,8 @@ def db_session(test_db_session):
 @pytest.fixture(scope="session")
 def client():
     """Create FastAPI test client (session-scoped to avoid repeated app startup)."""
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 # Test fixtures for integration tests
 @pytest.fixture
