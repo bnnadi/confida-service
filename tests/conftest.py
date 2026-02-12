@@ -106,9 +106,9 @@ def db_session(test_db_session):
     return test_db_session
 
 # FastAPI client fixture
-@pytest.fixture
+@pytest.fixture(scope="session")
 def client():
-    """Create FastAPI test client."""
+    """Create FastAPI test client (session-scoped to avoid repeated app startup)."""
     return TestClient(app)
 
 # Test fixtures for integration tests

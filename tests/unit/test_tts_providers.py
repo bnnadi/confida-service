@@ -486,12 +486,11 @@ class TestCircuitBreaker:
         assert cb.state == "open"
         assert cb.can_execute() is False
         
-        # Wait for recovery timeout
-        time.sleep(1.1)
-        
-        # Should be in half-open state
-        assert cb.can_execute() is True
-        assert cb.state == "half_open"
+        # Fast-forward past recovery timeout instead of sleeping
+        with patch('app.services.tts.service.time.time', return_value=time.time() + 1.1):
+            # Should be in half-open state
+            assert cb.can_execute() is True
+            assert cb.state == "half_open"
         
         # Success should close it
         cb.record_success()

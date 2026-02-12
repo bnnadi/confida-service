@@ -6,18 +6,11 @@ Tests WebSocket connection, message handling, and real-time feedback.
 import pytest
 import json
 import base64
-from fastapi.testclient import TestClient
 from unittest.mock import patch, AsyncMock, MagicMock
-from app.main import app
 
 
 class TestWebSocketEndpoints:
     """Test cases for WebSocket endpoints."""
-    
-    @pytest.fixture
-    def client(self):
-        """Create test client."""
-        return TestClient(app)
     
     @pytest.fixture
     def mock_user(self):
@@ -50,13 +43,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_connection_establishment(self, mock_auth):
+    async def test_websocket_connection_establishment(self, client, mock_auth):
         """Test WebSocket connection establishment (Testing Step 1)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session-123?token=test-token") as websocket:
             # Should receive connection status
             data = websocket.receive_json()
@@ -66,13 +54,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_authentication_required(self):
+    async def test_websocket_authentication_required(self, client):
         """Test WebSocket requires authentication."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with patch('app.routers.websocket.authenticate_websocket', new_callable=AsyncMock) as mock_auth:
             mock_auth.return_value = None  # Authentication fails
             
@@ -82,13 +65,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_ping_pong(self, mock_auth):
+    async def test_websocket_ping_pong(self, client, mock_auth):
         """Test WebSocket ping/pong keepalive."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -103,13 +81,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_transcript_message(self, mock_auth):
+    async def test_websocket_transcript_message(self, client, mock_auth):
         """Test WebSocket transcript message handling (Testing Step 2)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -129,13 +102,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_audio_chunk_message(self, mock_auth):
+    async def test_websocket_audio_chunk_message(self, client, mock_auth):
         """Test WebSocket audio chunk message handling (Testing Step 3)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -157,13 +125,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_binary_audio_data(self, mock_auth):
+    async def test_websocket_binary_audio_data(self, client, mock_auth):
         """Test WebSocket binary audio data handling."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -178,13 +141,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_metadata_update(self, mock_auth):
+    async def test_websocket_metadata_update(self, client, mock_auth):
         """Test WebSocket metadata update."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -210,13 +168,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_invalid_json(self, mock_auth):
+    async def test_websocket_invalid_json(self, client, mock_auth):
         """Test WebSocket invalid JSON handling (Testing Step 6)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -231,13 +184,9 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_connection_management(self, mock_auth):
+    async def test_websocket_connection_management(self, client, mock_auth):
         """Test WebSocket connection management (Testing Step 5)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
         from app.routers.websocket import manager
-        
-        client = TestClient(app)
         
         initial_connections = len(manager.active_connections)
         
@@ -254,13 +203,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_error_handling(self, mock_auth):
+    async def test_websocket_error_handling(self, client, mock_auth):
         """Test WebSocket error handling (Testing Step 6)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -280,13 +224,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_multiple_messages(self, mock_auth):
+    async def test_websocket_multiple_messages(self, client, mock_auth):
         """Test WebSocket handling multiple messages (Testing Step 4)."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token") as websocket:
             # Receive connection status
             websocket.receive_json()
@@ -304,13 +243,8 @@ class TestWebSocketEndpoints:
     
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_websocket_question_id_parameter(self, mock_auth):
+    async def test_websocket_question_id_parameter(self, client, mock_auth):
         """Test WebSocket with question_id query parameter."""
-        from fastapi.testclient import TestClient
-        from app.main import app
-        
-        client = TestClient(app)
-        
         with client.websocket_connect("/ws/feedback/test-session?token=test-token&question_id=42") as websocket:
             # Receive connection status
             websocket.receive_json()
