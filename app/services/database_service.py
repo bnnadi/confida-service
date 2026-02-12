@@ -23,14 +23,16 @@ try:
     
     # Patch JSONB class to handle SQLite
     if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
-        original_impl = JSONB.load_dialect_impl
+        # SQLAlchemy 2.x renamed load_dialect_impl to _gen_dialect_impl
+        _impl_attr = 'load_dialect_impl' if hasattr(JSONB, 'load_dialect_impl') else '_gen_dialect_impl'
+        original_impl = getattr(JSONB, _impl_attr)
         
         def _patched_load_dialect_impl(self, dialect):
             if dialect.name == 'sqlite':
                 return dialect.type_descriptor(JSON())
             return original_impl(self, dialect)
         
-        JSONB.load_dialect_impl = _patched_load_dialect_impl
+        setattr(JSONB, _impl_attr, _patched_load_dialect_impl)
         JSONB._patched_for_sqlite = True
     
     # Patch SQLite compiler to handle JSONB

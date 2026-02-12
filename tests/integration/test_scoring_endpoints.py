@@ -347,7 +347,7 @@ class TestScoringMetricsEndpoint:
         response = client.get("/api/v1/scoring/metrics")
         
         # May return 200 or 500 depending on implementation
-        assert response.status_code in [200, 500]
+        assert response.status_code in [200, 500], f"Unexpected status: {response.status_code}"
         
         if response.status_code == 200:
             data = response.json()

@@ -27,6 +27,7 @@ class User(Base):
     interview_sessions = relationship("InterviewSession", back_populates="user", cascade="all, delete-orphan")
     user_performance = relationship("UserPerformance", back_populates="user", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="user", cascade="all, delete-orphan")
+    goals = relationship("UserGoal", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, name={self.name})>"
@@ -197,6 +198,30 @@ class AgentConfiguration(Base):
     def __repr__(self):
         return f"<AgentConfiguration(id={self.id}, agent_name={self.agent_name}, agent_type={self.agent_type})>"
 
+
+class UserGoal(Base):
+    """User goals model for tracking personal interview preparation targets."""
+    __tablename__ = "user_goals"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    goal_type = Column(String(50), nullable=False, index=True)  # score, sessions, streak, completion_rate, dimension_score
+    target_value = Column(Float, nullable=False)
+    current_value = Column(Float, default=0.0, nullable=False)
+    dimension = Column(String(100), nullable=True)  # For dimension_score goals
+    target_date = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default="active", nullable=False, index=True)  # active, completed, expired, cancelled
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    user = relationship("User", back_populates="goals")
+    
+    def __repr__(self):
+        return f"<UserGoal(id={self.id}, user_id={self.user_id}, title={self.title}, status={self.status})>"
+
 # Create indexes for performance optimization
 Index('idx_users_email', User.email)
 Index('idx_sessions_user_id', InterviewSession.user_id)
@@ -215,6 +240,11 @@ Index('idx_questions_usage_count', Question.usage_count)
 Index('idx_session_questions_session_id', SessionQuestion.session_id)
 Index('idx_session_questions_question_id', SessionQuestion.question_id)
 Index('idx_session_questions_order', SessionQuestion.question_order)
+
+# User Goals indexes
+Index('idx_user_goals_user_id', UserGoal.user_id)
+Index('idx_user_goals_status', UserGoal.status)
+Index('idx_user_goals_goal_type', UserGoal.goal_type)
 
 # JSONB indexes for flexible queries (PostgreSQL only)
 # These will be created in migration scripts

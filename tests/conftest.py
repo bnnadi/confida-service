@@ -5,28 +5,39 @@ This module provides test fixtures and configuration for the testing infrastruct
 """
 import pytest
 import os
+import uuid
+import sqlite3
 from pathlib import Path
+
+# Disable rate limiting before importing the app (settings are cached on first access)
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 
-# Replace JSONB with JSON for SQLite compatibility
+# Register uuid adapter for SQLite
+sqlite3.register_adapter(uuid.UUID, lambda u: str(u))
+
+# Replace JSONB with JSON and UUID with CHAR(32) for SQLite compatibility
 # This must happen before importing models
 import sqlalchemy.dialects.sqlite.base
-from sqlalchemy import JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 
 # Patch JSONB class to handle SQLite
+# SQLAlchemy 2.x renamed load_dialect_impl to _gen_dialect_impl
 if JSONB is not None and not hasattr(JSONB, '_patched_for_sqlite'):
-    original_impl = JSONB.load_dialect_impl
+    _impl_attr = 'load_dialect_impl' if hasattr(JSONB, 'load_dialect_impl') else '_gen_dialect_impl'
+    _original_impl = getattr(JSONB, _impl_attr)
     
     def _patched_load_dialect_impl(self, dialect):
         if dialect.name == 'sqlite':
             return dialect.type_descriptor(JSON())
-        return original_impl(self, dialect)
+        return _original_impl(self, dialect)
     
-    JSONB.load_dialect_impl = _patched_load_dialect_impl
+    setattr(JSONB, _impl_attr, _patched_load_dialect_impl)
     JSONB._patched_for_sqlite = True
 
 # Patch SQLite compiler to handle JSONB
@@ -36,6 +47,28 @@ if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for
     
     sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_JSONB = visit_JSONB
     sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_jsonb = True
+
+# Patch PostgreSQL UUID to render as CHAR(32) on SQLite
+if PG_UUID is not None and not hasattr(PG_UUID, '_patched_for_sqlite'):
+    _uuid_impl_attr = 'load_dialect_impl' if hasattr(PG_UUID, 'load_dialect_impl') else '_gen_dialect_impl'
+    if hasattr(PG_UUID, _uuid_impl_attr):
+        _original_uuid_impl = getattr(PG_UUID, _uuid_impl_attr)
+        
+        def _patched_uuid_impl(self, dialect):
+            if dialect.name == 'sqlite':
+                return dialect.type_descriptor(String(32))
+            return _original_uuid_impl(self, dialect)
+        
+        setattr(PG_UUID, _uuid_impl_attr, _patched_uuid_impl)
+    PG_UUID._patched_for_sqlite = True
+
+# Patch SQLite compiler to handle UUID type
+if not hasattr(sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler, '_patched_for_uuid'):
+    def visit_UUID(self, type_, **kw):
+        return "CHAR(32)"
+    
+    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler.visit_UUID = visit_UUID
+    sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler._patched_for_uuid = True
 
 from app.database.models import Base
 
@@ -92,13 +125,28 @@ def test_db_engine():
 
 @pytest.fixture
 def test_db_session(test_db_engine):
-    """Create test database session."""
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+    """Create test database session with transaction rollback for isolation."""
+    connection = test_db_engine.connect()
+    transaction = connection.begin()
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     session = TestingSessionLocal()
+
+    # Start a nested savepoint so session.commit() inside tests doesn't
+    # actually commit the outer transaction
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(sess, trans):
+        nonlocal nested
+        if trans.nested and not trans._parent.nested:
+            nested = connection.begin_nested()
+
     try:
         yield session
     finally:
         session.close()
+        transaction.rollback()
+        connection.close()
 
 @pytest.fixture
 def db_session(test_db_session):

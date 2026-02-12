@@ -58,7 +58,7 @@ async def get_dashboard_overview(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get dashboard overview: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/progress/{user_id}", response_model=UserProgress)
@@ -92,7 +92,7 @@ async def get_user_progress(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user progress: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/analytics/{user_id}", response_model=AnalyticsData)
@@ -126,7 +126,7 @@ async def get_analytics_data(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get analytics data: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/metrics/{user_id}", response_model=PerformanceMetrics)
@@ -160,7 +160,7 @@ async def get_performance_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get performance metrics: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/trends/{user_id}", response_model=PerformanceTrends)
@@ -194,7 +194,7 @@ async def get_performance_trends(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get performance trends: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/insights/{user_id}", response_model=UserInsights)
@@ -228,5 +228,5 @@ async def get_user_insights(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user insights: {str(e)}"
-        )
+        ) from e
 
