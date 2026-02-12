@@ -355,6 +355,7 @@ def mock_tts_settings():
     from unittest.mock import patch, MagicMock, AsyncMock
     
     with patch("app.services.tts.service.get_settings") as mock_settings, \
+         patch("app.services.tts.factory.get_settings", new=mock_settings), \
          patch("app.services.tts.service.asyncio.sleep", new_callable=AsyncMock):
         settings = MagicMock()
         settings.TTS_PROVIDER = "coqui"

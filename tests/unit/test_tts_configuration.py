@@ -91,264 +91,362 @@ class TestTTSConfigurationValidation:
     @pytest.mark.unit
     def test_valid_coqui_configuration(self):
         """Test validation passes for valid coqui configuration."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "coqui",
             "TTS_DEFAULT_FORMAT": "mp3"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have no TTS-related errors
             tts_errors = [e for e in errors if "TTS" in e or "ELEVENLABS" in e or "PLAYHT" in e]
             assert len(tts_errors) == 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_invalid_tts_provider(self):
         """Test validation fails for invalid TTS provider."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "invalid_provider"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about invalid provider
             tts_errors = [e for e in errors if "TTS_PROVIDER" in e and "invalid_provider" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_elevenlabs_missing_api_key(self):
         """Test validation fails when ElevenLabs provider selected but API key missing."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "elevenlabs",
             "ELEVENLABS_API_KEY": ""
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about missing API key
             tts_errors = [e for e in errors if "ELEVENLABS_API_KEY" in e and "required" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_elevenlabs_with_api_key(self):
         """Test validation passes when ElevenLabs provider selected with valid API key."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "elevenlabs",
             "ELEVENLABS_API_KEY": "valid-key-12345678901234567890"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have no errors about missing API key
             tts_errors = [e for e in errors if "ELEVENLABS_API_KEY" in e and "required" in e]
             assert len(tts_errors) == 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_playht_missing_credentials(self):
         """Test validation fails when PlayHT provider selected but credentials missing."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "playht",
             "PLAYHT_API_KEY": "",
             "PLAYHT_USER_ID": ""
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have errors about missing credentials
             tts_errors = [e for e in errors if ("PLAYHT_API_KEY" in e or "PLAYHT_USER_ID" in e) and "required" in e]
             assert len(tts_errors) >= 2  # Both API key and user ID should be required
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_playht_with_credentials(self):
         """Test validation passes when PlayHT provider selected with valid credentials."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "playht",
             "PLAYHT_API_KEY": "valid-key-12345678901234567890",
             "PLAYHT_USER_ID": "user-123"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have no errors about missing credentials
             tts_errors = [e for e in errors if ("PLAYHT_API_KEY" in e or "PLAYHT_USER_ID" in e) and "required" in e]
             assert len(tts_errors) == 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_invalid_tts_format(self):
         """Test validation fails for invalid TTS format."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_DEFAULT_FORMAT": "invalid_format"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about invalid format
             tts_errors = [e for e in errors if "TTS_DEFAULT_FORMAT" in e and "invalid_format" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_invalid_tts_voice_version(self):
         """Test validation fails for invalid voice version."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_VOICE_VERSION": "0"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about invalid voice version
             tts_errors = [e for e in errors if "TTS_VOICE_VERSION" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_invalid_tts_timeout(self):
         """Test validation fails for invalid timeout."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_TIMEOUT": "0"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about invalid timeout
             tts_errors = [e for e in errors if "TTS_TIMEOUT" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_invalid_tts_cache_ttl(self):
         """Test validation fails for invalid cache TTL."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_CACHE_TTL": "-1"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have error about invalid cache TTL
             tts_errors = [e for e in errors if "TTS_CACHE_TTL" in e]
             assert len(tts_errors) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_high_cache_ttl_warning(self):
         """Test validation warns for very high cache TTL."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_CACHE_TTL": "2592001"  # > 30 days
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have warning about high cache TTL
             tts_warnings = [w for w in warnings if "TTS_CACHE_TTL" in w]
             assert len(tts_warnings) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_unused_vendor_key_warning(self):
         """Test validation warns when vendor key is set but provider not used."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "coqui",
             "ELEVENLABS_API_KEY": "some-key-12345678901234567890"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have warning about unused API key
             tts_warnings = [w for w in warnings if "ELEVENLABS_API_KEY" in w and "not 'elevenlabs'" in w]
             assert len(tts_warnings) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_same_fallback_provider_warning(self):
         """Test validation warns when fallback provider is same as main provider."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "coqui",
             "TTS_FALLBACK_PROVIDER": "coqui"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have warning about same provider
             tts_warnings = [w for w in warnings if "TTS_FALLBACK_PROVIDER" in w and "same" in w]
             assert len(tts_warnings) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_short_api_key_warning(self):
         """Test validation warns for short API keys."""
+        import importlib
+        import app.config
+        import app.utils.validation
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "elevenlabs",
             "ELEVENLABS_API_KEY": "short"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            app.config.get_settings.cache_clear()
             
+            from app.utils.validation import ValidationService
             validator = ValidationService()
             errors, warnings = validator.validate_configuration()
             
             # Should have warning about short API key
             tts_warnings = [w for w in warnings if "ELEVENLABS_API_KEY" in w and "short" in w]
             assert len(tts_warnings) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        app.config.get_settings.cache_clear()
 
 
 class TestTTSStartupValidation:
@@ -357,40 +455,60 @@ class TestTTSStartupValidation:
     @pytest.mark.unit
     def test_startup_validation_with_valid_config(self):
         """Test startup validation passes with valid TTS config."""
+        import importlib
+        import app.config
+        import app.startup
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "coqui"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.startup)
+            app.config.get_settings.cache_clear()
             
             with patch('app.startup.get_ai_client', return_value=MagicMock()):
                 with patch('app.startup.logger') as mock_logger:
+                    from app.startup import validate_startup
                     validate_startup()
                     
                     # Should log success
                     info_calls = [call for call in mock_logger.info.call_args_list 
                                 if any("✅" in str(arg) for arg in call[0])]
                     assert len(info_calls) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.startup)
+        app.config.get_settings.cache_clear()
     
     @pytest.mark.unit
     def test_startup_validation_with_invalid_config(self):
         """Test startup validation logs errors with invalid TTS config."""
+        import importlib
+        import app.config
+        import app.utils.validation
+        import app.utils.config_validator
+        import app.startup
         with patch.dict(os.environ, {
             "TTS_PROVIDER": "invalid_provider"
         }):
-            from app.config import get_settings
-            get_settings.cache_clear()
+            importlib.reload(app.config)
+            importlib.reload(app.utils.validation)
+            importlib.reload(app.utils.config_validator)
+            importlib.reload(app.startup)
+            app.config.get_settings.cache_clear()
             
             with patch('app.startup.get_ai_client', return_value=MagicMock()):
                 with patch('app.startup.logger') as mock_logger:
+                    from app.startup import validate_startup
                     validate_startup()
                     
                     # Should log error
                     error_calls = [call for call in mock_logger.error.call_args_list 
                                   if any("Configuration errors" in str(arg) for arg in call[0])]
                     assert len(error_calls) > 0
-            
-            get_settings.cache_clear()
+        
+        importlib.reload(app.config)
+        importlib.reload(app.utils.validation)
+        importlib.reload(app.utils.config_validator)
+        importlib.reload(app.startup)
+        app.config.get_settings.cache_clear()
 

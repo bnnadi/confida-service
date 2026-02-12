@@ -55,7 +55,11 @@ class FileService:
         """Get MIME type from filename."""
         import mimetypes
         mime_type, _ = mimetypes.guess_type(filename)
-        return mime_type or "application/octet-stream"
+        mime_type = mime_type or "application/octet-stream"
+        # Normalize WAV: some systems return audio/x-wav
+        if mime_type == "audio/x-wav":
+            mime_type = "audio/wav"
+        return mime_type
     
     @staticmethod
     def generate_file_id() -> str:
@@ -340,7 +344,11 @@ class FileService:
         """Get MIME type from file path."""
         import mimetypes
         mime_type, _ = mimetypes.guess_type(str(file_path))
-        return mime_type or "application/octet-stream"
+        mime_type = mime_type or "application/octet-stream"
+        # Normalize WAV: some systems return audio/x-wav
+        if mime_type == "audio/x-wav":
+            mime_type = "audio/wav"
+        return mime_type
     
     def delete_file(self, file_id: str) -> bool:
         """Delete file from storage."""
@@ -429,10 +437,15 @@ class FileService:
         MIME_TO_EXT = {
             "audio/mpeg": ".mp3",
             "audio/wav": ".wav",
+            "audio/x-wav": ".wav",  # Some systems use audio/x-wav
             "audio/mp4": ".m4a",
             "audio/ogg": ".ogg",
             "audio/flac": ".flac"
         }
+        
+        # Normalize WAV MIME type for consistency
+        if mime_type == "audio/x-wav":
+            mime_type = "audio/wav"
         
         if not filename:
             if mime_type and mime_type in MIME_TO_EXT:

@@ -251,10 +251,10 @@ class TestFilesAPIVoicePersistence:
         }
         
         save_result = file_service.save_file_from_bytes(
-            audio_data=audio_data,
+            content=audio_data,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg",
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -304,9 +304,10 @@ class TestFilesAPIVoicePersistence:
         
         # Save with metadata
         file_service.save_file_from_bytes(
-            audio_data=audio_data,
+            content=audio_data,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         

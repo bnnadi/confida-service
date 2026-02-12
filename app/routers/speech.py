@@ -85,11 +85,10 @@ async def transcribe_audio_endpoint(
             if save_file:
                 file_id = file_service.generate_file_id()
                 saved_file_info = file_service.save_file_from_bytes(
-                    audio_data=audio_data,
+                    content=audio_data,
                     file_type=FileType.AUDIO,
                     file_id=file_id,
                     filename=filename,
-                    mime_type=mime_type,
                     metadata={
                         "uploaded_by": current_user["id"],
                         "description": f"Transcribed audio: {filename}"

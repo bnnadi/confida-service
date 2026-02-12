@@ -18,10 +18,11 @@ class TestUserModel:
     @pytest.mark.unit
     def test_create_user(self, test_db_session):
         """Test creating a user."""
-        # Arrange
+        # Arrange - use unique email to avoid collisions across tests
+        unique_email = f"test-{uuid.uuid4().hex[:8]}@example.com"
         user_data = {
             "id": str(uuid.uuid4()),
-            "email": "test@example.com",
+            "email": unique_email,
             "name": "Test User",
             "password_hash": "hashed_password_123",
             "is_active": True,
@@ -36,7 +37,7 @@ class TestUserModel:
         test_db_session.refresh(user)
         
         # Assert
-        assert user.id == user_data["id"]
+        assert str(user.id) == user_data["id"]
         assert user.email == user_data["email"]
         assert user.name == user_data["name"]
         assert user.password_hash == user_data["password_hash"]
@@ -47,8 +48,8 @@ class TestUserModel:
     @pytest.mark.unit
     def test_user_email_unique(self, test_db_session):
         """Test that user email must be unique."""
-        # Arrange
-        email = "test@example.com"
+        # Arrange - use unique base email to avoid collisions with other tests
+        email = f"unique-{uuid.uuid4().hex[:8]}@example.com"
         user1_data = {
             "id": str(uuid.uuid4()),
             "email": email,
@@ -133,7 +134,7 @@ class TestInterviewSessionModel:
         test_db_session.refresh(session)
         
         # Assert
-        assert session.id == session_data["id"]
+        assert str(session.id) == session_data["id"]
         assert session.user_id == session_data["user_id"]
         assert session.role == session_data["role"]
         assert session.job_description == session_data["job_description"]
@@ -231,7 +232,7 @@ class TestQuestionModel:
         test_db_session.refresh(question)
         
         # Assert
-        assert question.id == question_data["id"]
+        assert str(question.id) == question_data["id"]
         assert question.question_text == question_data["question_text"]
         assert question.question_metadata == question_data["question_metadata"]
         assert question.difficulty_level == question_data["difficulty_level"]
@@ -320,7 +321,7 @@ class TestSessionQuestionModel:
         test_db_session.refresh(session_question)
         
         # Assert
-        assert session_question.id == session_question_data["id"]
+        assert str(session_question.id) == session_question_data["id"]
         assert session_question.session_id == session_question_data["session_id"]
         assert session_question.question_id == session_question_data["question_id"]
         assert session_question.question_order == session_question_data["question_order"]
@@ -407,7 +408,7 @@ class TestAnswerModel:
         test_db_session.refresh(answer)
         
         # Assert
-        assert answer.id == answer_data["id"]
+        assert str(answer.id) == answer_data["id"]
         assert answer.question_id == answer_data["question_id"]
         assert answer.answer_text == answer_data["answer_text"]
         assert answer.analysis_result == answer_data["analysis_result"]

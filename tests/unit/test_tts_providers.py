@@ -379,6 +379,7 @@ class TestTTSServiceRetryLogic:
     async def test_retry_skips_rate_limit_error(self, mock_tts_settings):
         """Test retry logic doesn't retry on rate limit errors."""
         mock_tts_settings.TTS_PROVIDER = "elevenlabs"
+        mock_tts_settings.ELEVENLABS_API_KEY = "valid-key-12345678901234567890"  # Required for provider init
         
         mock_provider = AsyncMock()
         mock_provider.synthesize = AsyncMock(

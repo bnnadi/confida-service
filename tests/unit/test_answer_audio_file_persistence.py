@@ -99,11 +99,13 @@ class TestAnswerAudioFilePersistence:
         test_db_session.commit()
         test_db_session.refresh(session_question)
         
-        # Act - Update with audio file ID
+        # Act - Update with audio file ID (assign new dict so SQLAlchemy detects change)
         audio_file_id = "audio_file_789"
-        context = session_question.session_specific_context or {}
+        from sqlalchemy.orm.attributes import flag_modified
+        context = dict(session_question.session_specific_context or {})
         context["answer_audio_file_id"] = audio_file_id
         session_question.session_specific_context = context
+        flag_modified(session_question, "session_specific_context")
         test_db_session.commit()
         test_db_session.refresh(session_question)
         
