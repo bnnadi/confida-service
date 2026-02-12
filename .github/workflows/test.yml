@@ -72,7 +72,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        python -m pytest tests/ -v -n auto --cov=app --cov-report=xml --junitxml=test-results.xml
+        python -m pytest tests/ -v -n auto --cov=app --cov-report=xml --cov-fail-under=85 --junitxml=test-results.xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
