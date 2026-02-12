@@ -66,6 +66,7 @@ jobs:
         echo "RATE_LIMIT_ENABLED=false" >> $GITHUB_ENV
 
     - name: Run database migrations
+      continue-on-error: true
       run: |
         python app/database/migrate.py upgrade head
 

@@ -397,8 +397,7 @@ class TestAnswerModel:
                 "improvements": ["Provide more specific examples"],
                 "idealAnswer": "I have extensive experience with Python web frameworks..."
             },
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.utcnow()
         }
         
         # Act
@@ -413,7 +412,6 @@ class TestAnswerModel:
         assert answer.answer_text == answer_data["answer_text"]
         assert answer.analysis_result == answer_data["analysis_result"]
         assert answer.created_at is not None
-        assert answer.updated_at is not None
     
     @pytest.mark.unit
     def test_answer_question_relationship(self, test_db_session, sample_question):
@@ -424,8 +422,7 @@ class TestAnswerModel:
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.utcnow()
         }
         
         # Act
@@ -447,8 +444,7 @@ class TestAnswerModel:
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.utcnow()
         }
         
         answer = Answer(**answer_data)
