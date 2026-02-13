@@ -209,7 +209,7 @@ class TestInterviewEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "score" in data
-        assert "improvements" in data
+        assert "suggestions" in data
     
     @pytest.mark.integration
     def test_parse_job_description_special_characters(self, client, mock_ai_client, override_auth, override_ai_client):
@@ -252,7 +252,7 @@ class TestInterviewEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "score" in data
-        assert "improvements" in data
+        assert "suggestions" in data
     
     @pytest.mark.integration
     def test_parse_job_description_unicode(self, client, mock_ai_client, override_auth, override_ai_client):
@@ -295,7 +295,7 @@ class TestInterviewEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "score" in data
-        assert "improvements" in data
+        assert "suggestions" in data
     
     @pytest.mark.integration
     def test_parse_job_description_malformed_json(self, client, override_auth):
