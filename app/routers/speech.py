@@ -8,7 +8,7 @@ from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
-from app.dependencies import get_ai_client_dependency, get_file_service, get_validation_service
+from app.dependencies import get_ai_client_dependency, get_file_service, get_validation_service, get_tts_service
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
 
@@ -281,7 +281,8 @@ async def list_audio_files(
 @router.post("/synthesize", response_model=SynthesizeResponse)
 async def synthesize_speech(
     request: SynthesizeRequest,
-    current_user: dict = Depends(get_current_admin)
+    current_user: dict = Depends(get_current_admin),
+    tts_service: TTSService = Depends(get_tts_service)
 ):
     """
     Synthesize text to speech (Admin Tooling Endpoint).
@@ -290,8 +291,6 @@ async def synthesize_speech(
     Requires admin authentication.
     """
     try:
-        # Initialize TTS service
-        tts_service = TTSService()
         
         # Synthesize text to speech
         audio_bytes = await tts_service.synthesize(

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.services.database_service import get_db
 from app.services.analytics_service import AnalyticsService
+from app.dependencies import get_analytics_service
 from app.models.analytics_models import (
     PerformanceMetrics, SessionAnalytics, TrendAnalysis, ReportRequest, 
     ReportResponse, AnalyticsSummary, PerformanceComparison, AnalyticsFilter,
@@ -30,11 +31,6 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
-
-
-def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
-    """Dependency to get analytics service."""
-    return AnalyticsService(db)
 
 
 # =============================================================================
