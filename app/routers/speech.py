@@ -1,7 +1,16 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
 from typing import List
 import base64
-from app.models.schemas import TranscribeResponse, SupportedFormatsResponse, SynthesizeRequest, SynthesizeResponse
+from app.models.schemas import (
+    TranscribeResponse,
+    SupportedFormatsResponse,
+    SynthesizeRequest,
+    SynthesizeResponse,
+    SpeechAnalysisRequest,
+    SpeechAnalysisResponse,
+    BatchSpeechAnalysisRequest,
+    BatchSpeechAnalysisResponse,
+)
 from app.services.file_service import FileService
 from app.middleware.auth_middleware import get_current_user_required, get_current_admin
 from app.services.database_service import get_db
@@ -11,8 +20,10 @@ from app.utils.logger import get_logger
 from app.dependencies import get_ai_client_dependency, get_file_service, get_validation_service, get_tts_service
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
+from app.services.speech_analyzer import SpeechAnalyzer
 
 logger = get_logger(__name__)
+speech_analyzer = SpeechAnalyzer()
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
 
@@ -204,6 +215,62 @@ async def transcribe_saved_audio(
             status_code=500,
             detail=f"Failed to transcribe audio file: {str(e)}"
         )
+
+
+@router.post("/analyze", response_model=SpeechAnalysisResponse)
+async def analyze_speech(
+    request: SpeechAnalysisRequest,
+    current_user: dict = Depends(get_current_user_required),
+):
+    """
+    Analyze transcript for speech patterns: filler words, pacing, clarity, confidence.
+    Optionally provide duration_seconds for accurate words-per-minute calculation.
+    """
+    analysis = speech_analyzer.analyze_transcript(
+        transcript=request.transcript,
+        duration_seconds=request.duration_seconds,
+    )
+    suggestions = speech_analyzer.get_realtime_suggestions(analysis)
+    return SpeechAnalysisResponse(
+        filler_words=analysis.filler_words,
+        pace=analysis.pace,
+        clarity=analysis.clarity,
+        volume=analysis.volume,
+        pauses=analysis.pauses,
+        confidence=analysis.confidence,
+        suggestions=suggestions,
+    )
+
+
+@router.post("/analyze/batch", response_model=BatchSpeechAnalysisResponse)
+async def analyze_speech_batch(
+    request: BatchSpeechAnalysisRequest,
+    current_user: dict = Depends(get_current_user_required),
+):
+    """
+    Batch analyze multiple transcripts for speech patterns.
+    Returns analysis results for each transcript in order.
+    """
+    results = []
+    for item in request.transcripts:
+        analysis = speech_analyzer.analyze_transcript(
+            transcript=item.text,
+            duration_seconds=item.duration_seconds,
+        )
+        suggestions = speech_analyzer.get_realtime_suggestions(analysis)
+        results.append(
+            SpeechAnalysisResponse(
+                filler_words=analysis.filler_words,
+                pace=analysis.pace,
+                clarity=analysis.clarity,
+                volume=analysis.volume,
+                pauses=analysis.pauses,
+                confidence=analysis.confidence,
+                suggestions=suggestions,
+            )
+        )
+    return BatchSpeechAnalysisResponse(results=results)
+
 
 @router.get("/supported-formats", response_model=SupportedFormatsResponse)
 async def get_supported_formats():

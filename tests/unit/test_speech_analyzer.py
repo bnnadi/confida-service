@@ -54,7 +54,15 @@ class TestSpeechAnalyzer:
         # Pace should be roughly 2 words per second = 120 WPM
         assert result.pace > 0
         assert result.pace == 200  # 100 words * 2
-    
+
+    @pytest.mark.unit
+    def test_analyze_transcript_with_duration_seconds(self, analyzer):
+        """Test pace calculation with duration_seconds for accurate WPM."""
+        transcript = " ".join(["word"] * 60)  # 60 words
+        result = analyzer.analyze_transcript(transcript, duration_seconds=30.0)
+        # 60 words in 30 seconds = 120 WPM
+        assert result.pace == 120.0
+
     @pytest.mark.unit
     def test_analyze_transcript_pauses(self, analyzer):
         """Test pause detection."""
