@@ -194,11 +194,12 @@ def override_ai_client(client):
 def sample_user(db_session):
     """Create a sample user for testing."""
     from app.database.models import User
-    from werkzeug.security import generate_password_hash
+    from app.services.auth_service import AuthService
+    auth_service = AuthService(db_session)
     user = User(
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
         name="Test User",
-        password_hash=generate_password_hash("testpass123"),
+        password_hash=auth_service.get_password_hash("testpass123"),
         is_active=True
     )
     db_session.add(user)
@@ -360,11 +361,12 @@ def generate_test_sessions():
 def admin_user(db_session):
     """Create an admin user for testing."""
     from app.database.models import User
-    from werkzeug.security import generate_password_hash
+    from app.services.auth_service import AuthService
+    auth_service = AuthService(db_session)
     user = User(
         email=f"admin-{uuid.uuid4().hex[:8]}@example.com",
         name="Admin User",
-        password_hash=generate_password_hash("adminpass123"),
+        password_hash=auth_service.get_password_hash("adminpass123"),
         is_active=True
     )
     db_session.add(user)
