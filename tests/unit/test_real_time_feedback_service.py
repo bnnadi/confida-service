@@ -88,7 +88,7 @@ class TestRealTimeFeedbackService:
         assert feedback.session_id == session_id
         assert feedback.feedback_type == FeedbackType.SPEECH_ANALYSIS
         assert feedback.confidence >= 0.0
-        assert "metrics" in feedback.dict()
+        assert "metrics" in feedback.model_dump()
         assert feedback.data["question_id"] == 1
     
     @pytest.mark.asyncio

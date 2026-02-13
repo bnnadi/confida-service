@@ -48,6 +48,25 @@ QuestionId = Annotated[str, Depends(validate_question_uuid)]
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
+
+def _session_to_response(session: InterviewSession) -> InterviewSessionResponse:
+    """Convert InterviewSession ORM to InterviewSessionResponse schema."""
+    return InterviewSessionResponse(
+        id=str(session.id),
+        user_id=str(session.user_id),
+        mode=session.mode or "interview",
+        role=session.role,
+        job_description=session.job_description or None,
+        scenario_id=session.scenario_id,
+        question_source=session.question_source or "generated",
+        status=session.status or "active",
+        total_questions=session.total_questions or 0,
+        completed_questions=session.completed_questions or 0,
+        created_at=session.created_at.isoformat() if session.created_at else "",
+        updated_at=session.updated_at.isoformat() if session.updated_at else None,
+    )
+
+
 @router.post("/", response_model=InterviewSessionResponse, status_code=201)
 async def create_session(
     request: CreateSessionRequest,
@@ -74,7 +93,7 @@ async def create_session(
             )
         else:
             raise HTTPException(status_code=400, detail="Invalid mode. Must be 'practice' or 'interview'")
-        return session
+        return _session_to_response(session)
     except HTTPException:
         raise
     except Exception as e:
@@ -90,7 +109,7 @@ async def get_user_sessions(
     """Get all interview sessions for a user."""
     session_service = SessionService(db)
     sessions = await session_service.get_user_sessions(current_user["id"], limit, offset)
-    return sessions
+    return [_session_to_response(s) for s in sessions]
 
 
 @router.get("/preview", response_model=SessionPreviewResponse)

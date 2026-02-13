@@ -84,7 +84,23 @@ class AnswerResponse(BaseModel):
     score: Optional[Dict[str, Any]] = None
     audio_file_id: Optional[str] = None
     created_at: str
-    
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def datetime_to_str(cls, v):
+        if v is None:
+            return ""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
     class Config:
         from_attributes = True
 

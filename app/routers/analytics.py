@@ -266,11 +266,11 @@ async def export_report(
             report = analytics_service.generate_report(report_request)
             return {
                 "message": "PDF export requires additional setup. Returning JSON data.",
-                "report": report.dict()
+                "report": report.model_dump()
             }
         else:
             report = analytics_service.generate_report(report_request)
-            return report.dict()
+            return report.model_dump()
         
     except HTTPException:
         raise
@@ -390,8 +390,8 @@ async def get_dashboard_metrics(
         trend = analytics_service.get_trend_analysis(user_id, "average_score", "30d")
         
         dashboard_data = {
-            "summary": summary.dict(),
-            "trend": trend.dict(),
+            "summary": summary.model_dump(),
+            "trend": trend.model_dump(),
             "last_updated": datetime.utcnow().isoformat()
         }
         

@@ -178,7 +178,7 @@ async def update_user_profile(
     # Update profile
     user = auth_service.update_user_profile(
         user_id=current_user["id"],
-        **request.dict(exclude_unset=True)
+        **request.model_dump(exclude_unset=True)
     )
     
     logger.info(f"Profile updated for user: {user.email}")

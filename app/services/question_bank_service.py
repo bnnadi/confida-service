@@ -41,9 +41,10 @@ class QuestionBankService:
         """
         try:
             # Check for duplicate question text
-            existing = self.db.execute(
+            result = self.db.execute(
                 select(Question).where(Question.question_text == question_data.question_text)
-            ).scalar_one_or_none()
+            )
+            existing = result.scalars().one_or_none()
             
             if existing:
                 raise ValueError(f"Question with this text already exists: {existing.id}")
@@ -87,7 +88,7 @@ class QuestionBankService:
             result = self.db.execute(
                 select(Question).where(Question.id == question_uuid)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().one_or_none()
         except ValueError:
             logger.warning(f"Invalid question ID format: {question_id}")
             return None

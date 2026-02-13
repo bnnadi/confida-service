@@ -14,7 +14,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_complete_interview_session_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete interview session flow from creation to completion."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create interview session
@@ -84,7 +84,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_multiple_sessions_per_user(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test creating and managing multiple sessions for a single user."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Create first session
@@ -133,7 +133,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_question_bank_integration_flow(self, client, sample_user, mock_ai_client, mock_question_bank_service, override_auth, override_ai_client):
         """Test complete flow with question bank integration."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session (should use question bank)
@@ -183,7 +183,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_error_recovery_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test error recovery and resilience in the interview flow."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -241,7 +241,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_concurrent_session_operations(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test concurrent operations on the same session."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -282,7 +282,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_session_lifecycle_management(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete session lifecycle from creation to deletion."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -330,7 +330,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_data_consistency_across_operations(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test data consistency across multiple operations."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -386,7 +386,7 @@ class TestCompleteInterviewFlow:
     @pytest.mark.e2e
     def test_performance_under_load(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test system performance under multiple concurrent requests."""
-        override_auth({"id": sample_user.id, "email": sample_user.email, "is_admin": False})
+        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
         # Step 1: Create multiple sessions concurrently

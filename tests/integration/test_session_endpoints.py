@@ -252,11 +252,22 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_delete_session_success(self, client, sample_interview_session, sample_user, override_auth):
-        """Test successful session deletion."""
+    def test_delete_session_success(self, client, sample_user, override_auth, override_ai_client, mock_ai_client):
+        """Test successful session deletion. Creates session via API to avoid ObjectDeletedError."""
         override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_ai_client(mock_ai_client)
 
-        session_id = str(sample_interview_session.id)
+        # Create session via API so we don't hold a fixture reference that gets deleted
+        create_resp = client.post("/api/v1/sessions/", json={
+            "user_id": str(sample_user.id),
+            "mode": "interview",
+            "role": "Python Developer",
+            "job_title": "Python Developer",
+            "job_description": "Looking for Python developer"
+        })
+        assert create_resp.status_code == 201
+        session_id = create_resp.json()["id"]
+
         response = client.delete(f"/api/v1/sessions/{session_id}")
 
         assert response.status_code == 200
@@ -483,7 +494,9 @@ class TestSessionEndpoints:
 
         with patch("app.routers.sessions.SessionService") as mock_session_service:
             mock_instance = mock_session_service.return_value
-            mock_instance.create_interview_session.side_effect = Exception("Database error")
+            mock_instance.create_interview_session = AsyncMock(
+                side_effect=Exception("Database error")
+            )
 
             response = client.post("/api/v1/sessions/", json=session_data)
 

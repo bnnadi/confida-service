@@ -112,30 +112,29 @@ def db_session(test_db_session):
     """Alias for test_db_session."""
     return test_db_session
 
-# FastAPI client fixture
-@pytest.fixture(scope="session")
-def client():
-    """Create FastAPI test client (session-scoped to avoid repeated app startup)."""
-    with TestClient(app) as c:
-        yield c
-
-
+# FastAPI client fixture - function-scoped with get_db override for consistency
 @pytest.fixture
-def client_with_db(client, db_session):
-    """Client with get_db overridden to use test db_session for integration tests.
+def client(db_session):
+    """Create FastAPI test client with get_db overridden to use test db_session.
     
-    Use this fixture for integration tests that need the app to see fixture data
-    (e.g. sample_user, sample_interview_session) in the same transaction.
+    Ensures the app sees fixture data (sample_user, etc.) in the same transaction.
+    Integration and E2E conftests provide their own client; this is the default.
     """
     def override_get_db():
         yield db_session
 
-    # get_db returns Session directly; override must be a generator for proper cleanup
     app.dependency_overrides[get_db] = override_get_db
     try:
-        yield client
+        with TestClient(app) as c:
+            yield c
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def client_with_db(client):
+    """Alias for client - both now use get_db override."""
+    return client
 
 # --- Auth dependency override helpers ---
 
