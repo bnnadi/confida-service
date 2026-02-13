@@ -4,7 +4,7 @@ WebSocket router for real-time feedback during interviews.
 import json
 import base64
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from app.models.real_time_models import (
     RealTimeFeedback,
@@ -197,7 +197,7 @@ async def feedback_websocket(
                     
                     if message_type == "ping":
                         # Keepalive
-                        await websocket.send_json({"type": "pong", "timestamp": str(datetime.utcnow())})
+                        await websocket.send_json({"type": "pong", "timestamp": str(datetime.now(timezone.utc))})
                     
                     elif message_type == "transcript":
                         # Process transcript chunk

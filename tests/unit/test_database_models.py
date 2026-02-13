@@ -5,7 +5,7 @@ Tests the database models including User, InterviewSession, Question,
 SessionQuestion, and Answer models.
 """
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from sqlalchemy.exc import IntegrityError
 
@@ -26,8 +26,8 @@ class TestUserModel:
             "name": "Test User",
             "password_hash": "hashed_password_123",
             "is_active": True,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -56,8 +56,8 @@ class TestUserModel:
             "name": "Test User 1",
             "password_hash": "hashed_password_123",
             "is_active": True,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         user2_data = {
             "id": str(uuid.uuid4()),
@@ -65,8 +65,8 @@ class TestUserModel:
             "name": "Test User 2",
             "password_hash": "hashed_password_456",
             "is_active": True,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -93,8 +93,8 @@ class TestUserModel:
             "status": "active",
             "total_questions": 5,
             "completed_questions": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -123,8 +123,8 @@ class TestInterviewSessionModel:
             "status": "active",
             "total_questions": 5,
             "completed_questions": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -156,8 +156,8 @@ class TestInterviewSessionModel:
             "status": "active",
             "total_questions": 5,
             "completed_questions": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -185,8 +185,8 @@ class TestInterviewSessionModel:
                 "status": status,
                 "total_questions": 5,
                 "completed_questions": 0,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
             }
             
             # Act
@@ -221,8 +221,8 @@ class TestQuestionModel:
             "success_rate": 0.85,
             "ai_service_used": "openai",
             "generation_prompt_hash": "hash_123",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -259,8 +259,8 @@ class TestQuestionModel:
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "medium",
             # category is missing
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -284,8 +284,8 @@ class TestQuestionModel:
                 "question_metadata": {"role": "python_developer"},
                 "difficulty_level": difficulty,
                 "category": "technical",
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
             }
             
             # Act
@@ -311,7 +311,7 @@ class TestSessionQuestionModel:
             "question_id": sample_question.id,
             "question_order": 1,
             "session_specific_context": {"role": "senior_developer", "focus": "technical_skills"},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -338,7 +338,7 @@ class TestSessionQuestionModel:
             "question_id": sample_question.id,
             "question_order": 1,
             "session_specific_context": {"role": "senior_developer"},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -363,7 +363,7 @@ class TestSessionQuestionModel:
             "question_id": sample_question.id,
             "question_order": 1,
             "session_specific_context": {"role": "senior_developer"},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         session_question = SessionQuestion(**session_question_data)
@@ -398,7 +398,7 @@ class TestAnswerModel:
                 "improvements": ["Provide more specific examples"],
                 "idealAnswer": "I have extensive experience with Python web frameworks..."
             },
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -423,7 +423,7 @@ class TestAnswerModel:
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         # Act
@@ -445,7 +445,7 @@ class TestAnswerModel:
             "question_id": sample_question.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         answer = Answer(**answer_data)
@@ -479,8 +479,8 @@ class TestModelRelationships:
             "status": "active",
             "total_questions": 2,
             "completed_questions": 0,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         session = InterviewSession(**session_data)
         test_db_session.add(session)
@@ -494,8 +494,8 @@ class TestModelRelationships:
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "medium",
             "category": "technical",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         question1 = Question(**question1_data)
         test_db_session.add(question1)
@@ -506,8 +506,8 @@ class TestModelRelationships:
             "question_metadata": {"role": "python_developer"},
             "difficulty_level": "easy",
             "category": "technical",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         }
         question2 = Question(**question2_data)
         test_db_session.add(question2)
@@ -522,7 +522,7 @@ class TestModelRelationships:
             "question_id": question1.id,
             "question_order": 1,
             "session_specific_context": {"role": "senior_developer"},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         session_question1 = SessionQuestion(**session_question1_data)
         test_db_session.add(session_question1)
@@ -533,7 +533,7 @@ class TestModelRelationships:
             "question_id": question2.id,
             "question_order": 2,
             "session_specific_context": {"role": "senior_developer"},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         session_question2 = SessionQuestion(**session_question2_data)
         test_db_session.add(session_question2)
@@ -547,7 +547,7 @@ class TestModelRelationships:
             "question_id": question1.id,
             "answer_text": "I have 5 years of Python experience.",
             "analysis_result": {"score": {"overall": 8.5}},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         answer1 = Answer(**answer1_data)
         test_db_session.add(answer1)
@@ -557,7 +557,7 @@ class TestModelRelationships:
             "question_id": question2.id,
             "answer_text": "I use pdb and logging for debugging.",
             "analysis_result": {"score": {"overall": 7.8}},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         answer2 = Answer(**answer2_data)
         test_db_session.add(answer2)

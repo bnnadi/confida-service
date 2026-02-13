@@ -5,7 +5,7 @@ from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, 
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 import uuid
 

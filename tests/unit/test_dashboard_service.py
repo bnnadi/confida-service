@@ -4,7 +4,8 @@ Unit tests for Dashboard Service.
 Tests the dashboard service logic and data formatting.
 """
 import pytest
-from datetime import datetime, timedelta
+from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 from app.services.dashboard_service import DashboardService
 from app.database.models import InterviewSession, User
 import uuid
@@ -26,7 +27,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 7.0},
-            created_at=datetime.utcnow() - timedelta(days=20)
+            created_at=datetime.now(timezone.utc) - timedelta(days=20)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -35,7 +36,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=5)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5)
         )
         
         db_session.add_all([session1, session2])
@@ -76,7 +77,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 7.0, "overall": 7.0},
-            created_at=datetime.utcnow() - timedelta(days=20)
+            created_at=datetime.now(timezone.utc) - timedelta(days=20)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -85,7 +86,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 8.0, "overall": 8.0},
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10)
         )
         
         db_session.add_all([session1, session2])
@@ -113,8 +114,8 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 7.0, "django": 8.0, "overall": 7.5},
-            created_at=datetime.utcnow() - timedelta(days=10),
-            updated_at=datetime.utcnow() - timedelta(days=10) + timedelta(minutes=30)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=10) + timedelta(minutes=30)
         )
         
         db_session.add(session1)
@@ -142,8 +143,8 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 7.0},
-            created_at=datetime.utcnow() - timedelta(days=10),
-            updated_at=datetime.utcnow() - timedelta(days=10) + timedelta(minutes=30)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=10) + timedelta(minutes=30)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -152,8 +153,8 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=5),
-            updated_at=datetime.utcnow() - timedelta(days=5) + timedelta(minutes=45)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=5) + timedelta(minutes=45)
         )
         
         db_session.add_all([session1, session2])
@@ -177,7 +178,7 @@ class TestDashboardService:
         service = DashboardService(db_session)
         
         # Create sessions over time
-        base_date = datetime.utcnow() - timedelta(days=20)
+        base_date = datetime.now(timezone.utc) - timedelta(days=20)
         for i in range(3):
             session = InterviewSession(
                 user_id=sample_user.id,
@@ -215,7 +216,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 9.0, "django": 8.0, "testing": 5.0, "overall": 7.3},
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -224,7 +225,7 @@ class TestDashboardService:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 8.5, "django": 7.5, "testing": 5.5, "overall": 7.2},
-            created_at=datetime.utcnow() - timedelta(days=5)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5)
         )
         
         db_session.add_all([session1, session2])
@@ -239,4 +240,28 @@ class TestDashboardService:
         assert isinstance(insights.milestones, list)
         assert isinstance(insights.next_goals, list)
         assert isinstance(insights.last_updated, datetime)
+
+    @pytest.mark.unit
+    def test_get_dashboard_overview_aggregator_raises(self, db_session, sample_user):
+        """Test get_dashboard_overview propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_user_sessions_summary", side_effect=RuntimeError("DB error")):
+            with pytest.raises(RuntimeError, match="DB error"):
+                service.get_dashboard_overview(str(sample_user.id), days=30)
+
+    @pytest.mark.unit
+    def test_get_user_progress_aggregator_raises(self, db_session, sample_user):
+        """Test get_user_progress propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_user_progress_data", side_effect=ValueError("Bad data")):
+            with pytest.raises(ValueError, match="Bad data"):
+                service.get_user_progress(str(sample_user.id), days=30)
+
+    @pytest.mark.unit
+    def test_get_analytics_data_aggregator_raises(self, db_session, sample_user):
+        """Test get_analytics_data propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_performance_metrics_detailed", side_effect=RuntimeError("Metrics error")):
+            with pytest.raises(RuntimeError, match="Metrics error"):
+                service.get_analytics_data(str(sample_user.id), days=30)
 

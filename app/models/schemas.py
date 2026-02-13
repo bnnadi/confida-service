@@ -217,7 +217,7 @@ class CreateSessionRequest(BaseModel):
         return self
 
 class AddQuestionsRequest(BaseModel):
-    questions: List[str] = Field(..., min_items=1, max_items=20, description="List of interview questions")
+    questions: List[str] = Field(..., min_length=1, max_length=20, description="List of interview questions")
     
     @field_validator('questions')
     @classmethod

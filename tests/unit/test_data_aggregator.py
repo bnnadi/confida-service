@@ -4,7 +4,7 @@ Unit tests for Data Aggregator service.
 Tests the data aggregation logic for dashboard endpoints.
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.data_aggregator import DataAggregator
 from app.database.models import (
     InterviewSession, Question, SessionQuestion, AnalyticsEvent, User
@@ -83,7 +83,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 6.0},
-            created_at=datetime.utcnow() - timedelta(days=60)
+            created_at=datetime.now(timezone.utc) - timedelta(days=60)
         )
         
         # Create recent session
@@ -94,14 +94,14 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=5)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5)
         )
         
         db_session.add_all([old_session, recent_session])
         db_session.commit()
         
         # Get only recent sessions (last 30 days)
-        start_date = datetime.utcnow() - timedelta(days=30)
+        start_date = datetime.now(timezone.utc) - timedelta(days=30)
         result = aggregator.get_user_sessions_summary(
             str(sample_user.id),
             start_date=start_date
@@ -123,7 +123,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 7.0, "django": 8.0, "overall": 7.5},
-            created_at=datetime.utcnow() - timedelta(days=20)
+            created_at=datetime.now(timezone.utc) - timedelta(days=20)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -132,7 +132,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 8.0, "django": 9.0, "overall": 8.5},
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10)
         )
         
         # Create questions with difficulty
@@ -188,7 +188,7 @@ class TestDataAggregator:
             status="completed",
             total_questions=5,
             completed_questions=5,
-            created_at=datetime.utcnow() - timedelta(days=1)
+            created_at=datetime.now(timezone.utc) - timedelta(days=1)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -196,7 +196,7 @@ class TestDataAggregator:
             status="active",
             total_questions=5,
             completed_questions=2,
-            created_at=datetime.utcnow() - timedelta(hours=1)
+            created_at=datetime.now(timezone.utc) - timedelta(hours=1)
         )
         
         # Create analytics event
@@ -222,7 +222,7 @@ class TestDataAggregator:
         aggregator = DataAggregator(db_session)
         
         # Create sessions for consecutive days
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         for i in range(3):
             session_date = datetime.combine(today - timedelta(days=i), datetime.min.time())
             session = InterviewSession(
@@ -263,7 +263,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 7.0, "django": 8.0},
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -272,7 +272,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 8.0, "django": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=5)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5)
         )
         
         db_session.add_all([session1, session2])
@@ -298,8 +298,8 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 7.0},
-            created_at=datetime.utcnow() - timedelta(days=10),
-            updated_at=datetime.utcnow() - timedelta(days=10) + timedelta(minutes=30)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=10) + timedelta(minutes=30)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -308,8 +308,8 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"overall": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=5),
-            updated_at=datetime.utcnow() - timedelta(days=5) + timedelta(minutes=45)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=5) + timedelta(minutes=45)
         )
         session3 = InterviewSession(
             user_id=sample_user.id,
@@ -318,8 +318,8 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=2,
             overall_score=None,
-            created_at=datetime.utcnow() - timedelta(days=1),
-            updated_at=datetime.utcnow() - timedelta(days=1) + timedelta(minutes=15)
+            created_at=datetime.now(timezone.utc) - timedelta(days=1),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=1) + timedelta(minutes=15)
         )
         
         db_session.add_all([session1, session2, session3])
@@ -342,7 +342,7 @@ class TestDataAggregator:
         aggregator = DataAggregator(db_session)
         
         # Create sessions over time
-        base_date = datetime.utcnow() - timedelta(days=20)
+        base_date = datetime.now(timezone.utc) - timedelta(days=20)
         for i in range(5):
             session = InterviewSession(
                 user_id=sample_user.id,
@@ -380,7 +380,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 9.0, "django": 8.0, "testing": 5.0},
-            created_at=datetime.utcnow() - timedelta(days=10)
+            created_at=datetime.now(timezone.utc) - timedelta(days=10)
         )
         session2 = InterviewSession(
             user_id=sample_user.id,
@@ -389,7 +389,7 @@ class TestDataAggregator:
             total_questions=5,
             completed_questions=5,
             overall_score={"python": 8.5, "django": 7.5, "testing": 5.5},
-            created_at=datetime.utcnow() - timedelta(days=5)
+            created_at=datetime.now(timezone.utc) - timedelta(days=5)
         )
         
         db_session.add_all([session1, session2])

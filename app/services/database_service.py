@@ -8,7 +8,7 @@ import asyncio
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Callable, AsyncGenerator
 from sqlalchemy import create_engine, text, select, update, delete, func, JSON
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool

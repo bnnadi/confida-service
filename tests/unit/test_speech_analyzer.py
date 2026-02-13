@@ -137,6 +137,20 @@ class TestSpeechAnalyzer:
         assert any("filler" in s.lower() for s in suggestions)
     
     @pytest.mark.unit
+    def test_get_realtime_suggestions_excessive_pauses(self, analyzer):
+        """Test suggestions when pauses exceed threshold (>10)."""
+        analysis = SpeechAnalysis(
+            filler_words=0,
+            pace=150,
+            clarity=0.8,
+            volume=0.7,
+            pauses=11,
+            confidence=0.8
+        )
+        suggestions = analyzer.get_realtime_suggestions(analysis)
+        assert any("continuously" in s.lower() or "pauses" in s.lower() for s in suggestions)
+
+    @pytest.mark.unit
     def test_get_realtime_suggestions_low_clarity(self, analyzer):
         """Test suggestions for low clarity."""
         analysis = SpeechAnalysis(

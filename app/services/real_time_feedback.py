@@ -2,7 +2,7 @@
 Real-time feedback service for processing and generating feedback during live interviews.
 """
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.real_time_models import RealTimeFeedback, FeedbackType, SpeechAnalysis
 from app.services.speech_analyzer import SpeechAnalyzer
 from app.utils.logger import get_logger
@@ -234,7 +234,7 @@ class RealTimeFeedbackService:
         """
         self.active_sessions[session_id] = {
             "user_id": user_id,
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "metadata": metadata or {}
         }
         logger.info(f"Registered real-time feedback session: {session_id}")

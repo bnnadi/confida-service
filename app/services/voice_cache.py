@@ -300,8 +300,11 @@ class VoiceCacheService:
             future.set_exception(e)
             self.stats["errors"] += 1
             logger.error(f"Voice synthesis failed: {e}")
+            # Ensure the future's exception is "retrieved" to avoid "Future exception
+            # was never retrieved" when waiters are cancelled (e.g. by gather)
+            future.add_done_callback(lambda f: f.exception())
             raise
-            
+
         finally:
             # Clean up in-flight tracking
             async with self._in_flight_lock:

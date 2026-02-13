@@ -304,6 +304,13 @@ class TestParseEnhancedRubric:
         # May return None or raise, depending on implementation
         assert rubric is None or isinstance(rubric, EnhancedScoringRubric)
 
+    @pytest.mark.unit
+    def test_parse_enhanced_rubric_malformed_returns_none(self):
+        """Test parsing with malformed rubric data triggers exception path and returns None."""
+        ai_response = {"enhanced_rubric": 123}  # int has no .get, triggers AttributeError
+        rubric = parse_enhanced_rubric_from_ai_response(ai_response)
+        assert rubric is None
+
 
 class TestCreateRubricFromLegacyScores:
     """Tests for creating enhanced rubric from legacy scores."""
