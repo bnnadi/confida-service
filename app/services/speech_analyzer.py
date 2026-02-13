@@ -27,13 +27,18 @@ class SpeechAnalyzer:
         self.transcript_buffer = deque(maxlen=1000)  # Keep last 1000 words
         self.audio_chunks = deque(maxlen=100)  # Keep last 100 audio chunks for analysis
     
-    def analyze_transcript(self, transcript: str) -> SpeechAnalysis:
+    def analyze_transcript(
+        self, transcript: str, duration_seconds: Optional[float] = None
+    ) -> SpeechAnalysis:
         """
         Analyze transcript text for speech patterns.
-        
+
         Args:
             transcript: Text transcript to analyze
-            
+            duration_seconds: Optional duration in seconds for accurate WPM calculation.
+                When provided, pace = (word_count / duration_seconds) * 60.
+                When not provided, uses rough estimate (word_count * 2).
+
         Returns:
             SpeechAnalysis object with metrics
         """
@@ -48,9 +53,11 @@ class SpeechAnalyzer:
         filler_count = sum(1 for word in stripped_words if word in self.FILLER_WORDS)
         
         # Calculate pace (words per minute)
-        # For real-time, we estimate based on word count and time
-        # This is a simplified calculation - in production, use actual timing
-        pace = word_count * 2  # Rough estimate: 2 words per second = 120 WPM
+        if duration_seconds and duration_seconds > 0:
+            pace = (word_count / duration_seconds) * 60.0
+        else:
+            # Rough estimate: 2 words per second = 120 WPM
+            pace = word_count * 2.0
         
         # Calculate clarity (based on filler word ratio and sentence structure)
         filler_ratio = filler_count / word_count if word_count > 0 else 0

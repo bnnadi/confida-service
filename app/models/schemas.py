@@ -588,4 +588,40 @@ class StructuredQuestionResponse(BaseModel):
     """Response model for structured question generation."""
     identifiers: Dict[str, Any] = Field(..., description="Global identifiers for the question set")
     questions: List[StructuredQuestion] = Field(..., description="List of generated questions")
-    embedding_vectors: Optional[Dict[str, List[float]]] = Field(None, description="Embedding vectors for questions") 
+    embedding_vectors: Optional[Dict[str, List[float]]] = Field(None, description="Embedding vectors for questions")
+
+
+# Speech Analysis API Models (INT-48)
+class SpeechAnalysisRequest(BaseModel):
+    """Request for single transcript speech analysis."""
+    transcript: str = Field(..., min_length=1, max_length=50000, description="Transcript text to analyze")
+    duration_seconds: Optional[float] = Field(None, gt=0, le=3600, description="Duration in seconds for accurate WPM calculation")
+
+
+class SpeechAnalysisResponse(BaseModel):
+    """Response with speech analysis metrics and suggestions."""
+    filler_words: int = Field(..., ge=0, description="Number of filler words detected")
+    pace: float = Field(..., ge=0.0, description="Speaking pace (words per minute)")
+    clarity: float = Field(..., ge=0.0, le=1.0, description="Speech clarity score (0-1)")
+    volume: float = Field(..., ge=0.0, le=1.0, description="Volume level (0-1)")
+    pauses: int = Field(..., ge=0, description="Number of pauses detected")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Overall confidence score (0-1)")
+    suggestions: List[str] = Field(default_factory=list, description="Real-time improvement suggestions")
+
+
+class BatchSpeechAnalysisItem(BaseModel):
+    """Single transcript for batch analysis."""
+    text: str = Field(..., min_length=1, max_length=50000, description="Transcript text")
+    duration_seconds: Optional[float] = Field(None, gt=0, le=3600, description="Duration in seconds for accurate WPM")
+
+
+class BatchSpeechAnalysisRequest(BaseModel):
+    """Request for batch transcript speech analysis."""
+    transcripts: List[BatchSpeechAnalysisItem] = Field(
+        ..., min_length=1, max_length=100, description="List of transcripts to analyze"
+    )
+
+
+class BatchSpeechAnalysisResponse(BaseModel):
+    """Response with batch speech analysis results."""
+    results: List[SpeechAnalysisResponse] = Field(..., description="Analysis result for each transcript") 
