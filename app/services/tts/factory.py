@@ -26,6 +26,7 @@ class TTSProviderFactory:
     """
     Factory for creating TTS provider instances.
     """
+    PROVIDER_REGISTRY = PROVIDER_REGISTRY  # Class attribute for test access
     
     @staticmethod
     def create_provider(

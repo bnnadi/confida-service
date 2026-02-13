@@ -464,6 +464,48 @@ jobs:
 
 **security** -- runs Bandit static analysis and Safety dependency checks (non-blocking).
 
+### Running CI Tests Locally
+
+To run the same tests that GitHub PR actions run (PostgreSQL 13, Redis 6, migrations, full coverage):
+
+1. **Start Docker** (required for PostgreSQL and Redis).
+
+2. **Run the script:**
+   ```bash
+   ./scripts/run_ci_tests_locally.sh
+   ```
+
+The script will:
+- Start PostgreSQL 13 and Redis 6 containers
+- Set environment variables matching CI
+- Install dependencies and run migrations
+- Execute `pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=85 --junitxml=test-results.xml --timeout=60`
+- Stop and remove containers when done
+
+If Docker is not running, the script exits with a clear error. Ensure Docker Desktop (or equivalent) is started before running.
+
+### Dedicated Test Service (Docker Compose)
+
+A dedicated test service runs the full CI test suite inside containers. No host Python or pytest required.
+
+```bash
+docker compose -f docker-compose.test.yml run --rm test-runner
+```
+
+This will:
+- Start PostgreSQL 13 and Redis 6 (on ports 5435 and 6381 to avoid conflicts with dev stack)
+- Build the test image (includes `requirements.txt` and `requirements-test.txt`)
+- Run migrations and pytest with coverage
+- Exit when tests complete (containers are removed with `--rm`)
+
+**Shorter run (no coverage/JUnit):**
+```bash
+docker compose -f docker-compose.test.yml run --rm test-runner \
+  bash -c "python app/database/migrate.py upgrade head && python -m pytest tests/ -v --timeout=60"
+```
+
+Note: Override the default command by passing a custom command after the service name.
+
 ### Test Stages
 
 1. **Unit Tests**: Fast, isolated tests

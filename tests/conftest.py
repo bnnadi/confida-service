@@ -22,6 +22,7 @@ from app.main import app
 from app.database.models import Base
 from app.middleware.auth_middleware import get_current_user_required, get_current_admin
 from app.dependencies import get_ai_client_dependency
+from app.services.database_service import get_db
 
 # Set up basic test environment
 @pytest.fixture(scope="session", autouse=True)
@@ -117,6 +118,24 @@ def client():
     """Create FastAPI test client (session-scoped to avoid repeated app startup)."""
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def client_with_db(client, db_session):
+    """Client with get_db overridden to use test db_session for integration tests.
+    
+    Use this fixture for integration tests that need the app to see fixture data
+    (e.g. sample_user, sample_interview_session) in the same transaction.
+    """
+    def override_get_db():
+        yield db_session
+
+    # get_db returns Session directly; override must be a generator for proper cleanup
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 # --- Auth dependency override helpers ---
 

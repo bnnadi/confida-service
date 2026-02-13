@@ -66,7 +66,7 @@ class AnalyzeAnswerResponse(BaseModel):
 
 # Database response models for interview data
 class QuestionResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     question_text: str
     question_order: int
     created_at: str
@@ -75,7 +75,7 @@ class QuestionResponse(BaseModel):
         from_attributes = True
 
 class AnswerResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     answer_text: str
     analysis_result: Optional[Dict[str, Any]] = None
     score: Optional[Dict[str, Any]] = None
@@ -86,8 +86,8 @@ class AnswerResponse(BaseModel):
         from_attributes = True
 
 class InterviewSessionResponse(BaseModel):
-    id: int
-    user_id: int
+    id: str  # UUID as string
+    user_id: str  # UUID as string
     mode: str
     role: str
     job_description: Optional[str] = None

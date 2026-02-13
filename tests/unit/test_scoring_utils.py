@@ -42,17 +42,18 @@ class TestGradeTierCalculation:
     
     @pytest.mark.unit
     def test_strong_tier(self):
-        """Test Strong tier (75-89 points)."""
+        """Test Strong tier (72-89 points)."""
+        assert calculate_grade_tier(72.0) == GradeTier.STRONG
         assert calculate_grade_tier(75.0) == GradeTier.STRONG
         assert calculate_grade_tier(82.5) == GradeTier.STRONG
         assert calculate_grade_tier(89.9) == GradeTier.STRONG
     
     @pytest.mark.unit
     def test_average_tier(self):
-        """Test Average tier (60-74 points)."""
+        """Test Average tier (60-71.9 points). Strong is 72-89.9."""
         assert calculate_grade_tier(60.0) == GradeTier.AVERAGE
         assert calculate_grade_tier(67.5) == GradeTier.AVERAGE
-        assert calculate_grade_tier(74.9) == GradeTier.AVERAGE
+        assert calculate_grade_tier(71.9) == GradeTier.AVERAGE
     
     @pytest.mark.unit
     def test_at_risk_tier(self):

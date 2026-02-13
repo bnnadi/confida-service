@@ -377,12 +377,11 @@ class TTSService:
                     logger.warning(f"{provider_type} provider failed: {e}")
                     last_error = e
             
-            # All providers failed
-            if last_error:
-                raise last_error
+            # All providers failed - raise consistent error message
             raise TTSProviderError(
                 f"All TTS providers failed. Primary: {self.primary_provider_name}, "
                 f"Fallback: {self.fallback_provider_name or 'none'}"
+                + (f". Last error: {last_error}" if last_error else "")
             )
         
         # Use singleflight pattern if cache is enabled

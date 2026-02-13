@@ -156,6 +156,8 @@ async def analyze_answer_multi_agent(
             agents_used=["ai_service_microservice", "content_agent", "delivery_agent", "technical_agent"]
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
         raise HTTPException(
