@@ -11,9 +11,9 @@ class TestCompleteInterviewFlow:
     """Test cases for complete interview flows."""
     
     @pytest.mark.e2e
-    def test_complete_interview_session_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_complete_interview_session_flow(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete interview session flow from creation to completion."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create interview session
@@ -92,9 +92,9 @@ class TestCompleteInterviewFlow:
         assert final_info["status"] == "completed"
     
     @pytest.mark.e2e
-    def test_multiple_sessions_per_user(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_multiple_sessions_per_user(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test creating and managing multiple sessions for a single user."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Create first session
@@ -141,9 +141,9 @@ class TestCompleteInterviewFlow:
         assert str(session2["id"]) in session_ids
     
     @pytest.mark.e2e
-    def test_question_bank_integration_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_question_bank_integration_flow(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete flow with question bank integration."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -198,9 +198,9 @@ class TestCompleteInterviewFlow:
         assert "ai_service_microservice" in services_data or "status" in services_data
     
     @pytest.mark.e2e
-    def test_error_recovery_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_error_recovery_flow(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test error recovery and resilience in the interview flow."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -262,9 +262,9 @@ class TestCompleteInterviewFlow:
         assert session_info["status"] == "active"
     
     @pytest.mark.e2e
-    def test_concurrent_session_operations(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_concurrent_session_operations(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test concurrent operations on the same session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -303,9 +303,9 @@ class TestCompleteInterviewFlow:
         assert final_info["status"] == "paused"
     
     @pytest.mark.e2e
-    def test_session_lifecycle_management(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_session_lifecycle_management(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete session lifecycle from creation to deletion."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -351,9 +351,9 @@ class TestCompleteInterviewFlow:
         assert get_response.status_code == 404
     
     @pytest.mark.e2e
-    def test_data_consistency_across_operations(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_data_consistency_across_operations(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test data consistency across multiple operations."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create session
@@ -413,9 +413,9 @@ class TestCompleteInterviewFlow:
         assert final_info["status"] == "completed"
     
     @pytest.mark.e2e
-    def test_performance_under_load(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
+    def test_performance_under_load(self, client, sample_user, mock_current_user, mock_ai_client, override_auth, override_ai_client):
         """Test system performance under multiple concurrent requests."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Step 1: Create multiple sessions concurrently

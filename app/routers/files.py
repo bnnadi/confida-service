@@ -5,21 +5,18 @@ from typing import Optional, List
 from datetime import datetime
 from app.services.database_service import get_db
 from app.services.file_service import FileService
+from app.dependencies import get_file_service, get_validation_service
+from app.utils.validation import ValidationService
 from app.models.schemas import (
     FileType, FileUploadResponse, FileInfoResponse, 
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required
-from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
-
-def get_file_service(db: Session = Depends(get_db)) -> FileService:
-    """Dependency to get file service."""
-    return FileService(db)
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
@@ -179,12 +176,12 @@ async def delete_file(
 async def validate_file(
     file: UploadFile = File(..., description="File to validate"),
     file_type: FileType = Query(..., description="Type of file being validated"),
-    current_user: dict = Depends(get_current_user_required)
+    current_user: dict = Depends(get_current_user_required),
+    validation_service: ValidationService = Depends(get_validation_service)
 ):
     """Validate a file without uploading it."""
     try:
         # Validate file using validation service
-        validation_service = ValidationService()
         is_valid, errors = validation_service.validate_file(file, file_type)
         
         if is_valid:

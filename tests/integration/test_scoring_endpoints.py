@@ -5,30 +5,13 @@ Tests the scoring API endpoints including:
 - Multi-agent analysis endpoint
 - Score conversion and rubric generation
 - Error handling
+
+Uses mock_ai_client and mock_current_user from root conftest.
 """
 import pytest
 from unittest.mock import AsyncMock
 from app.dependencies import get_ai_client_dependency
 from app.middleware.auth_middleware import get_current_user_required
-
-
-@pytest.fixture
-def mock_ai_client():
-    """Mock AI client for testing."""
-    ai_client = AsyncMock()
-    ai_client.analyze_answer = AsyncMock(return_value={
-        "analysis": "This is a comprehensive analysis of the answer.",
-        "score": {
-            "clarity": 8.0,
-            "confidence": 7.5
-        },
-        "suggestions": [
-            "Add more specific examples",
-            "Elaborate on technical details",
-            "Improve structure"
-        ]
-    })
-    return ai_client
 
 
 @pytest.fixture
@@ -92,16 +75,6 @@ def sample_analysis_request():
         "question": "What is Python?",
         "job_description": "We are looking for a Python developer with experience in web frameworks.",
         "role": "Python Developer"
-    }
-
-
-@pytest.fixture
-def mock_current_user():
-    """Mock current user for authentication."""
-    return {
-        "id": "test-user-123",
-        "email": "test@example.com",
-        "role": "user"
     }
 
 

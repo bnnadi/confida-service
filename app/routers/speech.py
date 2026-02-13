@@ -8,16 +8,13 @@ from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
-from app.dependencies import get_ai_client_dependency
+from app.dependencies import get_ai_client_dependency, get_file_service, get_validation_service
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
-
-def get_file_service(db = Depends(get_db)) -> FileService:
-    return FileService(db)
 
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio_endpoint(
@@ -26,7 +23,8 @@ async def transcribe_audio_endpoint(
     save_file: bool = Query(False, description="Whether to save the uploaded file for future reference"),
     current_user: dict = Depends(get_current_user_required),
     file_service: FileService = Depends(get_file_service),
-    ai_client = Depends(get_ai_client_dependency)
+    ai_client = Depends(get_ai_client_dependency),
+    validation_service: ValidationService = Depends(get_validation_service)
 ):
     """
     Transcribe audio file to text using AI service microservice.
@@ -35,7 +33,6 @@ async def transcribe_audio_endpoint(
     """
     try:
         # Validate audio file using validation service
-        validation_service = ValidationService()
         is_valid, errors = validation_service.validate_file(audio_file, FileType.AUDIO)
         if not is_valid:
             raise HTTPException(

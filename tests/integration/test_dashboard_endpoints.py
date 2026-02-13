@@ -14,24 +14,6 @@ class TestDashboardEndpoints:
     """Test cases for dashboard API endpoints."""
     
     @pytest.fixture
-    def mock_current_user(self, sample_user):
-        """Mock current user for authentication."""
-        return {
-            "id": sample_user.id,
-            "email": sample_user.email,
-            "is_admin": False
-        }
-    
-    @pytest.fixture
-    def mock_admin_user(self, sample_user):
-        """Mock admin user for authentication."""
-        return {
-            "id": sample_user.id,
-            "email": sample_user.email,
-            "is_admin": True
-        }
-    
-    @pytest.fixture
     def sample_sessions(self, db_session, sample_user):
         """Create sample sessions for testing."""
         sessions = []

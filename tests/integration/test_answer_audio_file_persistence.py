@@ -16,14 +16,6 @@ class TestAnswerAudioFilePersistenceIntegration:
     """Integration tests for answer audio file ID persistence."""
     
     @pytest.fixture
-    def mock_current_user(self, sample_user):
-        """Mock current user for authentication."""
-        return {
-            "id": str(sample_user.id),
-            "email": sample_user.email
-        }
-    
-    @pytest.fixture
     def sample_question_with_session(self, db_session, sample_user, sample_question):
         """Create a question linked to a session for testing."""
         # Create interview session

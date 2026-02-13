@@ -143,8 +143,8 @@ def override_auth(client):
     """Fixture to override auth dependency for tests.
     
     Usage:
-        def test_something(self, client, override_auth, sample_user):
-            override_auth({"user_id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        def test_something(self, client, override_auth, mock_current_user):
+            override_auth(mock_current_user)
             response = client.get("/api/v1/...")
     
     Automatically clears the override after the test.
@@ -205,6 +205,31 @@ def sample_user(db_session):
     db_session.commit()
     db_session.refresh(user)
     return user
+
+
+def make_auth_user(sample_user, is_admin: bool = False) -> dict:
+    """Helper to build auth dict for override_auth. Use when you need to customize per-test."""
+    result = {
+        "id": str(sample_user.id),
+        "email": sample_user.email,
+        "is_admin": is_admin,
+    }
+    if is_admin:
+        result["role"] = "admin"
+    return result
+
+
+@pytest.fixture
+def mock_current_user(sample_user):
+    """Build auth dict from sample_user for override_auth. Use 'id' to match auth middleware."""
+    return make_auth_user(sample_user, is_admin=False)
+
+
+@pytest.fixture
+def mock_admin_user(sample_user):
+    """Admin variant for admin-only endpoints."""
+    return make_auth_user(sample_user, is_admin=True)
+
 
 @pytest.fixture
 def mock_ai_client():

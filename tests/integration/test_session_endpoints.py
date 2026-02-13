@@ -13,10 +13,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.integration
     def test_create_session_success(
-        self, client, sample_user, override_auth, override_ai_client, mock_ai_client
+        self, client, sample_user, mock_current_user, override_auth, override_ai_client, mock_ai_client
     ):
         """Test successful session creation."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         session_data = {
@@ -85,9 +85,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_create_session_missing_fields(self, client, sample_user, override_auth):
+    def test_create_session_missing_fields(self, client, sample_user, mock_current_user, override_auth):
         """Test session creation with missing required fields."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         session_data = {
             "user_id": str(sample_user.id),
@@ -103,9 +103,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_create_session_empty_fields(self, client, sample_user, override_auth):
+    def test_create_session_empty_fields(self, client, sample_user, mock_current_user, override_auth):
         """Test session creation with empty fields."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         session_data = {
             "user_id": str(sample_user.id),
@@ -122,9 +122,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_get_session_success(self, client, sample_interview_session, sample_user, override_auth):
+    def test_get_session_success(self, client, sample_interview_session, sample_user, mock_current_user, override_auth):
         """Test successful session retrieval."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.get(f"/api/v1/sessions/{sample_interview_session.id}")
 
@@ -143,9 +143,9 @@ class TestSessionEndpoints:
         assert session_data["user_id"] == str(sample_interview_session.user_id)
 
     @pytest.mark.integration
-    def test_get_session_not_found(self, client, sample_user, override_auth):
+    def test_get_session_not_found(self, client, sample_user, mock_current_user, override_auth):
         """Test session retrieval for non-existent session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
 
@@ -157,9 +157,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_get_session_invalid_id(self, client, sample_user, override_auth):
+    def test_get_session_invalid_id(self, client, sample_user, mock_current_user, override_auth):
         """Test session retrieval with invalid ID format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         invalid_id = "invalid-uuid"
 
@@ -170,9 +170,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_list_sessions_success(self, client, sample_user, generate_test_sessions, override_auth):
+    def test_list_sessions_success(self, client, sample_user, mock_current_user, generate_test_sessions, override_auth):
         """Test successful session listing."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.get("/api/v1/sessions/")
 
@@ -185,9 +185,9 @@ class TestSessionEndpoints:
             assert "sessions" in data or "total" in data
 
     @pytest.mark.integration
-    def test_list_sessions_with_pagination(self, client, sample_user, generate_test_sessions, override_auth):
+    def test_list_sessions_with_pagination(self, client, sample_user, mock_current_user, generate_test_sessions, override_auth):
         """Test session listing with pagination."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.get("/api/v1/sessions/?limit=5&offset=0")
 
@@ -206,9 +206,9 @@ class TestSessionEndpoints:
         assert response.status_code == 401
 
     @pytest.mark.integration
-    def test_update_session_success(self, client, sample_interview_session, sample_user, override_auth):
+    def test_update_session_success(self, client, sample_interview_session, sample_user, mock_current_user, override_auth):
         """Test successful session status update."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.patch(
             f"/api/v1/sessions/{sample_interview_session.id}/status?status=completed"
@@ -221,9 +221,9 @@ class TestSessionEndpoints:
             assert data["status"] == "completed"
 
     @pytest.mark.integration
-    def test_update_session_not_found(self, client, sample_user, override_auth):
+    def test_update_session_not_found(self, client, sample_user, mock_current_user, override_auth):
         """Test session status update for non-existent session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
 
@@ -237,9 +237,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_update_session_invalid_id(self, client, sample_user, override_auth):
+    def test_update_session_invalid_id(self, client, sample_user, mock_current_user, override_auth):
         """Test session status update with invalid ID format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         invalid_id = "invalid-uuid"
 
@@ -252,9 +252,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_delete_session_success(self, client, sample_user, override_auth, override_ai_client, mock_ai_client):
+    def test_delete_session_success(self, client, sample_user, mock_current_user, override_auth, override_ai_client, mock_ai_client):
         """Test successful session deletion. Creates session via API to avoid ObjectDeletedError."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         # Create session via API so we don't hold a fixture reference that gets deleted
@@ -276,9 +276,9 @@ class TestSessionEndpoints:
         assert get_response.status_code == 404
 
     @pytest.mark.integration
-    def test_delete_session_not_found(self, client, sample_user, override_auth):
+    def test_delete_session_not_found(self, client, sample_user, mock_current_user, override_auth):
         """Test session deletion for non-existent session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
 
@@ -290,9 +290,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_delete_session_invalid_id(self, client, sample_user, override_auth):
+    def test_delete_session_invalid_id(self, client, sample_user, mock_current_user, override_auth):
         """Test session deletion with invalid ID format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         invalid_id = "invalid-uuid"
 
@@ -304,10 +304,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.integration
     def test_get_session_questions_success(
-        self, client, sample_interview_session, sample_session_question, sample_user, override_auth
+        self, client, sample_interview_session, sample_session_question, sample_user, mock_current_user, override_auth
     ):
         """Test successful session questions retrieval."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.get(f"/api/v1/sessions/{sample_interview_session.id}/questions")
 
@@ -317,9 +317,9 @@ class TestSessionEndpoints:
         assert all("id" in q for q in data) or len(data) >= 0
 
     @pytest.mark.integration
-    def test_get_session_questions_not_found(self, client, sample_user, override_auth):
+    def test_get_session_questions_not_found(self, client, sample_user, mock_current_user, override_auth):
         """Test session questions retrieval for non-existent session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
 
@@ -331,9 +331,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_get_session_questions_invalid_id(self, client, sample_user, override_auth):
+    def test_get_session_questions_invalid_id(self, client, sample_user, mock_current_user, override_auth):
         """Test session questions retrieval with invalid ID format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         invalid_id = "invalid-uuid"
 
@@ -345,10 +345,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.integration
     def test_add_question_to_session_success(
-        self, client, sample_interview_session, sample_question, sample_user, override_auth
+        self, client, sample_interview_session, sample_question, sample_user, mock_current_user, override_auth
     ):
         """Test successful question addition to session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         question_data = {
             "questions": ["What is your experience with Python and Django?"]
@@ -365,9 +365,9 @@ class TestSessionEndpoints:
         assert all("id" in q or "question_text" in q for q in data) if data else True
 
     @pytest.mark.integration
-    def test_add_question_to_session_not_found(self, client, sample_question, sample_user, override_auth):
+    def test_add_question_to_session_not_found(self, client, sample_question, sample_user, mock_current_user, override_auth):
         """Test question addition to non-existent session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
         question_data = {
@@ -385,9 +385,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_add_question_to_session_invalid_question_id(self, client, sample_interview_session, sample_user, override_auth):
+    def test_add_question_to_session_invalid_question_id(self, client, sample_interview_session, sample_user, mock_current_user, override_auth):
         """Test question addition with invalid question format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         question_data = {
             "questions": ["ab"]  # Too short - less than 5 chars
@@ -404,10 +404,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.integration
     def test_remove_question_from_session_success(
-        self, client, sample_interview_session, sample_session_question, sample_user, override_auth
+        self, client, sample_interview_session, sample_session_question, sample_user, mock_current_user, override_auth
     ):
         """Test successful question removal from session."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         response = client.delete(
             f"/api/v1/sessions/{sample_interview_session.id}/questions/{sample_session_question.id}"
@@ -419,9 +419,9 @@ class TestSessionEndpoints:
         assert get_response.status_code == 200
 
     @pytest.mark.integration
-    def test_remove_question_from_session_not_found(self, client, sample_interview_session, sample_user, override_auth):
+    def test_remove_question_from_session_not_found(self, client, sample_interview_session, sample_user, mock_current_user, override_auth):
         """Test question removal for non-existent session question."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         non_existent_id = "550e8400-e29b-41d4-a716-446655440999"
 
@@ -435,9 +435,9 @@ class TestSessionEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
-    def test_remove_question_from_session_invalid_id(self, client, sample_interview_session, sample_user, override_auth):
+    def test_remove_question_from_session_invalid_id(self, client, sample_interview_session, sample_user, mock_current_user, override_auth):
         """Test question removal with invalid ID format."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         invalid_id = "invalid-uuid"
 
@@ -450,9 +450,9 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_session_creation_with_ai_service_error(self, client, sample_user, override_auth):
+    def test_session_creation_with_ai_service_error(self, client, sample_user, mock_current_user, override_auth):
         """Test session creation when service raises (e.g. AI or downstream failure)."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
 
         session_data = {
             "user_id": str(sample_user.id),
@@ -476,10 +476,10 @@ class TestSessionEndpoints:
 
     @pytest.mark.integration
     def test_session_creation_with_database_error(
-        self, client, sample_user, override_auth, override_ai_client, mock_ai_client
+        self, client, sample_user, mock_current_user, override_auth, override_ai_client, mock_ai_client
     ):
         """Test session creation when database fails."""
-        override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
+        override_auth(mock_current_user)
         override_ai_client(mock_ai_client)
 
         session_data = {
