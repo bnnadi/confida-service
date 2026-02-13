@@ -102,14 +102,13 @@ class AuthService:
         """Get user by email address."""
         return self.db.query(User).filter(User.email == email).first()
     
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """Get user by ID."""
+    def get_user_by_id(self, user_id) -> Optional[User]:
+        """Get user by ID (accepts str or UUID)."""
         from uuid import UUID
         try:
-            # Convert string to UUID for database query
-            uuid_id = UUID(user_id)
+            uuid_id = user_id if isinstance(user_id, UUID) else UUID(str(user_id))
             return self.db.query(User).filter(User.id == uuid_id).first()
-        except ValueError:
+        except (ValueError, TypeError):
             return None
     
     def create_user(self, email: str, password: str, first_name: Optional[str] = None, 

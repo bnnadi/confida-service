@@ -43,8 +43,9 @@ class SpeechAnalyzer:
         words = transcript.lower().split()
         word_count = len(words)
         
-        # Count filler words
-        filler_count = sum(1 for word in words if word in self.FILLER_WORDS)
+        # Count filler words (strip punctuation before matching)
+        stripped_words = [word.strip(".,!?;:'\"()[]{}") for word in words]
+        filler_count = sum(1 for word in stripped_words if word in self.FILLER_WORDS)
         
         # Calculate pace (words per minute)
         # For real-time, we estimate based on word count and time

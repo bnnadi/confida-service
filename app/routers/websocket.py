@@ -67,7 +67,7 @@ class ConnectionManager:
     
     async def send_feedback(self, feedback: RealTimeFeedback, session_id: str):
         """Send feedback message to session."""
-        await self.send_personal_message(feedback.dict(), session_id)
+        await self.send_personal_message(feedback.model_dump(mode='json'), session_id)
 
 
 # Global connection manager
@@ -175,7 +175,7 @@ async def feedback_websocket(
         session_id=session_id,
         message="WebSocket connected successfully"
     )
-    await websocket.send_json(connection_status.dict())
+    await websocket.send_json(connection_status.model_dump(mode='json'))
     
     try:
         # Get session metadata for context
@@ -285,7 +285,7 @@ async def feedback_websocket(
             message="WebSocket disconnected"
         )
         try:
-            await websocket.send_json(disconnect_status.dict())
+            await websocket.send_json(disconnect_status.model_dump(mode='json'))
         except:
             pass
 

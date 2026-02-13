@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.services.database_service import get_db
 from app.services.analytics_service import AnalyticsService
+from app.dependencies import get_analytics_service
 from app.models.analytics_models import (
     PerformanceMetrics, SessionAnalytics, TrendAnalysis, ReportRequest, 
     ReportResponse, AnalyticsSummary, PerformanceComparison, AnalyticsFilter,
@@ -30,11 +31,6 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
-
-
-def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
-    """Dependency to get analytics service."""
-    return AnalyticsService(db)
 
 
 # =============================================================================
@@ -266,11 +262,11 @@ async def export_report(
             report = analytics_service.generate_report(report_request)
             return {
                 "message": "PDF export requires additional setup. Returning JSON data.",
-                "report": report.dict()
+                "report": report.model_dump()
             }
         else:
             report = analytics_service.generate_report(report_request)
-            return report.dict()
+            return report.model_dump()
         
     except HTTPException:
         raise
@@ -390,8 +386,8 @@ async def get_dashboard_metrics(
         trend = analytics_service.get_trend_analysis(user_id, "average_score", "30d")
         
         dashboard_data = {
-            "summary": summary.dict(),
-            "trend": trend.dict(),
+            "summary": summary.model_dump(),
+            "trend": trend.model_dump(),
             "last_updated": datetime.utcnow().isoformat()
         }
         

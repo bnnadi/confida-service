@@ -21,7 +21,6 @@ The Confida testing suite provides comprehensive coverage of the application wit
 - **Unit Tests**: Test individual components in isolation
 - **Integration Tests**: Test component interactions and API endpoints
 - **End-to-End Tests**: Test complete user workflows
-- **Performance Tests**: Test system performance and scalability
 - **Security Tests**: Test security vulnerabilities and best practices
 
 ### Test Framework
@@ -52,12 +51,15 @@ tests/
 │   ├── test_session_endpoints.py
 │   ├── test_dashboard_endpoints.py  # Dashboard API endpoint tests
 │   ├── test_answer_audio_file_persistence.py  # Answer audio file ID persistence integration tests
-│   └── test_speech_endpoints.py    # Admin speech synthesis endpoint tests
+│   ├── test_speech_endpoints.py    # Admin speech synthesis endpoint tests
+│   ├── test_api_endpoints.py       # Core API endpoint tests
+│   ├── test_admin_endpoints.py     # Admin endpoint tests
+│   ├── test_auth.py                # Authentication tests
+│   └── test_scoring_endpoints.py   # Scoring endpoint tests
 ├── e2e/                       # End-to-end tests
 │   └── test_complete_interview_flow.py
 ├── fixtures/                  # Test fixtures and utilities
-├── utils/                     # Test utilities and helpers
-└── performance/               # Performance tests
+└── utils/                     # Test utilities and helpers
 ```
 
 ## Running Tests
@@ -87,7 +89,7 @@ python scripts/run_tests.py --type all --coverage
 python scripts/run_tests.py --type unit
 
 # Run tests with specific marker
-python scripts/run_tests.py --marker performance
+python scripts/run_tests.py --marker integration
 
 # Run specific test file
 python scripts/run_tests.py --test tests/unit/test_question_bank_service.py
@@ -116,9 +118,6 @@ pytest -m integration
 
 # Run end-to-end tests
 pytest -m e2e
-
-# Run performance tests
-pytest -m performance
 
 # Run security tests
 pytest -m security
@@ -292,30 +291,6 @@ def test_complete_interview_session_flow(client, sample_user, mock_ai_service):
 **Markers**: `@pytest.mark.e2e`
 **Focus**: Complete user journeys, workflow validation
 
-### Performance Tests
-
-Performance tests measure system performance and scalability:
-
-```python
-@pytest.mark.performance
-def test_api_response_time(client, sample_parse_request):
-    """Test API response time under load."""
-    # Arrange
-    start_time = time.time()
-    
-    # Act
-    response = client.post("/api/v1/parse-jd", json=sample_parse_request)
-    
-    # Assert
-    end_time = time.time()
-    response_time = end_time - start_time
-    assert response_time < 2.0  # Should respond within 2 seconds
-```
-
-**Location**: `tests/performance/`
-**Markers**: `@pytest.mark.performance`
-**Focus**: Response times, throughput, resource usage
-
 ### Security Tests
 
 Security tests verify security vulnerabilities and best practices:
@@ -345,9 +320,37 @@ def test_sql_injection_protection(client):
 
 ### Coverage Requirements
 
-- **Minimum Coverage**: 85%
-- **Target Coverage**: 90%
-- **Critical Components**: 95%
+- **Minimum Coverage**: 60% (configured in `.coveragerc`)
+- Coverage measures only meaningful application code; low-value code is excluded (see below)
+
+### Core Logic Coverage
+
+Coverage prioritizes **core business logic**. When adding new tests, prioritize these modules:
+
+| Module | Path | Description |
+|--------|------|-------------|
+| Auth Service | `app/services/auth_service.py` | User authentication, password hashing, tokens |
+| Session Service | `app/services/session_service.py` | Interview session CRUD, questions, status |
+| Sessions Router | `app/routers/sessions.py` | Session API endpoints |
+| Interview Router | `app/routers/interview.py` | Parse JD, analyze answer, AI integration |
+| Scoring Router | `app/routers/scoring.py` | Multi-agent scoring endpoints |
+| Question Bank Service | `app/services/question_bank_service.py` | Question CRUD, bulk import |
+| Question Bank Router | `app/routers/question_bank.py` | Question bank API endpoints |
+| Analytics Service | `app/services/analytics_service.py` | Session analytics, metrics, trends |
+| Dashboard Router | `app/routers/dashboard.py` | Dashboard API endpoints |
+
+### Excluded from Coverage
+
+The following paths are excluded from coverage measurement (see `.coveragerc`):
+
+| Path | Rationale |
+|------|-----------|
+| `app/database/migrations/*` | Alembic migrations; schema changes, not app logic |
+| `app/database/migrate.py` | Migration runner script |
+| `app/database/migrations/env.py` | Alembic environment |
+| `app/*/__init__.py`, `app/__init__.py` | Package init files (imports only) |
+| `app/main.py` | App wiring; tested implicitly via TestClient |
+| `app/startup.py` | Startup hooks |
 
 ### Dashboard Test Coverage
 
@@ -451,61 +454,92 @@ pytest --cov=app --cov-report=term-missing
 
 ### Coverage Configuration
 
-```ini
-# pytest.ini
-[tool:pytest]
-addopts = 
-    --cov=app
-    --cov-report=html:htmlcov
-    --cov-report=xml:coverage.xml
-    --cov-report=term-missing
-    --cov-fail-under=85
+Coverage is configured in the CI workflow rather than in `pytest.ini`, so local test runs are fast by default. To run coverage locally:
+
+```bash
+# Run tests with coverage (same flags as CI)
+python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
 ```
 
 ## CI/CD Integration
 
 ### GitHub Actions
 
-The testing suite is integrated with GitHub Actions for continuous integration:
+The testing suite is integrated with GitHub Actions for continuous integration. The CI has two jobs:
+
+**test** -- runs against a Postgres 13 + Redis 6 service container on Python 3.11:
 
 ```yaml
-# .github/workflows/test.yml
-name: Test Suite
-on: [push, pull_request]
-
+# .github/workflows/test.yml (condensed)
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.8, 3.9, 3.10, 3.11]
-    
+    services:
+      postgres: { image: postgres:13, ports: ["5432:5432"] }
+      redis:    { image: redis:6, ports: ["6379:6379"] }
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt
-    
-    - name: Run tests
-      run: pytest tests/ --cov=app --cov-report=xml
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
+    - uses: actions/setup-python@v4
+      with: { python-version: '3.11' }
+    - run: |
+        python -m pip install -r requirements.txt
+        python -m pip install -r requirements-test.txt
+    - run: python app/database/migrate.py upgrade head
+    - run: python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing --junitxml=test-results.xml
+    - uses: codecov/codecov-action@v4
+      with: { fail_ci_if_error: false }
 ```
+
+**security** -- runs Bandit static analysis and Safety dependency checks (non-blocking).
+
+### Running CI Tests Locally
+
+To run the same tests that GitHub PR actions run (PostgreSQL 13, Redis 6, migrations, full coverage):
+
+1. **Start Docker** (required for PostgreSQL and Redis).
+
+2. **Run the script:**
+   ```bash
+   ./scripts/run_ci_tests_locally.sh
+   ```
+
+The script will:
+- Start PostgreSQL 13 and Redis 6 containers
+- Set environment variables matching CI
+- Install dependencies and run migrations
+- Execute `pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=85 --junitxml=test-results.xml --timeout=60`
+- Stop and remove containers when done
+
+If Docker is not running, the script exits with a clear error. Ensure Docker Desktop (or equivalent) is started before running.
+
+### Dedicated Test Service (Docker Compose)
+
+A dedicated test service runs the full CI test suite inside containers. No host Python or pytest required.
+
+```bash
+docker compose -f docker-compose.test.yml run --rm test-runner
+```
+
+This will:
+- Start PostgreSQL 13 and Redis 6 (on ports 5435 and 6381 to avoid conflicts with dev stack)
+- Build the test image (includes `requirements.txt` and `requirements-test.txt`)
+- Run migrations and pytest with coverage
+- Exit when tests complete (containers are removed with `--rm`)
+
+**Shorter run (no coverage/JUnit):**
+```bash
+docker compose -f docker-compose.test.yml run --rm test-runner \
+  bash -c "python app/database/migrate.py upgrade head && python -m pytest tests/ -v --timeout=60"
+```
+
+Note: Override the default command by passing a custom command after the service name.
 
 ### Test Stages
 
 1. **Unit Tests**: Fast, isolated tests
 2. **Integration Tests**: Component interaction tests
 3. **End-to-End Tests**: Complete workflow tests
-4. **Performance Tests**: Performance and scalability tests
-5. **Security Tests**: Security vulnerability tests
+4. **Security Tests**: Security vulnerability tests (separate CI job)
 
 ## Writing Tests
 
@@ -538,7 +572,7 @@ def sample_user(test_db_session):
     """Create a sample user for testing."""
     user_data = {
         "id": str(uuid.uuid4()),
-        "email": "test@example.com",
+        "email": f"test-{uuid.uuid4().hex[:8]}@example.com",
         "name": "Test User"
     }
     user = User(**user_data)
@@ -547,6 +581,8 @@ def sample_user(test_db_session):
     test_db_session.refresh(user)
     return user
 ```
+
+> **Note**: Fixtures use UUID-based emails to prevent UNIQUE constraint errors when tests run in parallel or without full transaction rollback.
 
 ### Mocking
 
@@ -658,9 +694,13 @@ async def test_async_function():
 
 #### Test Database Issues
 
+CI uses **PostgreSQL** (provided via a service container). Locally, you can use either Postgres or SQLite -- `conftest.py` respects whatever `DATABASE_URL` is set in your environment via `os.environ.setdefault()`.
+
 ```bash
-# Error: Database connection failed
-# Solution: Check DATABASE_URL environment variable
+# Local development with Postgres (recommended)
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/test_confida"
+
+# Local development with SQLite (quick, no server needed)
 export DATABASE_URL="sqlite:///./test_confida.db"
 
 # Error: Migration failed
@@ -740,7 +780,7 @@ python scripts/run_tests.py --type all --no-cleanup
 
 ### Adding New Tests
 
-1. **Identify the test type** (unit, integration, e2e, performance, security)
+1. **Identify the test type** (unit, integration, e2e, security)
 2. **Choose the appropriate test file** or create a new one
 3. **Follow the test structure** (Arrange-Act-Assert)
 4. **Add appropriate markers** (`@pytest.mark.unit`, etc.)

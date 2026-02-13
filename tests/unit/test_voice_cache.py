@@ -10,6 +10,7 @@ Tests the voice cache service including:
 """
 import pytest
 import asyncio
+import uuid
 from unittest.mock import AsyncMock, patch, MagicMock
 from app.services.voice_cache import VoiceCacheService, get_voice_cache_service
 
@@ -117,9 +118,10 @@ class TestVoiceCacheService:
             await asyncio.sleep(0.1)  # Simulate synthesis time
             return {"audio_data": "encoded_audio", "provider": "test"}
         
-        # Simulate 5 concurrent requests for same cache key
+        # Use unique text with uuid to avoid cache hits from previous test runs
+        unique_text = f"singleflight-unique-text-pattern-{uuid.uuid4()}"
         cache_key = voice_cache.generate_cache_key(
-            "test text", "voice1", "mp3", voice_cache.generate_settings_hash()
+            unique_text, "singleflight-voice", "mp3", voice_cache.generate_settings_hash()
         )
         
         async def request():
@@ -144,8 +146,10 @@ class TestVoiceCacheService:
         async def failing_synthesize():
             raise ValueError("Synthesis failed")
         
+        # Use unique text with uuid to avoid cache hits from previous test runs
+        unique_text = f"singleflight-unique-text-error-{uuid.uuid4()}"
         cache_key = voice_cache.generate_cache_key(
-            "test text", "voice1", "mp3", voice_cache.generate_settings_hash()
+            unique_text, "singleflight-error-voice", "mp3", voice_cache.generate_settings_hash()
         )
         
         async def request():

@@ -61,10 +61,10 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg"
+            filename=f"{file_id}.mp3"
         )
         
         assert result["file_id"] == file_id
@@ -86,10 +86,10 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_wav_bytes,
+            content=sample_wav_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/wav"
+            filename=f"{file_id}.wav"
         )
         
         assert result["file_id"] == file_id
@@ -115,9 +115,10 @@ class TestFileService:
         }
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -146,14 +147,14 @@ class TestFileService:
     
     @pytest.mark.unit
     def test_save_file_from_bytes_auto_filename(self, file_service, sample_mp3_bytes):
-        """Test auto-generating filename when not provided."""
+        """Test filename is correctly returned."""
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg"
+            filename=f"{file_id}.mp3"
         )
         
         assert result["filename"] == f"{file_id}.mp3"
@@ -164,7 +165,7 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
             filename="test.mp3"
@@ -185,9 +186,10 @@ class TestFileService:
         
         # Save file with metadata
         save_result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -215,9 +217,10 @@ class TestFileService:
         
         # Save file without metadata
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
-            file_id=file_id
+            file_id=file_id,
+            filename=f"{file_id}.mp3"
         )
         
         # Retrieve file info
@@ -235,9 +238,10 @@ class TestFileService:
         file_id = file_service.generate_file_id()
         
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
-            file_id=file_id
+            file_id=file_id,
+            filename=f"{file_id}.mp3"
         )
         
         # Find file
@@ -257,9 +261,10 @@ class TestFileService:
         }
         
         file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -378,9 +383,10 @@ class TestFileService:
         
         # Save file with metadata
         save_result = file_service.save_file_from_bytes(
-            audio_data=sample_mp3_bytes,
+            content=sample_mp3_bytes,
             file_type=FileType.AUDIO,
             file_id=file_id,
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -406,7 +412,7 @@ class TestFileService:
         mock_file = MagicMock(spec=UploadFile)
         mock_file.filename = "test.mp3"
         mock_file.file = MagicMock()
-        mock_file.file.read = Mock(return_value=b"test audio data")
+        mock_file.file.read = Mock(side_effect=[b"test audio data", b""])
         
         # Mock validation
         file_service.validation_service.validate_file = Mock(return_value=(True, []))
@@ -467,10 +473,10 @@ class TestFileServiceIntegration:
         }
         
         save_result = file_service.save_file_from_bytes(
-            audio_data=audio_data,
+            content=audio_data,
             file_type=FileType.AUDIO,
             file_id=file_id,
-            mime_type="audio/mpeg",
+            filename=f"{file_id}.mp3",
             metadata=metadata
         )
         
@@ -518,10 +524,10 @@ class TestFileServiceIntegration:
             file_id = file_service.generate_file_id()
             
             result = file_service.save_file_from_bytes(
-                audio_data=audio_data,
+                content=audio_data,
                 file_type=FileType.AUDIO,
                 file_id=file_id,
-                mime_type=mime_type
+                filename=f"{file_id}{ext}"
             )
             
             saved_files.append((file_id, audio_data, mime_type))

@@ -61,7 +61,7 @@ class AuthMiddleware:
             user_role = user.role if hasattr(user, 'role') and user.role else (token_payload.role if hasattr(token_payload, 'role') and token_payload.role else "user")
             
             return {
-                "id": user.id,
+                "id": str(user.id),
                 "email": user.email,
                 "first_name": first_name,
                 "last_name": last_name,

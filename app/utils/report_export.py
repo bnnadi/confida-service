@@ -308,7 +308,7 @@ class ReportExporter:
                     "format": "json",
                     "version": "1.0.0"
                 },
-                "report": report.dict()
+                "report": report.model_dump()
             }
             
             return json.dumps(export_data, indent=2, default=str)

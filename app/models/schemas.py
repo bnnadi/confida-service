@@ -1,4 +1,7 @@
-from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Dict, Any, Literal
 from enum import Enum
 
@@ -66,7 +69,7 @@ class AnalyzeAnswerResponse(BaseModel):
 
 # Database response models for interview data
 class QuestionResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     question_text: str
     question_order: int
     created_at: str
@@ -75,28 +78,67 @@ class QuestionResponse(BaseModel):
         from_attributes = True
 
 class AnswerResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     answer_text: str
     analysis_result: Optional[Dict[str, Any]] = None
     score: Optional[Dict[str, Any]] = None
     audio_file_id: Optional[str] = None
     created_at: str
-    
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def datetime_to_str(cls, v):
+        if v is None:
+            return ""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
     class Config:
         from_attributes = True
 
 class InterviewSessionResponse(BaseModel):
-    id: int
-    user_id: int
+    id: str  # UUID as string
+    user_id: str  # UUID as string
     mode: str
     role: str
     job_description: Optional[str] = None
     scenario_id: Optional[str] = None
     question_source: str
     status: str
+    total_questions: Optional[int] = 0
+    completed_questions: Optional[int] = 0
     created_at: str
     updated_at: Optional[str] = None
-    
+
+    @field_validator("id", "user_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def datetime_to_str(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
+    @field_validator("total_questions", "completed_questions", mode="before")
+    @classmethod
+    def int_default(cls, v):
+        return v if v is not None else 0
+
     class Config:
         from_attributes = True
 
@@ -120,6 +162,15 @@ class CreateSessionRequest(BaseModel):
     job_title: Optional[str] = Field(None, description="Job title for interview mode")
     job_description: Optional[str] = Field(None, description="Job description for interview mode")
     
+    @field_validator('user_id')
+    @classmethod
+    def validate_user_id_uuid(cls, v):
+        try:
+            UUID(v)
+        except (ValueError, TypeError):
+            raise ValueError('user_id must be a valid UUID format')
+        return v
+
     @field_validator('mode')
     @classmethod
     def validate_mode(cls, v):
@@ -145,11 +196,25 @@ class CreateSessionRequest(BaseModel):
     @classmethod
     def validate_job_fields(cls, v, info):
         if info.data.get('mode') == 'interview':
-            if not v or not v.strip():
-                raise ValueError(f'{"job_title" if "job_title" in info.data else "job_description"} is required for interview mode')
-            if len(v.strip()) < 10:
-                raise ValueError(f'{"job_title" if "job_title" in info.data else "job_description"} must be at least 10 characters')
-        return v.strip() if v else v
+            if not v or (isinstance(v, str) and not v.strip()):
+                raise ValueError('job_title and job_description are required for interview mode')
+            if isinstance(v, str) and len(v.strip()) < 10:
+                raise ValueError('job_title and job_description must be at least 10 characters')
+        return v.strip() if v and isinstance(v, str) else v
+
+    @model_validator(mode='after')
+    def validate_interview_job_fields(self):
+        """Ensure job_title and job_description are provided for interview mode."""
+        if self.mode == 'interview':
+            if not self.job_title or (isinstance(self.job_title, str) and not self.job_title.strip()):
+                raise ValueError('job_title is required for interview mode')
+            if not self.job_description or (isinstance(self.job_description, str) and not self.job_description.strip()):
+                raise ValueError('job_description is required for interview mode')
+            if len((self.job_title or '').strip()) < 10:
+                raise ValueError('job_title must be at least 10 characters')
+            if len((self.job_description or '').strip()) < 10:
+                raise ValueError('job_description must be at least 10 characters')
+        return self
 
 class AddQuestionsRequest(BaseModel):
     questions: List[str] = Field(..., min_items=1, max_items=20, description="List of interview questions")
@@ -295,9 +360,9 @@ class UserProfileUpdateRequest(BaseModel):
     skills: Optional[List[str]] = Field(None, description="User skills")
 
 class AuthStatusResponse(BaseModel):
-    is_authenticated: bool
-    user: Optional[UserResponse] = None
-    token_expires_in: Optional[int] = None
+    authenticated: bool
+    user: Optional[dict] = None
+    expires_at: Optional[str] = None
 
 class AuthErrorResponse(BaseModel):
     error: str

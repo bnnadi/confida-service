@@ -82,7 +82,7 @@ class RealTimeFeedbackService:
                 suggestions=suggestions,
                 metrics=metrics,
                 data={
-                    "speech_analysis": speech_analysis.dict(),
+                    "speech_analysis": speech_analysis.model_dump(),
                     "question_id": question_id
                 }
             )
@@ -140,7 +140,7 @@ class RealTimeFeedbackService:
                 suggestions=suggestions,
                 metrics=metrics,
                 data={
-                    "speech_analysis": speech_analysis.dict(),
+                    "speech_analysis": speech_analysis.model_dump(),
                     "question_id": question_id,
                     "transcript": transcript
                 }

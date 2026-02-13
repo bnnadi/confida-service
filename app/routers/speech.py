@@ -8,16 +8,13 @@ from app.services.database_service import get_db
 from app.models.schemas import FileType
 from app.utils.validation import ValidationService
 from app.utils.logger import get_logger
-from app.dependencies import get_ai_client_dependency
+from app.dependencies import get_ai_client_dependency, get_file_service, get_validation_service, get_tts_service
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/speech", tags=["speech"])
-
-def get_file_service(db = Depends(get_db)) -> FileService:
-    return FileService(db)
 
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio_endpoint(
@@ -26,7 +23,8 @@ async def transcribe_audio_endpoint(
     save_file: bool = Query(False, description="Whether to save the uploaded file for future reference"),
     current_user: dict = Depends(get_current_user_required),
     file_service: FileService = Depends(get_file_service),
-    ai_client = Depends(get_ai_client_dependency)
+    ai_client = Depends(get_ai_client_dependency),
+    validation_service: ValidationService = Depends(get_validation_service)
 ):
     """
     Transcribe audio file to text using AI service microservice.
@@ -35,7 +33,6 @@ async def transcribe_audio_endpoint(
     """
     try:
         # Validate audio file using validation service
-        validation_service = ValidationService()
         is_valid, errors = validation_service.validate_file(audio_file, FileType.AUDIO)
         if not is_valid:
             raise HTTPException(
@@ -85,11 +82,10 @@ async def transcribe_audio_endpoint(
             if save_file:
                 file_id = file_service.generate_file_id()
                 saved_file_info = file_service.save_file_from_bytes(
-                    audio_data=audio_data,
+                    content=audio_data,
                     file_type=FileType.AUDIO,
                     file_id=file_id,
                     filename=filename,
-                    mime_type=mime_type,
                     metadata={
                         "uploaded_by": current_user["id"],
                         "description": f"Transcribed audio: {filename}"
@@ -285,7 +281,8 @@ async def list_audio_files(
 @router.post("/synthesize", response_model=SynthesizeResponse)
 async def synthesize_speech(
     request: SynthesizeRequest,
-    current_user: dict = Depends(get_current_admin)
+    current_user: dict = Depends(get_current_admin),
+    tts_service: TTSService = Depends(get_tts_service)
 ):
     """
     Synthesize text to speech (Admin Tooling Endpoint).
@@ -294,8 +291,6 @@ async def synthesize_speech(
     Requires admin authentication.
     """
     try:
-        # Initialize TTS service
-        tts_service = TTSService()
         
         # Synthesize text to speech
         audio_bytes = await tts_service.synthesize(

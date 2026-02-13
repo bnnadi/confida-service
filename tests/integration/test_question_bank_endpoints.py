@@ -6,7 +6,6 @@ CRUD operations, search, analytics, and admin functionality.
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 from app.database.models import Question
 import uuid
 
@@ -15,10 +14,12 @@ class TestQuestionBankEndpoints:
     """Test cases for Question Bank API endpoints."""
     
     @pytest.mark.integration
-    def test_create_question_success(self, client, admin_user_token, db_session):
+    def test_create_question_success(self, client, admin_user, override_admin_auth, db_session):
         """Test successful question creation."""
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
+        unique_text = f"What is Python? (unique-{uuid.uuid4().hex[:8]})"
         question_data = {
-            "question_text": "What is Python?",
+            "question_text": unique_text,
             "category": "technical",
             "difficulty_level": "medium",
             "compatible_roles": ["Python Developer"],
@@ -26,11 +27,7 @@ class TestQuestionBankEndpoints:
             "industry_tags": ["tech"]
         }
         
-        response = client.post(
-            "/api/v1/questions",
-            json=question_data,
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response = client.post("/api/v1/questions", json=question_data)
         
         assert response.status_code == 201
         data = response.json()
@@ -52,27 +49,21 @@ class TestQuestionBankEndpoints:
         assert response.status_code == 401
     
     @pytest.mark.integration
-    def test_create_question_duplicate(self, client, admin_user_token, db_session):
+    def test_create_question_duplicate(self, client, admin_user, override_admin_auth, db_session):
         """Test creating duplicate question."""
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
+        unique_text = f"Duplicate test question {uuid.uuid4().hex[:8]}"
         question_data = {
-            "question_text": "What is Python?",
+            "question_text": unique_text,
             "category": "technical"
         }
         
         # Create first question
-        response1 = client.post(
-            "/api/v1/questions",
-            json=question_data,
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response1 = client.post("/api/v1/questions", json=question_data)
         assert response1.status_code == 201
         
         # Try to create duplicate
-        response2 = client.post(
-            "/api/v1/questions",
-            json=question_data,
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response2 = client.post("/api/v1/questions", json=question_data)
         assert response2.status_code == 400
     
     @pytest.mark.integration
@@ -120,19 +111,16 @@ class TestQuestionBankEndpoints:
         assert response.status_code == 404
     
     @pytest.mark.integration
-    def test_update_question(self, client, admin_user_token, db_session, sample_question):
+    def test_update_question(self, client, admin_user, override_admin_auth, db_session, sample_question):
         """Test updating a question."""
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         question_id = str(sample_question.id)
         update_data = {
             "category": "updated_category",
             "difficulty_level": "hard"
         }
         
-        response = client.put(
-            f"/api/v1/questions/{question_id}",
-            json=update_data,
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response = client.put(f"/api/v1/questions/{question_id}", json=update_data)
         
         assert response.status_code == 200
         data = response.json()
@@ -140,8 +128,9 @@ class TestQuestionBankEndpoints:
         assert data["difficulty_level"] == "hard"
     
     @pytest.mark.integration
-    def test_delete_question(self, client, admin_user_token, db_session):
+    def test_delete_question(self, client, admin_user, override_admin_auth, db_session):
         """Test deleting a question."""
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         # Create a question first
         question = Question(
             question_text="Test question to delete",
@@ -152,10 +141,7 @@ class TestQuestionBankEndpoints:
         db_session.commit()
         
         question_id = str(question.id)
-        response = client.delete(
-            f"/api/v1/questions/{question_id}",
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response = client.delete(f"/api/v1/questions/{question_id}")
         
         assert response.status_code == 204
         
@@ -231,8 +217,9 @@ class TestQuestionBankEndpoints:
         assert "questions_by_difficulty" in data
     
     @pytest.mark.integration
-    def test_bulk_import_questions(self, client, admin_user_token, db_session):
+    def test_bulk_import_questions(self, client, admin_user, override_admin_auth, db_session):
         """Test bulk importing questions."""
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         questions_data = [
             {
                 "question_text": "Question 1",
@@ -246,11 +233,7 @@ class TestQuestionBankEndpoints:
             }
         ]
         
-        response = client.post(
-            "/api/v1/questions/admin/bulk-import",
-            json=questions_data,
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        response = client.post("/api/v1/questions/admin/bulk-import", json=questions_data)
         
         assert response.status_code == 200
         data = response.json()
@@ -258,12 +241,10 @@ class TestQuestionBankEndpoints:
         assert "failed_count" in data
     
     @pytest.mark.integration
-    def test_quality_check(self, client, admin_user_token, db_session):
+    def test_quality_check(self, client, admin_user, override_admin_auth, db_session):
         """Test running quality check."""
-        response = client.post(
-            "/api/v1/questions/admin/quality-check",
-            headers={"Authorization": f"Bearer {admin_user_token}"}
-        )
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
+        response = client.post("/api/v1/questions/admin/quality-check")
         
         assert response.status_code == 200
         data = response.json()

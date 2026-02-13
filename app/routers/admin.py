@@ -1,14 +1,24 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.config import settings
 from app.utils.service_tester import ServiceTester
-# handle_service_errors import removed as it was unused
-# Exception imports removed as they were unused
 from app.dependencies import get_ai_client_dependency
+from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+_rate_limiter: Optional[EnhancedRateLimiter] = None
+
+
+def _get_rate_limiter() -> EnhancedRateLimiter:
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = EnhancedRateLimiter()
+    return _rate_limiter
 
 @router.get("/services/status")
 async def get_services_status(ai_client=Depends(get_ai_client_dependency)):
@@ -107,8 +117,8 @@ async def get_configuration():
             "features": {
                 "ai_services": {
                     "ai_service_microservice_enabled": bool(settings.AI_SERVICE_URL),
-                    "ai_service_fallback_enabled": settings.AI_SERVICE_FALLBACK_ENABLED,
-                    "ollama_enabled": bool(settings.OLLAMA_BASE_URL),
+                    "ai_service_fallback_enabled": getattr(settings, 'AI_SERVICE_FALLBACK_ENABLED', False),
+                    "ollama_enabled": settings.is_ollama_configured,
                     "openai_enabled": settings.is_openai_configured,
                     "anthropic_enabled": settings.is_anthropic_configured
                 },
@@ -235,9 +245,7 @@ async def get_rate_limit_status(client_id: str, user_type: str = "free"):
     Get rate limit status for a specific client.
     """
     try:
-        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
-        
-        rate_limiter = EnhancedRateLimiter()
+        rate_limiter = _get_rate_limiter()
         status = rate_limiter.get_rate_limit_status(client_id, user_type)
         
         return {
@@ -259,9 +267,7 @@ async def reset_rate_limits(client_id: str, user_type: str = "free"):
     Reset rate limits for a specific client.
     """
     try:
-        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
-        
-        rate_limiter = EnhancedRateLimiter()
+        rate_limiter = _get_rate_limiter()
         success = rate_limiter.reset_rate_limit(client_id, user_type)
         
         if success:
@@ -289,9 +295,6 @@ async def test_rate_limits():
     Test rate limiting configuration.
     """
     try:
-        from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
-        from fastapi import Request
-        
         # Create a mock request for testing
         class MockRequest:
             def __init__(self):
@@ -299,7 +302,7 @@ async def test_rate_limits():
                 self.client = type('obj', (object,), {'host': '127.0.0.1'})()
                 self.state = type('obj', (object,), {'user_type': 'free'})()
         
-        rate_limiter = EnhancedRateLimiter()
+        rate_limiter = _get_rate_limiter()
         mock_request = MockRequest()
         
         # Test rate limit check

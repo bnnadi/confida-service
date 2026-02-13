@@ -17,8 +17,9 @@ class TestQuestionBankService:
     def test_create_question(self, db_session):
         """Test creating a question."""
         service = QuestionBankService(db_session)
+        unique_text = f"What is Python? {uuid.uuid4().hex[:8]}"
         question_data = QuestionCreateRequest(
-            question_text="What is Python?",
+            question_text=unique_text,
             category="technical",
             difficulty_level="medium",
             compatible_roles=["Python Developer"],
@@ -37,8 +38,9 @@ class TestQuestionBankService:
     def test_create_question_duplicate(self, db_session):
         """Test creating duplicate question raises error."""
         service = QuestionBankService(db_session)
+        unique_text = f"What is Python? {uuid.uuid4().hex[:8]}"
         question_data = QuestionCreateRequest(
-            question_text="What is Python?",
+            question_text=unique_text,
             category="technical"
         )
         
@@ -46,7 +48,7 @@ class TestQuestionBankService:
         service.create_question(question_data)
         db_session.commit()
         
-        # Try to create duplicate
+        # Try to create duplicate (same text)
         with pytest.raises(ValueError, match="already exists"):
             service.create_question(question_data)
     
@@ -120,22 +122,23 @@ class TestQuestionBankService:
         """Test getting questions with pagination."""
         service = QuestionBankService(db_session)
         
-        # Create multiple questions
+        # Create multiple questions with unique category to isolate from other tests
+        unique_cat = f"paginate-{uuid.uuid4().hex[:8]}"
         for i in range(5):
             question = Question(
-                question_text=f"Question {i}",
-                category="test",
+                question_text=f"Pagination question {i}",
+                category=unique_cat,
                 difficulty_level="easy"
             )
             db_session.add(question)
         db_session.commit()
         
-        # Get first page
-        page1 = service.get_questions(limit=2, offset=0)
+        # Get first page (filter by category for deterministic order)
+        page1 = service.get_questions(category=unique_cat, limit=2, offset=0)
         assert len(page1) == 2
         
         # Get second page
-        page2 = service.get_questions(limit=2, offset=2)
+        page2 = service.get_questions(category=unique_cat, limit=2, offset=2)
         assert len(page2) == 2
         assert page1[0].id != page2[0].id
     
@@ -248,9 +251,11 @@ class TestQuestionBankService:
         """Test bulk importing questions."""
         service = QuestionBankService(db_session)
         
+        # Use unique text to avoid collisions with other tests
+        unique_prefix = uuid.uuid4().hex[:8]
         questions_data = [
             QuestionCreateRequest(
-                question_text=f"Question {i}",
+                question_text=f"Bulk question {i} {unique_prefix}",
                 category="test",
                 difficulty_level="easy"
             )

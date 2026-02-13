@@ -25,7 +25,11 @@ class ParsingStrategy:
 
 class QualityValidator:
     """Validates question quality and content safety."""
-    
+
+    def __init__(self, validation_service: Optional[ValidationService] = None):
+        """Initialize with optional ValidationService (injectable for testability)."""
+        self.validation_service = validation_service or ValidationService()
+
     # Content safety patterns
     INAPPROPRIATE_PATTERNS = [
         r'\b(sex|sexual|nude|naked|porn|xxx)\b',
@@ -49,32 +53,30 @@ class QualityValidator:
     MIN_WORD_COUNT = 5
     MAX_WORD_COUNT = 100
     
-    @classmethod
-    def validate_question_quality(cls, question: str) -> Tuple[bool, List[str]]:
+    def validate_question_quality(self, question: str) -> Tuple[bool, List[str]]:
         """Validate question quality and return issues if any."""
         issues = []
         
         # Use validation service for basic quality checks
-        validation_service = ValidationService()
-        _, basic_issues = validation_service.validate_quality(
+        _, basic_issues = self.validation_service.validate_quality(
             question, 
-            cls.MIN_QUESTION_LENGTH, 
-            cls.MAX_QUESTION_LENGTH,
-            cls.MIN_WORD_COUNT, 
-            cls.MAX_WORD_COUNT
+            self.MIN_QUESTION_LENGTH, 
+            self.MAX_QUESTION_LENGTH,
+            self.MIN_WORD_COUNT, 
+            self.MAX_WORD_COUNT
         )
         issues.extend(basic_issues)
         
         # Content safety validation
-        if cls._contains_inappropriate_content(question):
+        if self._contains_inappropriate_content(question):
             issues.append("Question contains inappropriate content")
         
         # AI failure detection
-        if cls._detects_ai_failure(question):
+        if self._detects_ai_failure(question):
             issues.append("Question appears to be an AI failure response")
         
         # Clarity validation
-        if cls._is_unclear(question):
+        if self._is_unclear(question):
             issues.append("Question is unclear or poorly formatted")
         
         return len(issues) == 0, issues
@@ -115,13 +117,18 @@ class QualityValidator:
 
 class ResponseParser:
     """Consolidated response parser with strategy pattern and quality validation."""
-    
-    def __init__(self, config_path: Optional[str] = None):
+
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        validation_service: Optional[ValidationService] = None,
+    ):
+        """Initialize with optional ValidationService (injectable for testability)."""
         # Load configuration from file or use defaults
         self.config = self._load_config(config_path)
         
         # Quality validator
-        self.quality_validator = QualityValidator()
+        self.quality_validator = QualityValidator(validation_service=validation_service)
     
     def _load_config(self, _config_path: Optional[str] = None) -> Dict[str, Any]:
         """Load parsing configuration - simplified version."""

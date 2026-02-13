@@ -1,0 +1,7 @@
+"""
+E2E test configuration.
+
+Uses root conftest's client fixture which overrides get_db with test db_session
+so the app sees fixture data (sample_user, etc.) in the same transaction
+during HTTP requests.
+"""

@@ -377,7 +377,7 @@ class TTSService:
                     logger.warning(f"{provider_type} provider failed: {e}")
                     last_error = e
             
-            # All providers failed
+            # All providers failed - re-raise last error to preserve original exception type
             if last_error:
                 raise last_error
             raise TTSProviderError(

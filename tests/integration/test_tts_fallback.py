@@ -5,7 +5,6 @@ Tests the complete TTS service with fallback chain, circuit breaker,
 and retry logic in realistic scenarios.
 """
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
 from app.services.tts.base import TTSProviderError
 from app.services.tts.service import CircuitBreaker
@@ -60,7 +59,7 @@ class TestTTSFallbackBehavior:
         
         service = tts_service_with_providers(primary_provider, fallback_provider)
         
-        with pytest.raises(TTSProviderError, match="All TTS providers failed"):
+        with pytest.raises(TTSProviderError, match="Fallback provider failed"):
             await service.synthesize("Hello world", use_cache=False)
     
     @pytest.mark.integration
@@ -91,20 +90,21 @@ class TestTTSFallbackBehavior:
         provider = AsyncMock()
         provider.synthesize = AsyncMock(return_value=b"audio_data")
         
+        import time
+        
         circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=1.0)  # 1 second
         # Open the circuit
         for _ in range(5):
             circuit_breaker.record_failure()
         
-        # Wait for recovery timeout
-        await asyncio.sleep(1.1)
-        
-        service = tts_service_with_providers(provider)
-        service.circuit_breakers["coqui"] = circuit_breaker
-        
-        # Should succeed now (circuit is half-open)
-        audio_data = await service.synthesize("Hello world", use_cache=False)
-        assert audio_data == b"audio_data"
+        # Fast-forward past recovery timeout instead of sleeping
+        with patch('app.services.tts.service.time.time', return_value=time.time() + 1.1):
+            service = tts_service_with_providers(provider)
+            service.circuit_breakers["coqui"] = circuit_breaker
+            
+            # Should succeed now (circuit is half-open)
+            audio_data = await service.synthesize("Hello world", use_cache=False)
+            assert audio_data == b"audio_data"
         
         # Circuit should be closed after success
         assert circuit_breaker.state == "closed"
@@ -129,7 +129,7 @@ class TestTTSProviderFactoryIntegration:
             provider = TTSProviderFactory.create_provider("coqui")
             
             assert provider is not None
-            assert isinstance(provider, type(TTSProviderFactory.PROVIDER_REGISTRY["coqui"]))
+            assert isinstance(provider, TTSProviderFactory.PROVIDER_REGISTRY["coqui"])
             assert provider.config["voice_id"] == "test-voice"
             assert provider.config["timeout"] == 30
     

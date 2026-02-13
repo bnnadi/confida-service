@@ -144,7 +144,7 @@ async def refresh_token(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(
+async def get_me(
     current_user: dict = Depends(get_current_user_required)
 ):
     """
@@ -152,7 +152,14 @@ async def get_current_user(
     
     Returns the profile information of the currently authenticated user.
     """
-    return current_user
+    return UserResponse(
+        id=str(current_user["id"]),
+        email=current_user["email"],
+        name=current_user.get("full_name") or current_user.get("name") or f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip(),
+        is_active=current_user.get("is_active", True),
+        created_at=current_user["created_at"].isoformat() if current_user.get("created_at") else "",
+        last_login=current_user["last_login"].isoformat() if current_user.get("last_login") else None
+    )
 
 
 @router.put("/me", response_model=UserResponse)
@@ -171,7 +178,7 @@ async def update_user_profile(
     # Update profile
     user = auth_service.update_user_profile(
         user_id=current_user["id"],
-        **request.dict(exclude_unset=True)
+        **request.model_dump(exclude_unset=True)
     )
     
     logger.info(f"Profile updated for user: {user.email}")

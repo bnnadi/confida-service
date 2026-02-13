@@ -1,38 +1,29 @@
 import base64
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.middleware.auth_middleware import get_current_admin
+from app.dependencies import get_tts_service
 from app.services.tts.base import TTSProviderRateLimitError
 
 
-@pytest.fixture
-def admin_override():
-    """Provide a reusable admin dependency override."""
-    def _override():
-        return {
-            "id": "admin-user",
-            "email": "admin@example.com",
-            "role": "admin",
-        }
-
-    return _override
-
-
-def test_synthesize_speech_success(client: TestClient, admin_override):
+def test_synthesize_speech_success(client: TestClient, override_admin_auth, mock_admin_user):
     """Admins can synthesize speech and receive base64 audio payloads."""
-    client.app.dependency_overrides[get_current_admin] = admin_override
+    override_admin_auth(mock_admin_user)
 
     mock_audio_bytes = b"fake-audio"
     expected_base64 = base64.b64encode(mock_audio_bytes).decode("utf-8")
 
-    with patch("app.routers.speech.TTSService") as mock_tts_service:
-        mock_instance = mock_tts_service.return_value
-        mock_instance.synthesize = AsyncMock(return_value=mock_audio_bytes)
+    mock_instance = MagicMock()
+    mock_instance.settings.TTS_DEFAULT_VOICE_ID = "test-voice"
+    mock_instance.settings.TTS_DEFAULT_FORMAT = "mp3"
+    mock_instance.synthesize = AsyncMock(return_value=mock_audio_bytes)
 
+    app.dependency_overrides[get_tts_service] = lambda: mock_instance
+
+    try:
         payload = {
             "text": "Hello world",
             "voice_id": "test-voice",
@@ -56,20 +47,22 @@ def test_synthesize_speech_success(client: TestClient, admin_override):
             audio_format="mp3",
             use_cache=True,
         )
+    finally:
+        app.dependency_overrides.pop(get_tts_service, None)
 
-    client.app.dependency_overrides.clear()
 
-
-def test_synthesize_speech_rate_limit_error(client: TestClient, admin_override):
+def test_synthesize_speech_rate_limit_error(client: TestClient, override_admin_auth, mock_admin_user):
     """TTS provider rate limits are surfaced to admins as HTTP 429 errors."""
-    client.app.dependency_overrides[get_current_admin] = admin_override
+    override_admin_auth(mock_admin_user)
 
-    with patch("app.routers.speech.TTSService") as mock_tts_service:
-        mock_instance = mock_tts_service.return_value
-        mock_instance.synthesize = AsyncMock(
-            side_effect=TTSProviderRateLimitError("Rate limit exceeded")
-        )
+    mock_instance = MagicMock()
+    mock_instance.synthesize = AsyncMock(
+        side_effect=TTSProviderRateLimitError("Rate limit exceeded")
+    )
 
+    app.dependency_overrides[get_tts_service] = lambda: mock_instance
+
+    try:
         response = client.post(
             "/api/v1/speech/synthesize",
             json={"text": "Hello world"},
@@ -79,8 +72,8 @@ def test_synthesize_speech_rate_limit_error(client: TestClient, admin_override):
         assert "rate limit exceeded" in response.json()["detail"].lower()
 
         mock_instance.synthesize.assert_awaited_once()
-
-    client.app.dependency_overrides.clear()
+    finally:
+        app.dependency_overrides.pop(get_tts_service, None)
 
 
 def test_synthesize_speech_requires_admin(client: TestClient):

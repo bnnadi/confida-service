@@ -3,15 +3,15 @@ Tests for admin endpoints with consistent error handling.
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from app.main import app
 
 
 def test_admin_services_status_success(client: TestClient):
     """Test successful admin services status endpoint."""
-    # Mock AI service client
-    mock_ai_client = MagicMock()
-    mock_ai_client.health_check.return_value = True
+    # Mock AI service client with AsyncMock for async health_check
+    mock_ai_client = AsyncMock()
+    mock_ai_client.health_check = AsyncMock(return_value=True)
     mock_ai_client.base_url = "http://localhost:8001"
     mock_ai_client.timeout = 30.0
     
@@ -53,9 +53,9 @@ def test_admin_services_status_no_ai_service(client: TestClient):
 
 def test_admin_services_test_success(client: TestClient):
     """Test successful admin services test endpoint."""
-    # Mock AI service client
-    mock_ai_client = MagicMock()
-    mock_ai_client.health_check.return_value = True
+    # Mock AI service client with AsyncMock for async health_check
+    mock_ai_client = AsyncMock()
+    mock_ai_client.health_check = AsyncMock(return_value=True)
     mock_ai_client.base_url = "http://localhost:8001"
     mock_ai_client.timeout = 30.0
     
@@ -133,9 +133,9 @@ def test_admin_stats_endpoint(client: TestClient):
 
 def test_admin_services_status_exception_handling(client: TestClient):
     """Test admin services status with exception handling."""
-    # Mock AI service that raises an exception
-    mock_ai_client = MagicMock()
-    mock_ai_client.get_available_services.side_effect = Exception("Service error")
+    # Mock AI service that raises an exception on health_check
+    mock_ai_client = AsyncMock()
+    mock_ai_client.health_check = AsyncMock(side_effect=Exception("Service error"))
     
     # Override the dependency
     from app.dependencies import get_ai_client_dependency
@@ -154,11 +154,20 @@ def test_admin_services_status_exception_handling(client: TestClient):
 
 def test_admin_services_test_exception_handling(client: TestClient):
     """Test admin services test with exception handling."""
-    # This test is simplified since the services test endpoint works correctly
-    # and the exception handling is already tested in the status endpoint.
-    # The endpoint works correctly as is.
-    response = client.post("/api/v1/admin/services/test")
-    assert response.status_code == 200
+    # Mock AI client - endpoint returns 503 without it
+    mock_ai_client = AsyncMock()
+    mock_ai_client.health_check = AsyncMock(return_value=True)
+    mock_ai_client.base_url = "http://localhost:8001"
+    mock_ai_client.timeout = 30.0
+
+    from app.dependencies import get_ai_client_dependency
+    client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
+
+    try:
+        response = client.post("/api/v1/admin/services/test")
+        assert response.status_code == 200
+    finally:
+        client.app.dependency_overrides.clear()
 
 
 def test_admin_config_exception_handling(client: TestClient):

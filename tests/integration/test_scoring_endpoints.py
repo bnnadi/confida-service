@@ -5,43 +5,20 @@ Tests the scoring API endpoints including:
 - Multi-agent analysis endpoint
 - Score conversion and rubric generation
 - Error handling
+
+Uses mock_ai_client and mock_current_user from root conftest.
 """
 import pytest
-from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
-from app.main import app
-
-
-@pytest.fixture
-def client():
-    """Create FastAPI test client."""
-    return TestClient(app)
-
-
-@pytest.fixture
-def mock_ai_client():
-    """Mock AI client for testing."""
-    client = AsyncMock()
-    client.analyze_answer = AsyncMock(return_value={
-        "analysis": "This is a comprehensive analysis of the answer.",
-        "score": {
-            "clarity": 8.0,
-            "confidence": 7.5
-        },
-        "suggestions": [
-            "Add more specific examples",
-            "Elaborate on technical details",
-            "Improve structure"
-        ]
-    })
-    return client
+from unittest.mock import AsyncMock
+from app.dependencies import get_ai_client_dependency
+from app.middleware.auth_middleware import get_current_user_required
 
 
 @pytest.fixture
 def mock_ai_client_with_enhanced_rubric():
     """Mock AI client that returns enhanced rubric."""
-    client = AsyncMock()
-    client.analyze_answer = AsyncMock(return_value={
+    ai_client = AsyncMock()
+    ai_client.analyze_answer = AsyncMock(return_value={
         "analysis": "Comprehensive analysis",
         "score": {
             "clarity": 8.0,
@@ -87,7 +64,7 @@ def mock_ai_client_with_enhanced_rubric():
             "improvement_areas": ["Could improve pacing", "More examples needed"]
         }
     })
-    return client
+    return ai_client
 
 
 @pytest.fixture
@@ -101,151 +78,138 @@ def sample_analysis_request():
     }
 
 
-@pytest.fixture
-def mock_current_user():
-    """Mock current user for authentication."""
-    return {
-        "id": "test-user-123",
-        "email": "test@example.com",
-        "role": "user"
-    }
-
-
 class TestScoringAnalyzeEndpoint:
     """Tests for POST /api/v1/scoring/analyze endpoint."""
     
     @pytest.mark.integration
     @pytest.mark.ai
-    @patch('app.routers.scoring.get_current_user')
-    @patch('app.dependencies.get_ai_client_dependency')
     def test_analyze_answer_success(
         self,
-        mock_get_ai_client,
-        mock_get_user,
         client,
         mock_ai_client,
         sample_analysis_request,
         mock_current_user
     ):
         """Test successful answer analysis."""
-        mock_get_ai_client.return_value = mock_ai_client
-        mock_get_user.return_value = mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
         
-        response = client.post(
-            "/api/v1/scoring/analyze",
-            json=sample_analysis_request,
-            headers={"Authorization": "Bearer test-token"}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert "analysis" in data
-        assert "processing_time" in data
-        assert "agents_used" in data
-        
-        analysis = data["analysis"]
-        assert "overall_score" in analysis
-        assert "grade_tier" in analysis
-        assert "enhanced_rubric" in analysis
-        
-        # Verify score is on 0-100 scale
-        assert 0.0 <= analysis["overall_score"] <= 100.0
-        
-        # Verify grade tier is valid
-        assert analysis["grade_tier"] in ["Excellent", "Strong", "Average", "At Risk"]
+        try:
+            response = client.post(
+                "/api/v1/scoring/analyze",
+                json=sample_analysis_request
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert "analysis" in data
+            assert "processing_time" in data
+            assert "agents_used" in data
+            
+            analysis = data["analysis"]
+            assert "overall_score" in analysis
+            assert "grade_tier" in analysis
+            assert "enhanced_rubric" in analysis
+            
+            # Verify score is on 0-100 scale
+            assert 0.0 <= analysis["overall_score"] <= 100.0
+            
+            # Verify grade tier is valid
+            assert analysis["grade_tier"] in ["Excellent", "Strong", "Average", "At Risk"]
+        finally:
+            client.app.dependency_overrides.pop(get_current_user_required, None)
+            client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
     @pytest.mark.ai
-    @patch('app.routers.scoring.get_current_user')
-    @patch('app.dependencies.get_ai_client_dependency')
     def test_analyze_answer_with_enhanced_rubric(
         self,
-        mock_get_ai_client,
-        mock_get_user,
         client,
         mock_ai_client_with_enhanced_rubric,
         sample_analysis_request,
         mock_current_user
     ):
         """Test analysis with enhanced rubric from AI service."""
-        mock_get_ai_client.return_value = mock_ai_client_with_enhanced_rubric
-        mock_get_user.return_value = mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client_with_enhanced_rubric
         
-        response = client.post(
-            "/api/v1/scoring/analyze",
-            json=sample_analysis_request,
-            headers={"Authorization": "Bearer test-token"}
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        rubric = data["analysis"]["enhanced_rubric"]
-        assert rubric is not None
-        assert "verbal_communication" in rubric
-        assert "interview_readiness" in rubric
-        assert "non_verbal_communication" in rubric
-        assert "adaptability_engagement" in rubric
-        assert "total_score" in rubric
-        assert "grade_tier" in rubric
-        
-        # Verify category scores
-        assert rubric["verbal_communication"]["category_score"] <= 40.0
-        assert rubric["interview_readiness"]["category_score"] <= 20.0
-        assert rubric["non_verbal_communication"]["category_score"] <= 25.0
-        assert rubric["adaptability_engagement"]["category_score"] <= 15.0
+        try:
+            response = client.post(
+                "/api/v1/scoring/analyze",
+                json=sample_analysis_request
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            rubric = data["analysis"]["enhanced_rubric"]
+            assert rubric is not None
+            assert "verbal_communication" in rubric
+            assert "interview_readiness" in rubric
+            assert "non_verbal_communication" in rubric
+            assert "adaptability_engagement" in rubric
+            assert "total_score" in rubric
+            assert "grade_tier" in rubric
+            
+            # Verify category scores
+            assert rubric["verbal_communication"]["category_score"] <= 40.0
+            assert rubric["interview_readiness"]["category_score"] <= 20.0
+            assert rubric["non_verbal_communication"]["category_score"] <= 25.0
+            assert rubric["adaptability_engagement"]["category_score"] <= 15.0
+        finally:
+            client.app.dependency_overrides.pop(get_current_user_required, None)
+            client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
     @pytest.mark.ai
-    @patch('app.routers.scoring.get_current_user')
-    @patch('app.dependencies.get_ai_client_dependency')
     def test_analyze_answer_ai_service_unavailable(
         self,
-        mock_get_ai_client,
-        mock_get_user,
         client,
         sample_analysis_request,
         mock_current_user
     ):
         """Test analysis when AI service is unavailable."""
-        mock_get_ai_client.return_value = None
-        mock_get_user.return_value = mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: None
         
-        response = client.post(
-            "/api/v1/scoring/analyze",
-            json=sample_analysis_request,
-            headers={"Authorization": "Bearer test-token"}
-        )
-        
-        assert response.status_code == 503
-        assert "unavailable" in response.json()["detail"].lower()
+        try:
+            response = client.post(
+                "/api/v1/scoring/analyze",
+                json=sample_analysis_request
+            )
+            
+            assert response.status_code == 503
+            assert "unavailable" in response.json()["detail"].lower()
+        finally:
+            client.app.dependency_overrides.pop(get_current_user_required, None)
+            client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
     @pytest.mark.ai
-    @patch('app.routers.scoring.get_current_user')
-    @patch('app.dependencies.get_ai_client_dependency')
     def test_analyze_answer_ai_service_error(
         self,
-        mock_get_ai_client,
-        mock_get_user,
         client,
         sample_analysis_request,
         mock_current_user
     ):
         """Test analysis when AI service returns error."""
-        mock_ai_client = AsyncMock()
-        mock_ai_client.analyze_answer = AsyncMock(side_effect=Exception("AI service error"))
-        mock_get_ai_client.return_value = mock_ai_client
-        mock_get_user.return_value = mock_current_user
+        error_ai_client = AsyncMock()
+        error_ai_client.analyze_answer = AsyncMock(side_effect=Exception("AI service error"))
         
-        response = client.post(
-            "/api/v1/scoring/analyze",
-            json=sample_analysis_request,
-            headers={"Authorization": "Bearer test-token"}
-        )
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: error_ai_client
         
-        assert response.status_code == 503
+        try:
+            response = client.post(
+                "/api/v1/scoring/analyze",
+                json=sample_analysis_request
+            )
+            
+            assert response.status_code == 503
+        finally:
+            client.app.dependency_overrides.pop(get_current_user_required, None)
+            client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
     @pytest.mark.ai
@@ -260,33 +224,32 @@ class TestScoringAnalyzeEndpoint:
     
     @pytest.mark.integration
     @pytest.mark.ai
-    @patch('app.routers.scoring.get_current_user')
-    @patch('app.dependencies.get_ai_client_dependency')
     def test_analyze_answer_validation_error(
         self,
-        mock_get_ai_client,
-        mock_get_user,
         client,
         mock_ai_client,
         mock_current_user
     ):
         """Test analysis with invalid request data."""
-        mock_get_ai_client.return_value = mock_ai_client
-        mock_get_user.return_value = mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
+        client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
         
-        invalid_request = {
-            "response": "",  # Empty response
-            "question": "Test question",
-            "job_description": "Test job description"
-        }
-        
-        response = client.post(
-            "/api/v1/scoring/analyze",
-            json=invalid_request,
-            headers={"Authorization": "Bearer test-token"}
-        )
-        
-        assert response.status_code == 422  # Validation error
+        try:
+            invalid_request = {
+                "response": "",  # Empty response
+                "question": "Test question",
+                "job_description": "Test job description"
+            }
+            
+            response = client.post(
+                "/api/v1/scoring/analyze",
+                json=invalid_request
+            )
+            
+            assert response.status_code == 422  # Validation error
+        finally:
+            client.app.dependency_overrides.pop(get_current_user_required, None)
+            client.app.dependency_overrides.pop(get_ai_client_dependency, None)
 
 
 class TestScoringStatusEndpoint:

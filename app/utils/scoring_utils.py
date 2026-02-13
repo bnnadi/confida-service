@@ -27,7 +27,7 @@ def calculate_grade_tier(total_score: float) -> GradeTier:
     """
     if total_score >= 90:
         return GradeTier.EXCELLENT
-    elif total_score >= 75:
+    elif total_score >= 72:
         return GradeTier.STRONG
     elif total_score >= 60:
         return GradeTier.AVERAGE

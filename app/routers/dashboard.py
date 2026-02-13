@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from app.services.database_service import get_db
 from app.services.dashboard_service import DashboardService
+from app.dependencies import get_dashboard_service
 from app.models.dashboard_models import (
     DashboardOverview, UserProgress, AnalyticsData, PerformanceMetrics,
     PerformanceTrends, UserInsights
@@ -20,11 +20,6 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
-
-
-def get_dashboard_service(db: Session = Depends(get_db)) -> DashboardService:
-    """Dependency to get dashboard service."""
-    return DashboardService(db)
 
 
 @router.get("/overview/{user_id}", response_model=DashboardOverview)
@@ -42,7 +37,7 @@ async def get_dashboard_overview(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -76,7 +71,7 @@ async def get_user_progress(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -110,7 +105,7 @@ async def get_analytics_data(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -144,7 +139,7 @@ async def get_performance_metrics(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -178,7 +173,7 @@ async def get_performance_trends(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"
@@ -212,7 +207,7 @@ async def get_user_insights(
     """
     try:
         # Verify user access
-        if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        if str(current_user.get("id")) != user_id and not current_user.get("is_admin", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to access this user's data"

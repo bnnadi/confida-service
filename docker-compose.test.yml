@@ -1,0 +1,66 @@
+# Test stack - matches CI (PostgreSQL 13, Redis 6).
+# Run: docker compose -f docker-compose.test.yml run --rm test-runner
+#
+# Uses ports 5435 and 6381 to avoid conflicts with dev stack (5432, 6379).
+
+services:
+  test-db:
+    image: postgres:13
+    container_name: confida-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test_confida
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d test_confida"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - confida-test-network
+
+  test-redis:
+    image: redis:6
+    container_name: confida-test-redis
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - confida-test-network
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: confida-test-runner
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql://postgres:postgres@test-db:5432/test_confida
+      REDIS_URL: redis://test-redis:6379
+      SECRET_KEY: test-secret-key-for-github-actions
+      ENVIRONMENT: test
+      RATE_LIMIT_ENABLED: "false"
+    depends_on:
+      test-db:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    command: >
+      bash -c "
+        python app/database/migrate.py upgrade head &&
+        python -m pytest tests/ -v --cov=app --cov-report=xml --junitxml=test-results.xml --timeout=60
+      "
+    networks:
+      - confida-test-network
+
+networks:
+  confida-test-network:
+    driver: bridge
