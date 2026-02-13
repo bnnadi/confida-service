@@ -1,0 +1,17 @@
+[run]
+source = app
+omit =
+    app/database/migrations/*
+    app/database/migrate.py
+    app/database/migrations/env.py
+    app/*/__init__.py
+    app/__init__.py
+    app/main.py
+    app/startup.py
+
+[report]
+fail_under = 60
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError

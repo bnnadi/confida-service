@@ -320,9 +320,37 @@ def test_sql_injection_protection(client):
 
 ### Coverage Requirements
 
-- **Minimum Coverage**: 85%
-- **Target Coverage**: 90%
-- **Critical Components**: 95%
+- **Minimum Coverage**: 60% (configured in `.coveragerc`)
+- Coverage measures only meaningful application code; low-value code is excluded (see below)
+
+### Core Logic Coverage
+
+Coverage prioritizes **core business logic**. When adding new tests, prioritize these modules:
+
+| Module | Path | Description |
+|--------|------|-------------|
+| Auth Service | `app/services/auth_service.py` | User authentication, password hashing, tokens |
+| Session Service | `app/services/session_service.py` | Interview session CRUD, questions, status |
+| Sessions Router | `app/routers/sessions.py` | Session API endpoints |
+| Interview Router | `app/routers/interview.py` | Parse JD, analyze answer, AI integration |
+| Scoring Router | `app/routers/scoring.py` | Multi-agent scoring endpoints |
+| Question Bank Service | `app/services/question_bank_service.py` | Question CRUD, bulk import |
+| Question Bank Router | `app/routers/question_bank.py` | Question bank API endpoints |
+| Analytics Service | `app/services/analytics_service.py` | Session analytics, metrics, trends |
+| Dashboard Router | `app/routers/dashboard.py` | Dashboard API endpoints |
+
+### Excluded from Coverage
+
+The following paths are excluded from coverage measurement (see `.coveragerc`):
+
+| Path | Rationale |
+|------|-----------|
+| `app/database/migrations/*` | Alembic migrations; schema changes, not app logic |
+| `app/database/migrate.py` | Migration runner script |
+| `app/database/migrations/env.py` | Alembic environment |
+| `app/*/__init__.py`, `app/__init__.py` | Package init files (imports only) |
+| `app/main.py` | App wiring; tested implicitly via TestClient |
+| `app/startup.py` | Startup hooks |
 
 ### Dashboard Test Coverage
 

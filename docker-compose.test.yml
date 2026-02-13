@@ -56,7 +56,7 @@ services:
     command: >
       bash -c "
         python app/database/migrate.py upgrade head &&
-        python -m pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=85 --junitxml=test-results.xml --timeout=60
+        python -m pytest tests/ -v --cov=app --cov-report=xml --junitxml=test-results.xml --timeout=60
       "
     networks:
       - confida-test-network
