@@ -161,7 +161,7 @@ def override_admin_auth(client):
     
     Usage:
         def test_something(self, client, override_admin_auth, admin_user):
-            override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+            override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
             response = client.post("/api/v1/questions", json=...)
     
     Automatically clears the override after the test.

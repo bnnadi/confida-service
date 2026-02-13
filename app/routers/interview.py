@@ -376,15 +376,27 @@ async def analyze_answer(
         from app.database.models import Question, InterviewSession, Answer, SessionQuestion
         
         question_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
-        # Use sync db (supports get_db override in tests)
-        question = db.query(Question).join(
-            SessionQuestion, Question.id == SessionQuestion.question_id
-        ).join(
+        # Accept either SessionQuestion.id (from get_session_questions) or Question.id
+        # First try SessionQuestion.id - resolve to Question via session ownership
+        session_question = db.query(SessionQuestion).join(
             InterviewSession, SessionQuestion.session_id == InterviewSession.id
         ).filter(
-            Question.id == question_uuid,
+            SessionQuestion.id == question_uuid,
             InterviewSession.user_id == current_user["id"]
         ).first()
+        if session_question:
+            question = session_question.question
+            question_uuid = session_question.question_id
+        else:
+            # Fallback: treat as Question.id
+            question = db.query(Question).join(
+                SessionQuestion, Question.id == SessionQuestion.question_id
+            ).join(
+                InterviewSession, SessionQuestion.session_id == InterviewSession.id
+            ).filter(
+                Question.id == question_uuid,
+                InterviewSession.user_id == current_user["id"]
+            ).first()
         
         if not question:
             raise HTTPException(status_code=404, detail="Question not found")
@@ -434,7 +446,7 @@ async def analyze_answer(
             suggestions=response.get("suggestions", []),
             jobDescription=request.jobDescription,
             answer=request.answer,
-            service_used=validated_service,
+            service_used=validated_service or "openai",
             multi_agent_analysis=response.get("multi_agent_analysis")
         )
         

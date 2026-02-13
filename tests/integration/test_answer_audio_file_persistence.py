@@ -199,9 +199,13 @@ class TestAnswerAudioFilePersistenceIntegration:
     def test_get_question_answers_includes_audio_file_id(
         self, client: TestClient, db_session: Session,
         sample_user, mock_current_user, sample_question, sample_interview_session,
-        override_auth
+        sample_session_question, override_auth
     ):
-        """Test get_question_answers endpoint returns audio_file_id."""
+        """Test get_question_answers endpoint returns audio_file_id.
+        
+        Requires sample_session_question to link sample_question to sample_interview_session,
+        since get_question_answers verifies question belongs to user's session.
+        """
         override_auth(mock_current_user)
         
         # Arrange

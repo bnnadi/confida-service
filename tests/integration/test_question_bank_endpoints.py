@@ -16,9 +16,10 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_create_question_success(self, client, admin_user, override_admin_auth, db_session):
         """Test successful question creation."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
+        unique_text = f"What is Python? (unique-{uuid.uuid4().hex[:8]})"
         question_data = {
-            "question_text": "What is Python?",
+            "question_text": unique_text,
             "category": "technical",
             "difficulty_level": "medium",
             "compatible_roles": ["Python Developer"],
@@ -50,9 +51,10 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_create_question_duplicate(self, client, admin_user, override_admin_auth, db_session):
         """Test creating duplicate question."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
+        unique_text = f"Duplicate test question {uuid.uuid4().hex[:8]}"
         question_data = {
-            "question_text": "What is Python?",
+            "question_text": unique_text,
             "category": "technical"
         }
         
@@ -111,7 +113,7 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_update_question(self, client, admin_user, override_admin_auth, db_session, sample_question):
         """Test updating a question."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         question_id = str(sample_question.id)
         update_data = {
             "category": "updated_category",
@@ -128,7 +130,7 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_delete_question(self, client, admin_user, override_admin_auth, db_session):
         """Test deleting a question."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         # Create a question first
         question = Question(
             question_text="Test question to delete",
@@ -217,7 +219,7 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_bulk_import_questions(self, client, admin_user, override_admin_auth, db_session):
         """Test bulk importing questions."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         questions_data = [
             {
                 "question_text": "Question 1",
@@ -241,7 +243,7 @@ class TestQuestionBankEndpoints:
     @pytest.mark.integration
     def test_quality_check(self, client, admin_user, override_admin_auth, db_session):
         """Test running quality check."""
-        override_admin_auth({"id": admin_user.id, "email": admin_user.email, "is_admin": True, "role": "admin"})
+        override_admin_auth({"id": str(admin_user.id), "email": admin_user.email, "is_admin": True, "role": "admin"})
         response = client.post("/api/v1/questions/admin/quality-check")
         
         assert response.status_code == 200

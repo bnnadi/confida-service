@@ -5,7 +5,6 @@ Tests the complete user journey from session creation to answer analysis,
 including all API interactions and data persistence.
 """
 import pytest
-from unittest.mock import patch
 
 
 class TestCompleteInterviewFlow:
@@ -40,6 +39,18 @@ class TestCompleteInterviewFlow:
         assert str(session_info["id"]) == str(session_id)
         assert session_info["status"] == "active"
 
+        # Step 2b: Add questions to session (session creation does not auto-add questions)
+        add_q_response = client.post(f"/api/v1/sessions/{session_id}/questions", json={
+            "questions": [
+                "What is Python?",
+                "Explain decorators.",
+                "What is your experience with Django?",
+                "How do you handle database migrations?",
+                "Describe your debugging process."
+            ]
+        })
+        assert add_q_response.status_code == 200
+
         # Step 3: Get session questions
         questions_response = client.get(f"/api/v1/sessions/{session_id}/questions")
         assert questions_response.status_code == 200
@@ -59,8 +70,7 @@ class TestCompleteInterviewFlow:
             assert analyze_response.status_code == 200
             analysis = analyze_response.json()
             assert "score" in analysis
-            assert "improvements" in analysis
-            assert "missingKeywords" in analysis
+            assert "suggestions" in analysis
 
             # Verify score structure
             score = analysis["score"]
@@ -131,12 +141,12 @@ class TestCompleteInterviewFlow:
         assert str(session2["id"]) in session_ids
     
     @pytest.mark.e2e
-    def test_question_bank_integration_flow(self, client, sample_user, mock_ai_client, mock_question_bank_service, override_auth, override_ai_client):
+    def test_question_bank_integration_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
         """Test complete flow with question bank integration."""
         override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
         override_ai_client(mock_ai_client)
 
-        # Step 1: Create session (should use question bank)
+        # Step 1: Create session
         session_data = {
             "user_id": str(sample_user.id),
             "mode": "interview",
@@ -145,40 +155,47 @@ class TestCompleteInterviewFlow:
             "job_description": "Looking for Python developer with Django experience"
         }
 
-        with patch('app.services.session_service.SessionService', return_value=mock_question_bank_service):
-            # Create session
-            create_response = client.post("/api/v1/sessions/", json=session_data)
+        create_response = client.post("/api/v1/sessions/", json=session_data)
+        assert create_response.status_code == 201
+        session = create_response.json()
+        session_id = session["id"]
 
-            assert create_response.status_code == 201
-            session = create_response.json()
-            session_id = session["id"]
+        # Step 2: Add questions to session
+        add_q_response = client.post(f"/api/v1/sessions/{session_id}/questions", json={
+            "questions": [
+                "What is Python?",
+                "Explain decorators.",
+                "What is your experience with Django?"
+            ]
+        })
+        assert add_q_response.status_code == 200
 
-            # Step 2: Get session questions (should come from question bank)
-            questions_response = client.get(f"/api/v1/sessions/{session_id}/questions")
-            assert questions_response.status_code == 200
-            questions_data = questions_response.json()
-            questions_list = questions_data if isinstance(questions_data, list) else questions_data.get("questions", [])
-            assert len(questions_list) > 0
+        # Step 3: Get session questions
+        questions_response = client.get(f"/api/v1/sessions/{session_id}/questions")
+        assert questions_response.status_code == 200
+        questions_data = questions_response.json()
+        questions_list = questions_data if isinstance(questions_data, list) else questions_data.get("questions", [])
+        assert len(questions_list) > 0
 
-            # Step 3: Analyze answers (should update question bank stats)
-            for question in questions_list[:2]:  # Test first 2 questions
-                answer_data = {
-                    "jobDescription": session_data["job_description"],
-                    "question": question["question_text"],
-                    "answer": "I have 5 years of Python experience with Django and Flask frameworks."
-                }
+        # Step 4: Analyze answers (should update question bank stats)
+        for question in questions_list[:2]:  # Test first 2 questions
+            answer_data = {
+                "jobDescription": session_data["job_description"],
+                "question": question["question_text"],
+                "answer": "I have 5 years of Python experience with Django and Flask frameworks."
+            }
 
-                analyze_response = client.post(f"/api/v1/analyze-answer?question_id={question['id']}", json=answer_data)
-                assert analyze_response.status_code == 200
-                analysis = analyze_response.json()
-                assert "score" in analysis
-                assert analysis["score"]["overall"] > 0
+            analyze_response = client.post(f"/api/v1/analyze-answer?question_id={question['id']}", json=answer_data)
+            assert analyze_response.status_code == 200
+            analysis = analyze_response.json()
+            assert "score" in analysis
+            assert analysis["score"]["overall"] > 0
 
-            # Step 4: Verify services endpoint returns successfully
-            services_response = client.get("/api/v1/services")
-            assert services_response.status_code == 200
-            services_data = services_response.json()
-            assert "ai_service_microservice" in services_data or "status" in services_data
+        # Step 5: Verify services endpoint returns successfully
+        services_response = client.get("/api/v1/services")
+        assert services_response.status_code == 200
+        services_data = services_response.json()
+        assert "ai_service_microservice" in services_data or "status" in services_data
     
     @pytest.mark.e2e
     def test_error_recovery_flow(self, client, sample_user, mock_ai_client, override_auth, override_ai_client):
@@ -200,6 +217,12 @@ class TestCompleteInterviewFlow:
         assert create_response.status_code == 201
         session = create_response.json()
         session_id = session["id"]
+
+        # Add questions to session
+        add_q_response = client.post(f"/api/v1/sessions/{session_id}/questions", json={
+            "questions": ["What is Python?", "Explain decorators.", "What is your experience with Django?"]
+        })
+        assert add_q_response.status_code == 200
 
         # Step 2: Get session questions
         questions_response = client.get(f"/api/v1/sessions/{session_id}/questions")
@@ -347,6 +370,12 @@ class TestCompleteInterviewFlow:
         assert create_response.status_code == 201
         session = create_response.json()
         session_id = session["id"]
+
+        # Add questions to session
+        add_q_response = client.post(f"/api/v1/sessions/{session_id}/questions", json={
+            "questions": ["What is Python?", "Explain decorators.", "What is your experience with Django?"]
+        })
+        assert add_q_response.status_code == 200
 
         # Step 2: Get session questions
         questions_response = client.get(f"/api/v1/sessions/{session_id}/questions")

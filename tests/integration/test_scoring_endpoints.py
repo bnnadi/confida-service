@@ -9,7 +9,7 @@ Tests the scoring API endpoints including:
 import pytest
 from unittest.mock import AsyncMock
 from app.dependencies import get_ai_client_dependency
-from app.middleware.auth_middleware import get_current_user
+from app.middleware.auth_middleware import get_current_user_required
 
 
 @pytest.fixture
@@ -118,7 +118,7 @@ class TestScoringAnalyzeEndpoint:
         mock_current_user
     ):
         """Test successful answer analysis."""
-        client.app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
         client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
         
         try:
@@ -145,7 +145,7 @@ class TestScoringAnalyzeEndpoint:
             # Verify grade tier is valid
             assert analysis["grade_tier"] in ["Excellent", "Strong", "Average", "At Risk"]
         finally:
-            client.app.dependency_overrides.pop(get_current_user, None)
+            client.app.dependency_overrides.pop(get_current_user_required, None)
             client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
@@ -158,7 +158,7 @@ class TestScoringAnalyzeEndpoint:
         mock_current_user
     ):
         """Test analysis with enhanced rubric from AI service."""
-        client.app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
         client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client_with_enhanced_rubric
         
         try:
@@ -185,7 +185,7 @@ class TestScoringAnalyzeEndpoint:
             assert rubric["non_verbal_communication"]["category_score"] <= 25.0
             assert rubric["adaptability_engagement"]["category_score"] <= 15.0
         finally:
-            client.app.dependency_overrides.pop(get_current_user, None)
+            client.app.dependency_overrides.pop(get_current_user_required, None)
             client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
@@ -197,7 +197,7 @@ class TestScoringAnalyzeEndpoint:
         mock_current_user
     ):
         """Test analysis when AI service is unavailable."""
-        client.app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
         client.app.dependency_overrides[get_ai_client_dependency] = lambda: None
         
         try:
@@ -209,7 +209,7 @@ class TestScoringAnalyzeEndpoint:
             assert response.status_code == 503
             assert "unavailable" in response.json()["detail"].lower()
         finally:
-            client.app.dependency_overrides.pop(get_current_user, None)
+            client.app.dependency_overrides.pop(get_current_user_required, None)
             client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
@@ -224,7 +224,7 @@ class TestScoringAnalyzeEndpoint:
         error_ai_client = AsyncMock()
         error_ai_client.analyze_answer = AsyncMock(side_effect=Exception("AI service error"))
         
-        client.app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
         client.app.dependency_overrides[get_ai_client_dependency] = lambda: error_ai_client
         
         try:
@@ -235,7 +235,7 @@ class TestScoringAnalyzeEndpoint:
             
             assert response.status_code == 503
         finally:
-            client.app.dependency_overrides.pop(get_current_user, None)
+            client.app.dependency_overrides.pop(get_current_user_required, None)
             client.app.dependency_overrides.pop(get_ai_client_dependency, None)
     
     @pytest.mark.integration
@@ -258,7 +258,7 @@ class TestScoringAnalyzeEndpoint:
         mock_current_user
     ):
         """Test analysis with invalid request data."""
-        client.app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        client.app.dependency_overrides[get_current_user_required] = lambda: mock_current_user
         client.app.dependency_overrides[get_ai_client_dependency] = lambda: mock_ai_client
         
         try:
@@ -275,7 +275,7 @@ class TestScoringAnalyzeEndpoint:
             
             assert response.status_code == 422  # Validation error
         finally:
-            client.app.dependency_overrides.pop(get_current_user, None)
+            client.app.dependency_overrides.pop(get_current_user_required, None)
             client.app.dependency_overrides.pop(get_ai_client_dependency, None)
 
 

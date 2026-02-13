@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Annotated, List, Optional
 from app.services.database_service import get_db
@@ -322,7 +323,7 @@ async def update_session_status(
     
     return {"message": "Session status updated successfully", "status": session.status}
 
-@router.delete("/{session_id}")
+@router.delete("/{session_id}", status_code=204)
 async def delete_session(
     session_id: SessionId,
     current_user: dict = Depends(get_current_user_required),
@@ -335,4 +336,4 @@ async def delete_session(
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    return {"message": "Session deleted successfully"}
+    return Response(status_code=204)

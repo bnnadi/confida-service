@@ -270,9 +270,7 @@ class TestSessionEndpoints:
 
         response = client.delete(f"/api/v1/sessions/{session_id}")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "message" in data
+        assert response.status_code == 204
 
         get_response = client.get(f"/api/v1/sessions/{session_id}")
         assert get_response.status_code == 404
