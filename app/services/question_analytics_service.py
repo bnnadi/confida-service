@@ -6,7 +6,7 @@ Provides analytics and reporting for question bank performance.
 from typing import List, Optional, Dict, Any
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.database.models import Question, SessionQuestion, Answer
 from app.utils.logger import get_logger
 
@@ -45,7 +45,7 @@ class QuestionAnalyticsService:
         try:
             # Parse time period
             days = int(time_period.rstrip('d'))
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Build query - use Question model's pre-calculated metrics
             if question_id:
@@ -147,7 +147,7 @@ class QuestionAnalyticsService:
         try:
             # Parse time period
             days = int(time_period.rstrip('d'))
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Total questions
             total_questions = self.db.execute(

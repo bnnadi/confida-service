@@ -216,7 +216,7 @@ class HealthService:
             health_status["status"] = "warning"
         
         # Add timestamp
-        import datetime
-        health_status["timestamp"] = datetime.datetime.utcnow().isoformat() + "Z"
+        from datetime import datetime, timezone
+        health_status["timestamp"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         
         return health_status

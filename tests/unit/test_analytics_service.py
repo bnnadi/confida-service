@@ -8,7 +8,7 @@ heatmap generation, and goal management.
 import pytest
 import uuid as _uuid
 uuid = _uuid  # alias for use in tests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.database.models import (
@@ -52,7 +52,7 @@ def _create_session(
     updated_at=None,
 ):
     """Helper to create an InterviewSession with sensible defaults."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     session = InterviewSession(
         user_id=user_id,
         role=role,
@@ -73,7 +73,7 @@ def _create_session(
 def _create_sessions_over_time(db_session, user_id, count=5, base_score=6.0, step=0.5):
     """Create several sessions spread over time with incrementing scores."""
     sessions = []
-    base_date = datetime.utcnow() - timedelta(days=count * 3)
+    base_date = datetime.now(timezone.utc) - timedelta(days=count * 3)
     for i in range(count):
         score = base_score + i * step
         created = base_date + timedelta(days=i * 3)
@@ -288,7 +288,7 @@ class TestPerformanceComparison:
     @pytest.mark.unit
     def test_comparison_returns_model(self, db_session, analytics_user):
         # Create old sessions
-        old_base = datetime.utcnow() - timedelta(days=50)
+        old_base = datetime.now(timezone.utc) - timedelta(days=50)
         for i in range(3):
             _create_session(
                 db_session, analytics_user.id,
@@ -296,7 +296,7 @@ class TestPerformanceComparison:
                 created_at=old_base + timedelta(days=i),
             )
         # Create recent sessions
-        recent_base = datetime.utcnow() - timedelta(days=10)
+        recent_base = datetime.now(timezone.utc) - timedelta(days=10)
         for i in range(3):
             _create_session(
                 db_session, analytics_user.id,
@@ -357,12 +357,12 @@ class TestSessionComparison:
         s1 = _create_session(
             db_session, analytics_user.id,
             overall_score={"overall": 6.0, "python": 7.0},
-            created_at=datetime.utcnow() - timedelta(days=10),
+            created_at=datetime.now(timezone.utc) - timedelta(days=10),
         )
         s2 = _create_session(
             db_session, analytics_user.id,
             overall_score={"overall": 8.0, "python": 9.0},
-            created_at=datetime.utcnow() - timedelta(days=2),
+            created_at=datetime.now(timezone.utc) - timedelta(days=2),
         )
 
         svc = AnalyticsService(db_session)
@@ -501,8 +501,8 @@ class TestReportGeneration:
 
         request = ReportRequest(
             user_id=str(analytics_user.id),
-            start_date=datetime.utcnow() - timedelta(days=30),
-            end_date=datetime.utcnow(),
+            start_date=datetime.now(timezone.utc) - timedelta(days=30),
+            end_date=datetime.now(timezone.utc),
             report_type=ReportType.DETAILED,
         )
         report = svc.generate_report(request)
@@ -520,8 +520,8 @@ class TestReportGeneration:
 
         request = ReportRequest(
             user_id=str(analytics_user.id),
-            start_date=datetime.utcnow() - timedelta(days=30),
-            end_date=datetime.utcnow(),
+            start_date=datetime.now(timezone.utc) - timedelta(days=30),
+            end_date=datetime.now(timezone.utc),
             report_type=ReportType.PERFORMANCE,
             format=ReportFormat.CSV,
         )
@@ -536,8 +536,8 @@ class TestReportGeneration:
         svc = AnalyticsService(db_session)
         request = ReportRequest(
             user_id=str(analytics_user.id),
-            start_date=datetime.utcnow() - timedelta(days=30),
-            end_date=datetime.utcnow(),
+            start_date=datetime.now(timezone.utc) - timedelta(days=30),
+            end_date=datetime.now(timezone.utc),
             report_type=ReportType.SUMMARY,
         )
         report = svc.generate_report(request)

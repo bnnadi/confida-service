@@ -14,7 +14,7 @@ from app.database.models import InterviewSession, SessionQuestion, Question, Sce
 from app.exceptions import AIServiceError
 from app.services.encryption_service import get_encryption_service
 from app.utils.logger import get_logger
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 logger = get_logger(__name__)
@@ -74,8 +74,8 @@ class SessionService:
                 "mode": mode,
                 "question_source": "generated",
                 "status": "active",
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
             }
             if enc_ctx is not None:
                 session_data["job_context"] = enc_ctx
@@ -127,8 +127,8 @@ class SessionService:
                 "question_source": "scenario",
                 "question_ids": [q["id"] for q in questions_data] if questions_data else [],
                 "status": "active",
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
             }
             
             session = InterviewSession(**session_data)
@@ -235,7 +235,7 @@ class SessionService:
                 return None
             
             # Update fields
-            updates["updated_at"] = datetime.utcnow()
+            updates["updated_at"] = datetime.now(timezone.utc)
             
             if self.is_async:
                 await self.db_session.execute(
@@ -334,8 +334,8 @@ class SessionService:
                         difficulty_level="medium",
                         question_metadata={},
                         usage_count=0,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
                     )
                     self.db_session.add(question)
                     if not self.is_async:
@@ -349,7 +349,7 @@ class SessionService:
                     session_id=session_id,
                     question_id=question_id,
                     question_order=i,
-                    created_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc)
                 )
                 self.db_session.add(session_question)
                 session_questions.append(session_question)

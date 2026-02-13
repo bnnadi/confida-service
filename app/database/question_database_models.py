@@ -7,7 +7,7 @@ interview questions to reduce AI service calls and optimize costs.
 
 from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, JSON, Index
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 import uuid
 

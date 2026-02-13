@@ -1,7 +1,8 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.logging_config import setup_logging
 from app.utils.logger import get_logger
 from app.middleware.logging_middleware import log_requests
@@ -18,6 +19,38 @@ logger = get_logger(__name__)
 
 # Set custom OpenAPI schema using simplified documentation builder
 from app.utils.api_documentation import APIDocumentationBuilder
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
+    if settings.ASYNC_DATABASE_ENABLED:
+        try:
+            from app.services.database_service import init_async_db
+            await init_async_db()
+            logger.info("✅ Async database initialized successfully")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize async database: {e}")
+            raise
+    if settings.MONITORING_ENABLED:
+        try:
+            from app.utils.metrics import start_metrics_server
+            start_metrics_server()
+        except Exception as e:
+            logger.error(f"❌ Failed to start monitoring server: {e}")
+    yield
+    # Shutdown
+    if settings.ASYNC_DATABASE_ENABLED:
+        try:
+            from app.services.async_database_monitor import async_db_monitor
+            from app.database.async_connection import async_db_manager
+            await async_db_monitor.stop_monitoring()
+            await async_db_manager.close()
+            logger.info("✅ Async database connections closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing async database connections: {e}")
+
 
 app = FastAPI(
     title="Confida API",
@@ -74,7 +107,8 @@ app = FastAPI(
             "url": "http://localhost:8000",
             "description": "Development server"
         }
-    ]
+    ],
+    lifespan=lifespan
 )
 
 def create_custom_openapi():
@@ -209,42 +243,6 @@ except Exception as e:
 validate_startup()
 log_environment_status()
 
-# Startup and shutdown event handlers
-@app.on_event("startup")
-async def startup_event():
-    """Initialize async database and monitoring on startup."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        try:
-            await init_async_db()
-            logger.info("✅ Async database initialized successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize async database: {e}")
-            raise
-    
-    # Start monitoring server if enabled
-    if settings.MONITORING_ENABLED:
-        try:
-            from app.utils.metrics import start_metrics_server
-            start_metrics_server()
-        except Exception as e:
-            logger.error(f"❌ Failed to start monitoring server: {e}")
-            # Don't raise - monitoring is not critical for startup
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup async database connections on shutdown."""
-    if settings.ASYNC_DATABASE_ENABLED:
-        try:
-            # Stop monitoring
-            from app.services.async_database_monitor import async_db_monitor
-            await async_db_monitor.stop_monitoring()
-            
-            # Close database connections
-            await async_db_manager.close()
-            logger.info("✅ Async database connections closed")
-        except Exception as e:
-            logger.error(f"❌ Error closing async database connections: {e}")
-
 @app.get("/")
 async def root():
     return {
@@ -323,7 +321,7 @@ async def database_monitoring():
             "health_status": await async_db_monitor.get_health_status(),
             "connection_pool_status": await async_db_monitor.get_connection_pool_status(),
             "performance_metrics": await async_db_monitor.get_performance_metrics(),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Error getting database monitoring data: {e}")
@@ -341,7 +339,7 @@ async def vector_monitoring():
         return {
             "health_status": health,
             "collection_stats": stats,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.error(f"Error getting vector monitoring data: {e}")

@@ -5,7 +5,7 @@ Tests the complete flow of dashboard-related endpoints including
 authentication, data retrieval, and error handling.
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.database.models import InterviewSession, User
 import uuid
 
@@ -17,7 +17,7 @@ class TestDashboardEndpoints:
     def sample_sessions(self, db_session, sample_user):
         """Create sample sessions for testing."""
         sessions = []
-        base_date = datetime.utcnow() - timedelta(days=20)
+        base_date = datetime.now(timezone.utc) - timedelta(days=20)
         
         for i in range(5):
             session = InterviewSession(

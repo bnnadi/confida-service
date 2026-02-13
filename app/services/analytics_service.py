@@ -8,7 +8,7 @@ import uuid
 import io
 import csv
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import Counter, defaultdict
 from functools import wraps
 from sqlalchemy.orm import Session
@@ -354,7 +354,7 @@ class AnalyticsService:
     @handle_analytics_errors("getting performance metrics")
     def get_performance_metrics(self, user_id: str, time_period: str = "30d") -> PerformanceMetrics:
         """Get performance metrics for a user."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = self._calculate_start_date(end_date, time_period)
         sessions = self._get_user_sessions(user_id, start_date, end_date)
         
@@ -373,7 +373,7 @@ class AnalyticsService:
         
         Supported metrics: average_score, completion_rate, total_sessions, response_time.
         """
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = self._calculate_start_date(end_date, time_period)
         sessions = self._get_user_sessions(user_id, start_date, end_date)
         
@@ -551,7 +551,7 @@ class AnalyticsService:
         
         For example, current_period='30d' compares the last 30 days against the 30 days before that.
         """
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         current_start = self._calculate_start_date(end_date, current_period)
         
         # Previous period ends where current starts
@@ -660,7 +660,7 @@ class AnalyticsService:
             report_id=str(uuid.uuid4()),
             user_id=request.user_id,
             report_type=request.report_type.value,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc),
             time_period=time_period,
             performance_metrics=metrics,
             trend_analysis=trend,
@@ -748,7 +748,7 @@ class AnalyticsService:
     @handle_analytics_errors("getting dimension progress")
     def get_dimension_progress(self, user_id: str, time_period: str = "30d") -> DimensionProgress:
         """Get progress tracking across all scoring dimensions."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = self._calculate_start_date(end_date, time_period)
         sessions = self._get_user_sessions(user_id, start_date, end_date)
         
@@ -805,7 +805,7 @@ class AnalyticsService:
             dimensions=dimension_scores,
             overall_score=round(overall, 2),
             data_points=time_series,
-            last_updated=datetime.utcnow()
+            last_updated=datetime.now(timezone.utc)
         )
     
     # -------------------------------------------------------------------------
@@ -1006,7 +1006,7 @@ class AnalyticsService:
                 goal.status = "completed"
             
             # Auto-expire if past target date
-            if goal.target_date and datetime.utcnow() > goal.target_date and goal.status == "active":
+            if goal.target_date and datetime.now(timezone.utc) > goal.target_date and goal.status == "active":
                 goal.status = "expired"
             
             self.db.commit()
@@ -1126,7 +1126,7 @@ class AnalyticsService:
         
         Returns a grid of cells: 7 days x 24 hours, each with session count and average score.
         """
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = self._calculate_start_date(end_date, time_period)
         sessions = self._get_user_sessions(user_id, start_date, end_date)
         
@@ -1176,7 +1176,7 @@ class AnalyticsService:
             peak_day=DAY_NAMES[peak_day_idx],
             peak_hour=peak_hour,
             total_sessions=len(sessions),
-            last_updated=datetime.utcnow()
+            last_updated=datetime.now(timezone.utc)
         )
     
     # -------------------------------------------------------------------------
@@ -1185,7 +1185,7 @@ class AnalyticsService:
     
     def get_user_performance_metrics_simple(self, user_id: str, date_range_days: int = 30) -> Dict[str, Any]:
         """Get user performance metrics using simplified aggregation."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=date_range_days)
         sessions = self._get_user_sessions(user_id, start_date, end_date)
         

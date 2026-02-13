@@ -5,7 +5,7 @@ This service provides efficient data aggregation capabilities for dashboard
 and analytics endpoints, with caching support for performance optimization.
 """
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_
@@ -79,7 +79,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get user progress data over time."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         sessions = self.db.query(InterviewSession).filter(
@@ -211,7 +211,7 @@ class DataAggregator:
     
     def get_current_streak(self, user_id: str) -> int:
         """Calculate current consecutive days with activity."""
-        end_date = datetime.utcnow().date()
+        end_date = datetime.now(timezone.utc).date()
         current_date = end_date
         streak = 0
         
@@ -242,7 +242,7 @@ class DataAggregator:
     
     def get_skill_breakdown(self, user_id: str, days: int = 30) -> Dict[str, float]:
         """Get skill breakdown by category."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         sessions = self.db.query(InterviewSession).filter(
@@ -273,7 +273,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get detailed performance metrics."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         sessions = self.db.query(InterviewSession).filter(
@@ -334,7 +334,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get trend data for performance metrics."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         sessions = self.db.query(InterviewSession).filter(
@@ -427,7 +427,7 @@ class DataAggregator:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get personalized user insights."""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         sessions = self.db.query(InterviewSession).filter(
@@ -488,14 +488,14 @@ class DataAggregator:
             milestones.append({
                 "title": "10 Sessions Completed",
                 "description": "Great progress! Keep practicing",
-                "achieved_at": datetime.utcnow().isoformat()
+                "achieved_at": datetime.now(timezone.utc).isoformat()
             })
         
         if avg_score >= 8.0:
             milestones.append({
                 "title": "High Performer",
                 "description": "You're scoring above average!",
-                "achieved_at": datetime.utcnow().isoformat()
+                "achieved_at": datetime.now(timezone.utc).isoformat()
             })
         
         # Next goals

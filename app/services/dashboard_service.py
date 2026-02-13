@@ -5,7 +5,7 @@ This service provides dashboard-specific data aggregation and formatting
 for the dashboard API endpoints.
 """
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.services.data_aggregator import DataAggregator
 from app.services.analytics_service import AnalyticsService
@@ -35,7 +35,7 @@ class DashboardService:
         """Get dashboard overview data."""
         try:
             # Get session summary
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days)
             summary = self.aggregator.get_user_sessions_summary(user_id, start_date, end_date)
             
@@ -89,7 +89,7 @@ class DashboardService:
                 improvement_rate=improvement_rate,
                 current_streak=current_streak,
                 recent_activity=activities,
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting dashboard overview for user {user_id}: {e}")
@@ -110,7 +110,7 @@ class DashboardService:
                 difficulty_progression=progress_data["difficulty_progression"],
                 time_progression=progress_data["time_progression"],
                 overall_trend=progress_data["overall_trend"],
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting user progress for user {user_id}: {e}")
@@ -151,7 +151,7 @@ class DashboardService:
                 skill_breakdown=skill_breakdown,
                 time_analysis=time_analysis,
                 recommendations=recommendations,
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting analytics data for user {user_id}: {e}")
@@ -176,7 +176,7 @@ class DashboardService:
                 completion_rate=metrics["completion_rate"],
                 average_session_duration=metrics["average_session_duration"],
                 total_questions_answered=metrics["total_questions_answered"],
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting performance metrics for user {user_id}: {e}")
@@ -198,7 +198,7 @@ class DashboardService:
                 skill_trends=trend_data["skill_trends"],
                 trend_direction=trend_data["trend_direction"],
                 trend_percentage=trend_data["trend_percentage"],
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting performance trends for user {user_id}: {e}")
@@ -220,7 +220,7 @@ class DashboardService:
                 recommendations=insights_data["recommendations"],
                 milestones=insights_data["milestones"],
                 next_goals=insights_data["next_goals"],
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
         except Exception as e:
             logger.error(f"Error getting user insights for user {user_id}: {e}")
