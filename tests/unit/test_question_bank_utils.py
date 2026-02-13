@@ -5,6 +5,8 @@ Tests the shared utilities for question bank operations.
 """
 import pytest
 import uuid
+from unittest.mock import MagicMock
+
 from app.utils.question_bank_utils import QuestionBankUtils
 from app.database.models import Question, SessionQuestion, InterviewSession
 
@@ -213,3 +215,35 @@ class TestQuestionBankUtils:
         assert result["total_questions"] >= 1
         assert isinstance(result["difficulty_distribution"], dict)
         assert isinstance(result["category_distribution"], dict)
+
+    @pytest.mark.unit
+    def test_find_duplicate_questions_db_exception(self):
+        """When db.execute raises, find_duplicate_questions returns empty list."""
+        mock_db = MagicMock()
+        mock_db.execute.side_effect = Exception("Database connection failed")
+
+        result = QuestionBankUtils.find_duplicate_questions(mock_db)
+
+        assert result == []
+
+    @pytest.mark.unit
+    def test_get_duplicate_question_instances_db_exception(self):
+        """When db.execute raises, get_duplicate_question_instances returns empty list."""
+        mock_db = MagicMock()
+        mock_db.execute.side_effect = Exception("Database error")
+
+        result = QuestionBankUtils.get_duplicate_question_instances(
+            mock_db, "some question text"
+        )
+
+        assert result == []
+
+    @pytest.mark.unit
+    def test_is_question_linked_to_sessions_db_exception(self):
+        """When db.execute raises, is_question_linked_to_sessions returns True (safe default)."""
+        mock_db = MagicMock()
+        mock_db.execute.side_effect = Exception("Database error")
+
+        result = QuestionBankUtils.is_question_linked_to_sessions(mock_db, 123)
+
+        assert result is True

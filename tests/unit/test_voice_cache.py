@@ -155,9 +155,19 @@ class TestVoiceCacheService:
         async def request():
             return await voice_cache.get_or_synthesize(cache_key, failing_synthesize)
         
-        # Run 3 concurrent requests
-        with pytest.raises(ValueError, match="Synthesis failed"):
-            await asyncio.gather(*[request() for _ in range(3)])
+        # Run 3 concurrent requests. Use return_exceptions=True so gather doesn't cancel
+        # waiting tasks when the first raises - otherwise we get "Future exception was
+        # never retrieved" because the shared singleflight Future's exception is never
+        # consumed by the cancelled waiters.
+        results = await asyncio.gather(
+            *[request() for _ in range(3)], return_exceptions=True
+        )
+
+        # All 3 requests should have received the propagated ValueError
+        assert len(results) == 3
+        for r in results:
+            assert isinstance(r, ValueError)
+            assert str(r) == "Synthesis failed"
     
     @pytest.mark.unit
     def test_cache_statistics(self, voice_cache):
@@ -218,6 +228,70 @@ class TestVoiceCacheService:
         key3, hash3 = voice_cache._get_cache_key_with_hash("text", "voice", "mp3", None)
         assert key3 == key1
         assert hash3 == hash1
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_get_cached_voice_exception_returns_none(self, voice_cache):
+        """Test get_cached_voice returns None and increments errors when cache.get raises."""
+        mock_cache = AsyncMock()
+        mock_cache.get.side_effect = RuntimeError("Cache backend unavailable")
+        voice_cache.cache = mock_cache
+
+        result = await voice_cache.get_cached_voice("test text", "voice1", "mp3")
+
+        assert result is None
+        assert voice_cache.stats["errors"] == 1
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_cache_voice_exception_returns_false(self, voice_cache):
+        """Test cache_voice returns False and increments errors when cache.set raises."""
+        mock_cache = AsyncMock()
+        mock_cache.set.side_effect = RuntimeError("Cache write failed")
+        voice_cache.cache = mock_cache
+
+        success = await voice_cache.cache_voice(
+            text="test text",
+            voice_id="voice1",
+            format="mp3",
+            file_id="file123",
+            duration=5.5,
+        )
+
+        assert success is False
+        assert voice_cache.stats["errors"] == 1
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_get_or_synthesize_cache_hit_returns_cached(self, voice_cache):
+        """Test get_or_synthesize returns cached data without calling synthesize when cache hit."""
+        # First cache the data
+        await voice_cache.cache_voice(
+            text="cached-or-synth-text",
+            voice_id="voice1",
+            format="mp3",
+            file_id="file456",
+            duration=3.0,
+        )
+
+        cache_key, _ = voice_cache._get_cache_key_with_hash(
+            "cached-or-synth-text", "voice1", "mp3"
+        )
+
+        synthesize_called = False
+
+        async def would_synthesize():
+            nonlocal synthesize_called
+            synthesize_called = True
+            return {"file_id": "should_not_use"}
+
+        result = await voice_cache.get_or_synthesize(cache_key, would_synthesize)
+
+        assert result is not None
+        assert result["file_id"] == "file456"
+        assert result["duration"] == 3.0
+        assert synthesize_called is False
+        assert voice_cache.stats["hits"] == 1
 
 
 class TestVoiceCacheServiceGlobal:

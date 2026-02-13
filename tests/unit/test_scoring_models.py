@@ -366,3 +366,16 @@ class TestScoringWeights:
         assert weights.delivery_weight == 0.3
         assert weights.technical_weight == 0.3
 
+    @pytest.mark.unit
+    def test_scoring_weights_custom_values(self):
+        """Test creating scoring weights with custom values that sum to 1.0."""
+        weights = ScoringWeights(
+            content_weight=0.5,
+            delivery_weight=0.3,
+            technical_weight=0.2,
+        )
+        assert weights.content_weight == 0.5
+        assert weights.delivery_weight == 0.3
+        assert weights.technical_weight == 0.2
+        assert weights.content_weight + weights.delivery_weight + weights.technical_weight == 1.0
+
