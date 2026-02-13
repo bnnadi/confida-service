@@ -186,14 +186,17 @@ The `SessionService` now includes:
 
 ## Testing
 
-Run the test script to verify the implementation:
+Run the test suite to verify the implementation:
 
 ```bash
-python test_dual_mode.py
+# Unit tests for session service (practice/interview modes)
+pytest tests/unit/test_session_service.py -v
+
+# Integration tests for interview endpoints
+pytest tests/integration/test_interview_endpoints.py -v
 ```
 
-This will test:
+This covers:
 - Scenarios endpoint
-- Practice session preview
-- Interview session preview
-- Session creation (requires authentication)
+- Practice session creation and preview
+- Interview session creation and preview

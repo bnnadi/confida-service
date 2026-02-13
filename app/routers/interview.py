@@ -374,10 +374,10 @@ async def analyze_answer(
     try:
         from uuid import UUID
         from app.database.models import Question, InterviewSession, Answer, SessionQuestion
-        
+        from app.services.encryption_service import get_encryption_service
+        from app.services.audit_service import log_data_access
+
         question_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
-        # Accept either SessionQuestion.id (from get_session_questions) or Question.id
-        # First try SessionQuestion.id - resolve to Question via session ownership
         session_question = db.query(SessionQuestion).join(
             InterviewSession, SessionQuestion.session_id == InterviewSession.id
         ).filter(
@@ -387,40 +387,50 @@ async def analyze_answer(
         if session_question:
             question = session_question.question
             question_uuid = session_question.question_id
+            session_id = session_question.session_id
         else:
-            # Fallback: treat as Question.id
-            question = db.query(Question).join(
-                SessionQuestion, Question.id == SessionQuestion.question_id
-            ).join(
+            sq = db.query(SessionQuestion).join(
                 InterviewSession, SessionQuestion.session_id == InterviewSession.id
             ).filter(
-                Question.id == question_uuid,
+                SessionQuestion.question_id == question_uuid,
                 InterviewSession.user_id == current_user["id"]
             ).first()
-        
-        if not question:
-            raise HTTPException(status_code=404, detail="Question not found")
-        
+            if not sq:
+                raise HTTPException(status_code=404, detail="Question not found")
+            session_question = sq
+            question = session_question.question
+            session_id = session_question.session_id
+
         question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
         role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
-        
+
         response = await ai_client.analyze_answer(
             job_description=request.jobDescription,
             question=question_text,
             answer=request.answer,
             role=role
         )
-        
+
+        enc = get_encryption_service()
+        uid = str(current_user["id"])
+        enc_answer = enc.encrypt(request.answer, uid) or request.answer
+        enc_analysis = enc.encrypt(response, uid) if enc.is_enabled() else response
+        score_val = {"clarity": response.get("score", {}).get("clarity", 0),
+                    "confidence": response.get("score", {}).get("confidence", 0)}
+        enc_score = enc.encrypt(score_val, uid) if enc.is_enabled() else score_val
+        enc_multi = enc.encrypt(response.get("multi_agent_analysis"), uid) if enc.is_enabled() and response.get("multi_agent_analysis") else response.get("multi_agent_analysis")
+
         answer = Answer(
             question_id=question_uuid,
-            answer_text=request.answer,
-            analysis_result=response,
-            score={"clarity": response.get("score", {}).get("clarity", 0), 
-                  "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis"),
+            session_id=session_id,
+            answer_text=enc_answer,
+            analysis_result=enc_analysis,
+            score=enc_score,
+            multi_agent_scores=enc_multi,
             audio_file_id=request.audio_file_id
         )
         db.add(answer)
+        log_data_access(db, uid, "answer", "write", str(question_uuid))
         
         if request.audio_file_id:
             session_question = db.query(SessionQuestion).filter(
@@ -666,7 +676,9 @@ async def _handle_parse_jd_unified(ai_client, db, request, validated_service, cu
 async def _handle_async_analyze_answer(ai_service, db, request, validated_service, current_user, question_id):
     """Handle async analyze answer operation."""
     from app.routers.analysis_helpers import perform_analysis_with_fallback
-    
+    from app.database.models import SessionQuestion, InterviewSession
+    from sqlalchemy import select
+
     # Verify question exists and belongs to user using generic validation
     question = await _validate_question_access(db, question_id, current_user["id"])
     
@@ -677,63 +689,58 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
     # Perform analysis with fallback
     response = await perform_analysis_with_fallback(ai_service, request, question_text, role)
     
+    # Resolve session_id for encryption and audit
+    from uuid import UUID
+    q_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
+    sq_result = await db.execute(
+        select(SessionQuestion)
+        .join(InterviewSession, SessionQuestion.session_id == InterviewSession.id)
+        .where(
+            ((SessionQuestion.question_id == q_uuid) | (SessionQuestion.id == q_uuid)),
+            InterviewSession.user_id == current_user["id"]
+        )
+        .limit(1)
+    )
+    session_question = sq_result.scalar_one_or_none()
+    session_id = session_question.session_id if session_question and session_question.session_id else None
+
+    # Encrypt sensitive fields
+    from app.services.encryption_service import get_encryption_service
+    from app.services.audit_service import log_data_access
+
+    enc = get_encryption_service()
+    uid = str(current_user["id"])
+    enc_answer = enc.encrypt(request.answer, uid) or request.answer
+    enc_analysis = enc.encrypt(response, uid) if enc.is_enabled() else response
+    score_val = {"clarity": response.get("score", {}).get("clarity", 0),
+                 "confidence": response.get("score", {}).get("confidence", 0)}
+    enc_score = enc.encrypt(score_val, uid) if enc.is_enabled() else score_val
+    enc_multi = enc.encrypt(response.get("multi_agent_analysis"), uid) if enc.is_enabled() and response.get("multi_agent_analysis") else response.get("multi_agent_analysis")
+    
     # Store answer and analysis in database directly
     from app.database.models import Answer, SessionQuestion
     
-    if hasattr(db, 'execute'):  # Async session
-        answer = Answer(
-            question_id=question_id,
-            answer_text=request.answer,
-            analysis_result=response,
-            score={"clarity": response.get("score", {}).get("clarity", 0), 
-                  "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis"),
-            audio_file_id=getattr(request, 'audio_file_id', None)
-        )
-        db.add(answer)
-        
-        # Update SessionQuestion.session_specific_context to store answer audio file ID
-        if hasattr(request, 'audio_file_id') and request.audio_file_id:
-            from sqlalchemy import select
-            session_question_result = await db.execute(
-                select(SessionQuestion).where(SessionQuestion.question_id == question_id)
-            )
-            session_question = session_question_result.scalar_one_or_none()
-            
-            if session_question:
-                context = session_question.session_specific_context or {}
-                if not isinstance(context, dict):
-                    context = {}
-                context["answer_audio_file_id"] = request.audio_file_id
-                session_question.session_specific_context = context
-        
-        await db.commit()
-    else:  # Sync session
-        answer = Answer(
-            question_id=question_id,
-            answer_text=request.answer,
-            analysis_result=response,
-            score={"clarity": response.get("score", {}).get("clarity", 0), 
-                  "confidence": response.get("score", {}).get("confidence", 0)},
-            multi_agent_scores=response.get("multi_agent_analysis"),
-            audio_file_id=getattr(request, 'audio_file_id', None)
-        )
-        db.add(answer)
-        
-        # Update SessionQuestion.session_specific_context to store answer audio file ID
-        if hasattr(request, 'audio_file_id') and request.audio_file_id:
-            session_question = db.query(SessionQuestion).filter(
-                SessionQuestion.question_id == question_id
-            ).first()
-            
-            if session_question:
-                context = session_question.session_specific_context or {}
-                if not isinstance(context, dict):
-                    context = {}
-                context["answer_audio_file_id"] = request.audio_file_id
-                session_question.session_specific_context = context
-        
-        db.commit()
+    answer = Answer(
+        question_id=question_id,
+        session_id=session_id,
+        answer_text=enc_answer,
+        analysis_result=enc_analysis,
+        score=enc_score,
+        multi_agent_scores=enc_multi,
+        audio_file_id=getattr(request, 'audio_file_id', None)
+    )
+    db.add(answer)
+    log_data_access(db, uid, "answer", "write", str(question_id))
+    
+    # Update SessionQuestion.session_specific_context to store answer audio file ID
+    if hasattr(request, 'audio_file_id') and request.audio_file_id and session_question:
+        context = session_question.session_specific_context or {}
+        if not isinstance(context, dict):
+            context = {}
+        context["answer_audio_file_id"] = request.audio_file_id
+        session_question.session_specific_context = context
+    
+    await db.commit()
     
     # Extract enhanced scoring rubric
     from app.routers.analysis_helpers import extract_enhanced_score
@@ -754,6 +761,8 @@ async def _handle_async_analyze_answer(ai_service, db, request, validated_servic
 async def _handle_sync_analyze_answer(ai_service, db, request, validated_service, current_user, question_id):
     """Handle sync analyze answer operation."""
     from app.routers.analysis_helpers import perform_analysis_with_fallback
+    from app.database.models import Answer, SessionQuestion, InterviewSession
+    from uuid import UUID
     
     # Verify question exists and belongs to user using generic validation
     question = await _validate_question_access(db, question_id, current_user["id"])
@@ -765,19 +774,40 @@ async def _handle_sync_analyze_answer(ai_service, db, request, validated_service
     # Perform analysis with fallback
     response_dict = await perform_analysis_with_fallback(ai_service, request, question_text, role)
     
-    # Store answer and analysis in database directly
-    from app.database.models import Answer
+    # Resolve session_id for encryption and audit (sync db)
+    q_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
+    session_question = db.query(SessionQuestion).join(
+        InterviewSession, SessionQuestion.session_id == InterviewSession.id
+    ).filter(
+        (SessionQuestion.question_id == q_uuid) | (SessionQuestion.id == q_uuid),
+        InterviewSession.user_id == current_user["id"]
+    ).first()
+    session_id = session_question.session_id if session_question and session_question.session_id else None
+    
+    # Encrypt sensitive fields
+    from app.services.encryption_service import get_encryption_service
+    from app.services.audit_service import log_data_access
+    
+    enc = get_encryption_service()
+    uid = str(current_user["id"])
+    enc_answer = enc.encrypt(request.answer, uid) or request.answer
+    enc_analysis = enc.encrypt(response_dict, uid) if enc.is_enabled() else response_dict
+    score_val = {"clarity": response_dict.get("score", {}).get("clarity", 0),
+                 "confidence": response_dict.get("score", {}).get("confidence", 0)}
+    enc_score = enc.encrypt(score_val, uid) if enc.is_enabled() else score_val
+    enc_multi = enc.encrypt(response_dict.get("multi_agent_analysis"), uid) if enc.is_enabled() and response_dict.get("multi_agent_analysis") else response_dict.get("multi_agent_analysis")
     
     answer = Answer(
         question_id=question_id,
-        answer_text=request.answer,
-        analysis_result=response_dict,
-        score={"clarity": response_dict.get("score", {}).get("clarity", 0), 
-              "confidence": response_dict.get("score", {}).get("confidence", 0)},
-        multi_agent_scores=response_dict.get("multi_agent_analysis")
+        session_id=session_id,
+        answer_text=enc_answer,
+        analysis_result=enc_analysis,
+        score=enc_score,
+        multi_agent_scores=enc_multi
     )
     
     db.add(answer)
+    log_data_access(db, uid, "answer", "write", str(question_id))
     db.commit()
     
     # Extract enhanced scoring rubric

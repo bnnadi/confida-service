@@ -3,11 +3,12 @@ Data rights router for GDPR/CCPA compliance.
 
 Provides user data export (Right to Access) and account deletion (Right to Erasure).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.services.database_service import get_db
 from app.services.data_rights_service import DataRightsService
 from app.services.auth_service import AuthService
+from app.services.audit_service import log_data_access
 from app.middleware.auth_middleware import get_current_user_required
 from app.models.schemas import DeleteAccountRequest, DataExportResponse
 router = APIRouter(prefix="/api/v1/data-rights", tags=["data-rights"])
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api/v1/data-rights", tags=["data-rights"])
 
 @router.get("/export", response_model=DataExportResponse)
 async def export_user_data(
+    request: Request,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -29,12 +31,15 @@ async def export_user_data(
     data = service.export_user_data(current_user["id"])
     if "error" in data:
         raise HTTPException(status_code=404, detail=data["error"])
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "export", "export", ip_address=ip)
     return DataExportResponse(**data)
 
 
 @router.post("/delete-account", status_code=status.HTTP_200_OK)
 async def delete_account(
     request: DeleteAccountRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -59,5 +64,6 @@ async def delete_account(
     success = service.delete_user_account(current_user["id"])
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
-
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, current_user["id"], "account", "delete", ip_address=ip)
     return {"message": "Account deleted successfully"}

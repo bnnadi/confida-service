@@ -71,10 +71,10 @@ For development and testing, you can use SQLite by updating your `.env`:
 DATABASE_URL=sqlite:///./confida.db
 ```
 
-Then run the setup script:
+Then run the setup script (from project root):
 
 ```bash
-python setup_database.py
+python scripts/setup/setup_database.py
 ```
 
 ## Database Schema
@@ -193,7 +193,9 @@ logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 │   │   ├── user.py        # User model
 │   │   └── auth.py        # Auth schemas
 │   └── config.py          # Configuration
-├── setup_database.py      # Database setup script
+├── scripts/setup/
+│   ├── setup_database.py      # Database setup script
+│   └── setup_dev_database.py  # Development database setup
 └── env.example           # Environment template
 ```
 

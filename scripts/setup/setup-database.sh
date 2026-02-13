@@ -60,7 +60,7 @@ if [ "$ENVIRONMENT" = "development" ]; then
         print_success "Migrations completed!"
     else
         print_warning "Alembic not found, running setup script instead..."
-        python setup_database.py
+        python scripts/setup/setup_database.py
     fi
     
 elif [ "$ENVIRONMENT" = "production" ]; then
@@ -83,7 +83,7 @@ elif [ "$ENVIRONMENT" = "production" ]; then
         print_success "Production migrations completed!"
     else
         print_warning "Alembic not found, running setup script instead..."
-        python setup_database.py
+        python scripts/setup/setup_database.py
     fi
     
 else

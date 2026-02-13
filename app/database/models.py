@@ -114,6 +114,7 @@ class Answer(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"), nullable=True, index=True)  # For cascade delete on user erasure
     answer_text = Column(Text, nullable=False)
     analysis_result = Column(JSONB, nullable=True)
     score = Column(JSONB, nullable=True)
@@ -259,6 +260,38 @@ class ConsentHistory(Base):
         return f"<ConsentHistory(id={self.id}, user_id={self.user_id}, consent_type={self.consent_type}, action={self.action})>"
 
 
+class EncryptionKey(Base):
+    """Per-user encryption key metadata for key derivation (INT-31).
+    Stores salt for PBKDF2; deleting rows on user delete enables crypto-shredding."""
+    __tablename__ = "encryption_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
+    key_salt = Column(String(88), nullable=False)  # base64-encoded 32 bytes
+    key_version = Column(Integer, default=1, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    def __repr__(self):
+        return f"<EncryptionKey(id={self.id}, user_id={self.user_id}, version={self.key_version})>"
+
+
+class DataAccessLog(Base):
+    """Audit log for data access (INT-31)."""
+    __tablename__ = "data_access_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    resource_type = Column(String(50), nullable=False, index=True)  # session, answer, export, etc.
+    resource_id = Column(String(255), nullable=True, index=True)
+    action = Column(String(20), nullable=False, index=True)  # read, write, delete, export
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<DataAccessLog(id={self.id}, user_id={self.user_id}, resource_type={self.resource_type}, action={self.action})>"
+
+
 # Create indexes for performance optimization
 Index('idx_users_email', User.email)
 Index('idx_sessions_user_id', InterviewSession.user_id)
@@ -289,6 +322,12 @@ Index('idx_user_consents_consent_type', UserConsent.consent_type)
 Index('idx_consent_history_user_id', ConsentHistory.user_id)
 Index('idx_consent_history_consent_type', ConsentHistory.consent_type)
 Index('idx_consent_history_created_at', ConsentHistory.created_at)
+
+# Encryption and audit (INT-31)
+Index('idx_encryption_keys_user_id', EncryptionKey.user_id)
+Index('idx_data_access_log_user_id', DataAccessLog.user_id)
+Index('idx_data_access_log_created_at', DataAccessLog.created_at)
+Index('idx_data_access_log_resource_type', DataAccessLog.resource_type)
 
 # JSONB indexes for flexible queries (PostgreSQL only)
 # These will be created in migration scripts

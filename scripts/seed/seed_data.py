@@ -7,6 +7,12 @@ and other test data for development and testing purposes.
 
 import os
 import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
@@ -15,7 +21,6 @@ from app.database.models import (
     User, InterviewSession, Question, Answer, 
     UserPerformance, AnalyticsEvent, AgentConfiguration
 )
-from app.database.connection import get_db
 from app.services.auth_service import AuthService
 from app.config import get_settings
 import logging

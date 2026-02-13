@@ -6,10 +6,10 @@ This script migrates the hardcoded scenario data from QuestionEngine to the data
 """
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy.orm import Session
-from app.database.connection import get_db
+from app.services.database_service import get_db
 from app.services.scenario_service import ScenarioService
 from app.utils.logger import get_logger
 

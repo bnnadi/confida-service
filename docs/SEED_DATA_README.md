@@ -1,15 +1,15 @@
 # 🌱 Seed Data for Confida
 
-This directory contains scripts to populate your development database with demo data for testing and development purposes.
+The `scripts/seed/` directory contains scripts to populate your development database with demo data for testing and development purposes.
 
 ## Quick Start
 
 ```bash
-# Run the seed data script
-python seed_data.py
+# Run the seed data script (from project root)
+python scripts/seed/seed_data.py
 
 # Or use the convenience script
-python run_seed.py
+python scripts/seed/run_seed.py
 ```
 
 ## What Gets Created
@@ -45,8 +45,8 @@ Make sure you have:
 
 ### Basic Usage
 ```bash
-# Seed the database
-python seed_data.py
+# Seed the database (run from project root)
+python scripts/seed/seed_data.py
 ```
 
 ### Reset and Reseed
@@ -61,7 +61,7 @@ psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_
 alembic upgrade head
 
 # Seed with demo data
-python seed_data.py
+python scripts/seed/seed_data.py
 ```
 
 ### Testing with Demo Data
@@ -78,14 +78,18 @@ curl -X POST "http://localhost:8000/auth/login" \
 ## File Structure
 
 ```
-seed_data.py          # Main seed data script
-run_seed.py           # Convenience script to run seed data
-SEED_DATA_README.md   # This documentation
+scripts/seed/
+├── seed_data.py              # Main seed data script (demo users, sessions)
+├── run_seed.py               # Convenience script to run seed_data.py
+├── seed_question_bank.py     # Question bank seeding
+├── seed_question_database.py # Question database seeding
+├── seed_scenarios.py         # Practice scenario seeding
+docs/SEED_DATA_README.md      # This documentation
 ```
 
 ## Customization
 
-You can modify the seed data by editing the constants in `seed_data.py`:
+You can modify the seed data by editing the constants in `scripts/seed/seed_data.py`:
 
 - `DEMO_USERS` - Add/modify demo user accounts
 - `SAMPLE_JOB_DESCRIPTIONS` - Add new job roles and descriptions

@@ -7,7 +7,7 @@ This script will create the database and run initial migrations.
 import os
 import sys
 from sqlalchemy import create_engine, text
-from app.database.connection import Base, engine
+from app.services.database_service import database_service
 from app.config import get_settings
 
 def create_database():
@@ -47,8 +47,9 @@ def create_database():
 def run_migrations():
     """Run database migrations."""
     try:
-        # Create all tables
-        Base.metadata.create_all(bind=engine)
+        # Create all tables using database service
+        database_service.initialize()
+        database_service.create_tables()
         print("✅ Database tables created successfully")
         return True
     except Exception as e:
@@ -71,7 +72,7 @@ def main():
         print("1. Make sure PostgreSQL is installed and running")
         print("2. Check if the database user exists")
         print("3. Verify connection permissions")
-        print("4. Run: python setup_dev_database.py for automated setup")
+        print("4. Run: python scripts/setup/setup_dev_database.py for automated setup")
         sys.exit(1)
     
     # Run migrations

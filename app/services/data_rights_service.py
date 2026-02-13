@@ -17,9 +17,11 @@ from app.database.models import (
     UserGoal,
     UserConsent,
     ConsentHistory,
+    EncryptionKey,
 )
 from app.utils.uuid_utils import to_uuid
 from app.utils.logger import get_logger
+from app.services.encryption_service import get_encryption_service
 
 logger = get_logger(__name__)
 
@@ -59,12 +61,19 @@ class DataRightsService:
             .order_by(InterviewSession.created_at.desc())
             .all()
         )
+        enc = get_encryption_service()
+        uid_str = str(uid)
         sessions_data = []
         for s in sessions:
+            job_desc = s.job_description
+            if job_desc and enc.is_enabled() and isinstance(job_desc, str):
+                dec = enc.decrypt(job_desc, uid_str)
+                job_desc = dec if isinstance(dec, str) else str(dec) if dec is not None else job_desc
             sessions_data.append({
                 "id": str(s.id),
                 "mode": s.mode,
                 "role": s.role,
+                "job_description": job_desc,
                 "status": s.status,
                 "total_questions": s.total_questions,
                 "completed_questions": s.completed_questions,
@@ -72,30 +81,30 @@ class DataRightsService:
                 "created_at": s.created_at.isoformat() if s.created_at else None,
             })
 
-        # Answers: get via session_questions -> question_ids for user's sessions
         session_ids = [s.id for s in sessions]
-        question_ids = (
-            self.db.query(SessionQuestion.question_id)
-            .filter(SessionQuestion.session_id.in_(session_ids))
-            .distinct()
+        answers_data = []
+        answers = (
+            self.db.query(Answer)
+            .filter(Answer.session_id.in_(session_ids))
             .all()
         )
-        question_ids = [q[0] for q in question_ids]
-        answers_data = []
-        if question_ids:
-            answers = (
-                self.db.query(Answer)
-                .filter(Answer.question_id.in_(question_ids))
-                .all()
-            )
-            for a in answers:
-                answers_data.append({
-                    "id": str(a.id),
-                    "question_id": str(a.question_id),
-                    "answer_text": a.answer_text,
-                    "score": a.score,
-                    "created_at": a.created_at.isoformat() if a.created_at else None,
-                })
+        for a in answers:
+            ans_text = a.answer_text
+            ans_score = a.score
+            if enc.is_enabled():
+                if ans_text and isinstance(ans_text, str):
+                    dec = enc.decrypt(ans_text, uid_str)
+                    ans_text = dec if isinstance(dec, str) else str(dec) if dec is not None else ans_text
+                if ans_score and isinstance(ans_score, str):
+                    dec = enc.decrypt(ans_score, uid_str)
+                    ans_score = dec if isinstance(dec, dict) else ans_score
+            answers_data.append({
+                "id": str(a.id),
+                "question_id": str(a.question_id),
+                "answer_text": ans_text,
+                "score": ans_score,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            })
 
         # Performance
         perf = (
@@ -182,11 +191,19 @@ class DataRightsService:
         if not user:
             return False
 
+        # Crypto-shredding: delete encryption keys before user (INT-31)
+        self.db.query(EncryptionKey).filter(EncryptionKey.user_id == uid).delete()
+
+        # Delete answers for this user's sessions (Answer.session_id cascade may be null for legacy)
+        session_ids = [s.id for s in self.db.query(InterviewSession).filter(InterviewSession.user_id == uid).all()]
+        if session_ids:
+            self.db.query(Answer).filter(Answer.session_id.in_(session_ids)).delete(synchronize_session=False)
+
         # Delete consent history first (no FK from User)
         self.db.query(ConsentHistory).filter(ConsentHistory.user_id == uid).delete()
 
         # Delete user - cascade will handle: interview_sessions, user_performance,
-        # analytics_events, goals, consents (UserConsent)
+        # analytics_events, goals, consents (UserConsent), answers with session_id
         self.db.delete(user)
         self.db.commit()
 
