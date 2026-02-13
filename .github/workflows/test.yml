@@ -70,6 +70,10 @@ jobs:
       run: |
         python app/database/migrate.py upgrade head
 
+    - name: Production readiness validation (local checks)
+      run: |
+        python scripts/validate_production_readiness.py --skip-remote
+
     - name: Run tests with coverage
       run: |
         python -m pytest tests/ -v --cov=app --cov-report=xml --junitxml=test-results.xml --timeout=60
