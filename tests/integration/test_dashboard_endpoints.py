@@ -200,6 +200,22 @@ class TestDashboardEndpoints:
         assert isinstance(data["recommendations"], list)
     
     @pytest.mark.integration
+    def test_get_dashboard_overview_with_different_days(
+        self, client, sample_user, sample_sessions, mock_current_user, override_auth
+    ):
+        """Test dashboard overview with different days parameter."""
+        override_auth(mock_current_user)
+        for days in [7, 30, 90]:
+            response = client.get(
+                f"/api/v1/dashboard/overview/{sample_user.id}",
+                params={"days": days},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["user_id"] == str(sample_user.id)
+            assert "total_sessions" in data
+
+    @pytest.mark.integration
     def test_dashboard_endpoints_require_auth(self, client, sample_user):
         """Test that dashboard endpoints require authentication."""
         # Clear any existing overrides to test without auth

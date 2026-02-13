@@ -413,5 +413,5 @@ class TestInterviewEndpoints:
         assert response.status_code == 500
         data = response.json()
         assert "detail" in data
-    
+
     # Note: list_models error test removed - endpoint doesn't exist in pure microservice architecture
