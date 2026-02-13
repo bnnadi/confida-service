@@ -59,7 +59,7 @@ class TestTTSFallbackBehavior:
         
         service = tts_service_with_providers(primary_provider, fallback_provider)
         
-        with pytest.raises(TTSProviderError, match="All TTS providers failed"):
+        with pytest.raises(TTSProviderError, match="Fallback provider failed"):
             await service.synthesize("Hello world", use_cache=False)
     
     @pytest.mark.integration
@@ -129,7 +129,7 @@ class TestTTSProviderFactoryIntegration:
             provider = TTSProviderFactory.create_provider("coqui")
             
             assert provider is not None
-            assert isinstance(provider, type(TTSProviderFactory.PROVIDER_REGISTRY["coqui"]))
+            assert isinstance(provider, TTSProviderFactory.PROVIDER_REGISTRY["coqui"])
             assert provider.config["voice_id"] == "test-voice"
             assert provider.config["timeout"] == 30
     

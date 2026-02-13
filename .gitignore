@@ -47,6 +47,10 @@ postgres-data/
 # Coverage reports
 .coverage
 htmlcov/
+coverage.xml
+
+# Test reports
+test-results.xml
 
 # Test cache
 .pytest_cache/

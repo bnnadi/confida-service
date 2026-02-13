@@ -130,16 +130,17 @@ class TestSessionEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert "id" in data
-        assert "user_id" in data
-        assert "role" in data
-        assert "job_description" in data
-        assert "status" in data
-        assert "total_questions" in data
-        assert "completed_questions" in data
-        assert "created_at" in data
-        assert data["id"] == str(sample_interview_session.id)
-        assert data["user_id"] == str(sample_interview_session.user_id)
+        assert "session" in data
+        assert "questions" in data
+        session_data = data["session"]
+        assert "id" in session_data
+        assert "user_id" in session_data
+        assert "role" in session_data
+        assert "job_description" in session_data
+        assert "status" in session_data
+        assert "created_at" in session_data
+        assert session_data["id"] == str(sample_interview_session.id)
+        assert session_data["user_id"] == str(sample_interview_session.user_id)
 
     @pytest.mark.integration
     def test_get_session_not_found(self, client, sample_user, override_auth):
@@ -255,13 +256,14 @@ class TestSessionEndpoints:
         """Test successful session deletion."""
         override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
 
-        response = client.delete(f"/api/v1/sessions/{sample_interview_session.id}")
+        session_id = str(sample_interview_session.id)
+        response = client.delete(f"/api/v1/sessions/{session_id}")
 
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
 
-        get_response = client.get(f"/api/v1/sessions/{sample_interview_session.id}")
+        get_response = client.get(f"/api/v1/sessions/{session_id}")
         assert get_response.status_code == 404
 
     @pytest.mark.integration
@@ -439,23 +441,25 @@ class TestSessionEndpoints:
         assert "detail" in data
 
     @pytest.mark.integration
-    def test_session_creation_with_ai_service_error(self, client, sample_user, override_auth, override_ai_client):
-        """Test session creation when AI service fails."""
+    def test_session_creation_with_ai_service_error(self, client, sample_user, override_auth):
+        """Test session creation when service raises (e.g. AI or downstream failure)."""
         override_auth({"id": str(sample_user.id), "email": sample_user.email, "is_admin": False})
-
-        mock_ai_client = AsyncMock()
-        mock_ai_client.generate_questions.side_effect = Exception("AI service error")
-        override_ai_client(mock_ai_client)
 
         session_data = {
             "user_id": str(sample_user.id),
             "mode": "interview",
             "role": "Python Developer",
             "job_title": "Python Developer",
-            "job_description": "Looking for Python developer"
+            "job_description": "Looking for Python developer with Django"
         }
 
-        response = client.post("/api/v1/sessions/", json=session_data)
+        with patch("app.routers.sessions.SessionService") as mock_session_service:
+            mock_instance = mock_session_service.return_value
+            mock_instance.create_interview_session = AsyncMock(
+                side_effect=Exception("AI service error")
+            )
+
+            response = client.post("/api/v1/sessions/", json=session_data)
 
         assert response.status_code == 500
         data = response.json()

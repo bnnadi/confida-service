@@ -2,6 +2,7 @@
 Tests for authentication functionality.
 """
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.services.auth_service import AuthService
@@ -10,7 +11,7 @@ from app.services.auth_service import AuthService
 def test_user_registration(client: TestClient, db_session: Session):
     """Test user registration endpoint."""
     user_data = {
-        "email": "register-test@example.com",
+        "email": f"register-test-{uuid.uuid4().hex[:12]}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -28,8 +29,9 @@ def test_user_registration(client: TestClient, db_session: Session):
 
 def test_user_registration_duplicate_email(client: TestClient, db_session: Session):
     """Test user registration with duplicate email."""
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "duplicate-test@example.com",
+        "email": f"duplicate-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -47,7 +49,7 @@ def test_user_registration_duplicate_email(client: TestClient, db_session: Sessi
 def test_user_registration_invalid_password(client: TestClient, db_session: Session):
     """Test user registration with invalid password."""
     user_data = {
-        "email": "invalid-pass-test@example.com",
+        "email": f"invalid-pass-test-{uuid.uuid4().hex[:12]}@example.com",
         "password": "weak",  # Too short
         "name": "Test User"
     }
@@ -58,9 +60,9 @@ def test_user_registration_invalid_password(client: TestClient, db_session: Sess
 
 def test_user_login_success(client: TestClient, db_session: Session):
     """Test successful user login."""
-    # First register a user
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "login-test@example.com",
+        "email": f"login-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -70,7 +72,7 @@ def test_user_login_success(client: TestClient, db_session: Session):
     
     # Now login
     login_data = {
-        "email": "login-test@example.com",
+        "email": user_data["email"],
         "password": "TestPassword123"
     }
     
@@ -98,9 +100,9 @@ def test_user_login_invalid_credentials(client: TestClient, db_session: Session)
 
 def test_password_change(client: TestClient, db_session: Session):
     """Test password change functionality."""
-    # First register and login
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "passchange-test@example.com",
+        "email": f"passchange-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -109,7 +111,7 @@ def test_password_change(client: TestClient, db_session: Session):
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "passchange-test@example.com",
+        "email": user_data["email"],
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -131,9 +133,9 @@ def test_password_change(client: TestClient, db_session: Session):
 
 def test_get_current_user(client: TestClient, db_session: Session):
     """Test getting current user information."""
-    # First register and login
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "me-test@example.com",
+        "email": f"me-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -142,7 +144,7 @@ def test_get_current_user(client: TestClient, db_session: Session):
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "me-test@example.com",
+        "email": user_data["email"],
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -156,7 +158,7 @@ def test_get_current_user(client: TestClient, db_session: Session):
     assert response.status_code == 200
     
     data = response.json()
-    assert data["email"] == "me-test@example.com"
+    assert data["email"] == user_data["email"]
     assert "id" in data
 
 
@@ -168,9 +170,9 @@ def test_get_current_user_no_token(client: TestClient, db_session: Session):
 
 def test_auth_status_authenticated(client: TestClient, db_session: Session):
     """Test authentication status when authenticated."""
-    # First register and login
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "status-test@example.com",
+        "email": f"status-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -179,7 +181,7 @@ def test_auth_status_authenticated(client: TestClient, db_session: Session):
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "status-test@example.com",
+        "email": user_data["email"],
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200
@@ -195,7 +197,7 @@ def test_auth_status_authenticated(client: TestClient, db_session: Session):
     data = response.json()
     assert data["authenticated"] is True
     assert data["user"] is not None
-    assert data["user"]["email"] == "status-test@example.com"
+    assert data["user"]["email"] == user_data["email"]
 
 
 def test_auth_status_not_authenticated(client: TestClient, db_session: Session):
@@ -219,9 +221,9 @@ def test_protected_endpoint_without_auth(client: TestClient, db_session: Session
 
 def test_protected_endpoint_with_auth(client: TestClient, db_session: Session):
     """Test that protected endpoints work with authentication."""
-    # First register and login
+    unique = uuid.uuid4().hex[:12]
     user_data = {
-        "email": "protected-test@example.com",
+        "email": f"protected-test-{unique}@example.com",
         "password": "TestPassword123",
         "name": "Test User"
     }
@@ -230,7 +232,7 @@ def test_protected_endpoint_with_auth(client: TestClient, db_session: Session):
     assert register_response.status_code == 201
     
     login_response = client.post("/api/v1/auth/login", json={
-        "email": "protected-test@example.com",
+        "email": user_data["email"],
         "password": "TestPassword123"
     })
     assert login_response.status_code == 200

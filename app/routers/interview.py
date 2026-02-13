@@ -362,7 +362,8 @@ async def analyze_answer(
     service: Optional[str] = create_service_query_param(),
     question_id: str = Query(..., description="Question ID (UUID) to store the answer"),
     current_user: dict = Depends(get_current_user_required),
-    ai_client = Depends(get_ai_client_dependency)
+    ai_client = Depends(get_ai_client_dependency),
+    db = Depends(get_db)
 ):
     """Analyze user's answer and provide feedback using AI service microservice."""
     validated_service = InputValidator.validate_service(service)
@@ -371,78 +372,56 @@ async def analyze_answer(
         raise HTTPException(status_code=503, detail="AI service unavailable")
     
     try:
-        # Verify question exists and belongs to user (async)
         from uuid import UUID
         from app.database.models import Question, InterviewSession, Answer, SessionQuestion
-        from sqlalchemy import select
         
         question_uuid = UUID(question_id) if isinstance(question_id, str) else question_id
-        async_db_gen = get_async_db()
-        session = await async_db_gen.__anext__()
-        try:
-            # Verify question access (join through SessionQuestion)
-            result = await session.execute(
-                select(Question)
-                .join(SessionQuestion, Question.id == SessionQuestion.question_id)
-                .join(InterviewSession, SessionQuestion.session_id == InterviewSession.id)
-                .where(
-                    Question.id == question_uuid,
-                    InterviewSession.user_id == current_user["id"]
-                )
-            )
-            question = result.scalar_one_or_none()
-            
-            if not question:
-                raise HTTPException(status_code=404, detail="Question not found")
-            
-            # Get question text and role for analysis
-            question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
-            role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
-            
-            # Use AI service microservice for analysis
-            response = await ai_client.analyze_answer(
-                job_description=request.jobDescription,
-                question=question_text,
-                answer=request.answer,
-                role=role
-            )
-            
-            # Store answer and analysis in database directly
-            answer = Answer(
-                question_id=question_uuid,
-                answer_text=request.answer,
-                analysis_result=response,
-                score={"clarity": response.get("score", {}).get("clarity", 0), 
-                      "confidence": response.get("score", {}).get("confidence", 0)},
-                multi_agent_scores=response.get("multi_agent_analysis"),
-                audio_file_id=request.audio_file_id
-            )
-            
-            session.add(answer)
-            
-            # Update SessionQuestion.session_specific_context to store answer audio file ID
-            if request.audio_file_id:
-                session_question_result = await session.execute(
-                    select(SessionQuestion)
-                    .where(SessionQuestion.question_id == question_uuid)
-                )
-                session_question = session_question_result.scalar_one_or_none()
-                
-                if session_question:
-                    # Update session_specific_context with answer audio file ID
-                    context = session_question.session_specific_context or {}
-                    if not isinstance(context, dict):
-                        context = {}
-                    context["answer_audio_file_id"] = request.audio_file_id
-                    session_question.session_specific_context = context
-            
-            await session.commit()
-        finally:
-            await session.close()
-            try:
-                await async_db_gen.__anext__()  # Trigger cleanup
-            except StopAsyncIteration:
-                pass
+        # Use sync db (supports get_db override in tests)
+        question = db.query(Question).join(
+            SessionQuestion, Question.id == SessionQuestion.question_id
+        ).join(
+            InterviewSession, SessionQuestion.session_id == InterviewSession.id
+        ).filter(
+            Question.id == question_uuid,
+            InterviewSession.user_id == current_user["id"]
+        ).first()
+        
+        if not question:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        question_text = question.question_text if hasattr(question, 'question_text') else "Interview question"
+        role = getattr(question, 'role', '') if hasattr(question, 'role') else ""
+        
+        response = await ai_client.analyze_answer(
+            job_description=request.jobDescription,
+            question=question_text,
+            answer=request.answer,
+            role=role
+        )
+        
+        answer = Answer(
+            question_id=question_uuid,
+            answer_text=request.answer,
+            analysis_result=response,
+            score={"clarity": response.get("score", {}).get("clarity", 0), 
+                  "confidence": response.get("score", {}).get("confidence", 0)},
+            multi_agent_scores=response.get("multi_agent_analysis"),
+            audio_file_id=request.audio_file_id
+        )
+        db.add(answer)
+        
+        if request.audio_file_id:
+            session_question = db.query(SessionQuestion).filter(
+                SessionQuestion.question_id == question_uuid
+            ).first()
+            if session_question:
+                context = session_question.session_specific_context or {}
+                if not isinstance(context, dict):
+                    context = {}
+                context["answer_audio_file_id"] = request.audio_file_id
+                session_question.session_specific_context = context
+        
+        db.commit()
         
         # Extract enhanced scoring rubric
         from app.routers.analysis_helpers import extract_enhanced_score

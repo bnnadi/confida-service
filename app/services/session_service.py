@@ -345,7 +345,56 @@ class SessionService:
                 self.db_session.rollback()
             logger.error(f"Error adding questions to session {session_id}: {e}")
             return []
-    
+
+    async def remove_question_from_session(
+        self,
+        session_id: str,
+        session_question_id: str,
+        user_id: Union[int, str]
+    ) -> bool:
+        """Remove a question from a session by SessionQuestion id.
+
+        Returns True if removed, False if not found or session doesn't belong to user.
+        """
+        try:
+            session = await self.get_session(session_id, user_id)
+            if not session:
+                return False
+
+            if self.is_async:
+                result = await self.db_session.execute(
+                    select(SessionQuestion)
+                    .where(SessionQuestion.id == session_question_id)
+                    .where(SessionQuestion.session_id == session_id)
+                )
+                sq = result.scalar_one_or_none()
+            else:
+                sq = self.db_session.query(SessionQuestion).filter(
+                    SessionQuestion.id == session_question_id,
+                    SessionQuestion.session_id == session_id
+                ).first()
+
+            if not sq:
+                return False
+
+            if self.is_async:
+                await self.db_session.delete(sq)
+                await self.db_session.commit()
+            else:
+                self.db_session.delete(sq)
+                self.db_session.commit()
+
+            logger.info(f"Removed question {session_question_id} from session {session_id}")
+            return True
+
+        except Exception as e:
+            if self.is_async:
+                await self.db_session.rollback()
+            else:
+                self.db_session.rollback()
+            logger.error(f"Error removing question from session {session_id}: {e}")
+            return False
+
     # Atomic Operations
     async def create_session_with_questions_atomic(
         self,

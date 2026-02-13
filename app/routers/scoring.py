@@ -13,7 +13,7 @@ from app.models.scoring_models import (
     GradeTier
 )
 from app.dependencies import get_ai_client_dependency
-from app.middleware.auth_middleware import get_current_user
+from app.middleware.auth_middleware import get_current_user_required
 from app.utils.logger import get_logger
 from app.utils.scoring_utils import (
     convert_10_to_100, parse_enhanced_rubric_from_ai_response,
@@ -104,7 +104,7 @@ def _convert_to_multi_agent_analysis(result: Dict[str, Any]):
 async def analyze_answer_multi_agent(
     request: MultiAgentAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_required),
     ai_client = Depends(get_ai_client_dependency)
 ):
     """
@@ -229,7 +229,7 @@ async def list_available_agents():
 async def test_agent(
     agent_id: str,
     request: AgentTestRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Test a specific agent with sample data.
@@ -383,7 +383,7 @@ async def get_performance_metrics():
 async def get_analysis_history(
     user_id: str,
     limit: int = 10,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_required)
 ):
     """
     Get analysis history for a specific user.
