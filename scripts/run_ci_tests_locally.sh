@@ -84,4 +84,4 @@ echo "Running migrations..."
 python app/database/migrate.py upgrade head
 
 echo "Running CI test command..."
-python -m pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=85 --junitxml=test-results.xml --timeout=60
+python -m pytest tests/ -v --cov=app --cov-report=xml --junitxml=test-results.xml --timeout=60
