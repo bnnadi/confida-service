@@ -4,6 +4,7 @@ Unit tests for Dashboard Service.
 Tests the dashboard service logic and data formatting.
 """
 import pytest
+from unittest.mock import patch
 from datetime import datetime, timedelta
 from app.services.dashboard_service import DashboardService
 from app.database.models import InterviewSession, User
@@ -239,4 +240,28 @@ class TestDashboardService:
         assert isinstance(insights.milestones, list)
         assert isinstance(insights.next_goals, list)
         assert isinstance(insights.last_updated, datetime)
+
+    @pytest.mark.unit
+    def test_get_dashboard_overview_aggregator_raises(self, db_session, sample_user):
+        """Test get_dashboard_overview propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_user_sessions_summary", side_effect=RuntimeError("DB error")):
+            with pytest.raises(RuntimeError, match="DB error"):
+                service.get_dashboard_overview(str(sample_user.id), days=30)
+
+    @pytest.mark.unit
+    def test_get_user_progress_aggregator_raises(self, db_session, sample_user):
+        """Test get_user_progress propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_user_progress_data", side_effect=ValueError("Bad data")):
+            with pytest.raises(ValueError, match="Bad data"):
+                service.get_user_progress(str(sample_user.id), days=30)
+
+    @pytest.mark.unit
+    def test_get_analytics_data_aggregator_raises(self, db_session, sample_user):
+        """Test get_analytics_data propagates exception from aggregator."""
+        service = DashboardService(db_session)
+        with patch.object(service.aggregator, "get_performance_metrics_detailed", side_effect=RuntimeError("Metrics error")):
+            with pytest.raises(RuntimeError, match="Metrics error"):
+                service.get_analytics_data(str(sample_user.id), days=30)
 

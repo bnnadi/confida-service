@@ -35,3 +35,17 @@ class TestFallbackResponses:
         assert any("challenging project" in q.lower() for q in result.questions)
         assert any("problem-solving" in q.lower() for q in result.questions)
         assert any("code review" in q.lower() for q in result.questions)
+
+    @pytest.mark.unit
+    def test_get_fallback_analysis_returns_analyze_answer_response(self):
+        """Verify get_fallback_analysis returns AnalyzeAnswerResponse with expected fields."""
+        result = FallbackResponses.get_fallback_analysis(
+            job_description="Test JD",
+            answer="Test answer"
+        )
+        assert result.analysis is not None
+        assert result.score == {"clarity": 5, "confidence": 5}
+        assert len(result.suggestions) == 4
+        assert result.jobDescription == "Test JD"
+        assert result.answer == "Test answer"
+        assert result.service_used == "fallback"

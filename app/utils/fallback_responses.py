@@ -2,7 +2,7 @@
 Centralized fallback responses to eliminate duplication across AI services.
 """
 
-from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse, Score
+from app.models.schemas import ParseJDResponse, AnalyzeAnswerResponse
 
 
 class FallbackResponses:
@@ -25,16 +25,21 @@ class FallbackResponses:
         ])
     
     @staticmethod
-    def get_fallback_analysis() -> AnalyzeAnswerResponse:
+    def get_fallback_analysis(
+        job_description: str = "",
+        answer: str = "",
+    ) -> AnalyzeAnswerResponse:
         """Get fallback analysis if all AI services fail."""
         return AnalyzeAnswerResponse(
-            score=Score(clarity=5, confidence=5),
-            missingKeywords=["specific examples", "metrics", "technical details"],
-            improvements=[
+            analysis="Unable to complete analysis. Please try again.",
+            score={"clarity": 5, "confidence": 5},
+            suggestions=[
                 "Provide more specific examples",
                 "Include quantifiable results",
                 "Add more technical details",
                 "Demonstrate problem-solving approach"
             ],
-            idealAnswer="Please provide a more detailed answer with specific examples, measurable outcomes, and technical depth."
+            jobDescription=job_description,
+            answer=answer,
+            service_used="fallback"
         )
