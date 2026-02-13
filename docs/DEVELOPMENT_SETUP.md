@@ -151,11 +151,11 @@ The project includes a comprehensive seed data script that populates your develo
 #### Running Seed Data
 
 ```bash
-# Run the seed data script
-python seed_data.py
+# Run the seed data script (from project root)
+python scripts/seed/seed_data.py
 
 # Or use the convenience script
-python run_seed.py
+python scripts/seed/run_seed.py
 ```
 
 #### What Gets Created
@@ -190,7 +190,7 @@ psql -d confida_dev -c "GRANT ALL PRIVILEGES ON DATABASE confida_dev TO confida_
 alembic upgrade head
 
 # Seed with demo data
-python seed_data.py
+python scripts/seed/seed_data.py
 ```
 
 ## 🧪 **Testing Strategy**
@@ -296,7 +296,7 @@ alembic revision --autogenerate -m "Initial migration"
 alembic upgrade head
 
 # 6. Seed database with demo data (optional)
-python seed_data.py
+python scripts/seed/seed_data.py
 
 # 7. Start development server
 uvicorn app.main:app --reload

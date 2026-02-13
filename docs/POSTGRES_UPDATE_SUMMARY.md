@@ -15,8 +15,8 @@ Update the Confida service to use PostgreSQL as the default database for develop
 - **`.env`**: Updated existing environment file to use PostgreSQL development settings
 
 ### 3. **Setup Scripts Enhanced**
-- **`setup_database.py`**: Enhanced with better error handling and PostgreSQL-specific guidance
-- **`setup_dev_database.py`**: Improved as the primary development setup script
+- **`scripts/setup/setup_database.py`**: Enhanced with better error handling and PostgreSQL-specific guidance
+- **`scripts/setup/setup_dev_database.py`**: Improved as the primary development setup script
 - **`DEVELOPMENT_SETUP.md`**: Comprehensive guide explaining PostgreSQL vs SQLite issues
 
 ### 4. **Default Configuration**
@@ -42,8 +42,8 @@ DATABASE_URL=postgresql://confida_dev:dev_password@localhost:5432/confida_dev
 
 ### For New Development Setup:
 ```bash
-# 1. Run automated setup
-python setup_dev_database.py
+# 1. Run automated setup (from project root)
+python scripts/setup/setup_dev_database.py
 
 # 2. Create and apply migrations
 alembic revision --autogenerate -m "Initial migration"
@@ -59,7 +59,7 @@ uvicorn app.main:app --reload
 cp env.example .env
 
 # 2. Run setup
-python setup_dev_database.py
+python scripts/setup/setup_dev_database.py
 
 # 3. Apply migrations
 alembic upgrade head
@@ -92,7 +92,7 @@ alembic upgrade head
 - `DEVELOPMENT_SETUP.md`: Comprehensive development guide
 - `DATABASE_SETUP.md`: Database setup instructions
 - `env.example`: Updated with PostgreSQL defaults
-- `setup_dev_database.py`: Automated setup script
+- `scripts/setup/setup_dev_database.py`: Automated setup script
 
 ## 🎉 **Status: COMPLETE**
 The Confida service now uses PostgreSQL as the default development database, ensuring production parity and eliminating potential migration issues when deploying to production.

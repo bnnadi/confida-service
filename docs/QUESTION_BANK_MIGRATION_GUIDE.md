@@ -41,7 +41,7 @@ python scripts/migrate_questions.py
 Seed the question bank with comprehensive questions:
 
 ```bash
-python scripts/seed_question_bank.py
+python scripts/seed/seed_question_bank.py
 ```
 
 **What it does:**
@@ -91,7 +91,7 @@ python scripts/validate_migration.py
 python scripts/migrate_questions.py
 ```
 
-### `scripts/seed_question_bank.py`
+### `scripts/seed/seed_question_bank.py`
 
 **Purpose:** Seed question bank with comprehensive questions
 
@@ -103,7 +103,7 @@ python scripts/migrate_questions.py
 
 **Usage:**
 ```bash
-python scripts/seed_question_bank.py
+python scripts/seed/seed_question_bank.py
 ```
 
 ### `scripts/validate_migration.py`

@@ -12,9 +12,10 @@ from sqlalchemy import select, update, delete, desc
 from sqlalchemy.orm import selectinload, joinedload
 from app.database.models import InterviewSession, SessionQuestion, Question, Scenario
 from app.exceptions import AIServiceError
-# Error handling imports removed as they were unused
+from app.services.encryption_service import get_encryption_service
 from app.utils.logger import get_logger
 from datetime import datetime
+import json
 
 logger = get_logger(__name__)
 
@@ -29,6 +30,30 @@ class SessionService:
         # Use direct SQLAlchemy operations for both sync and async
     
     # Session Creation Methods
+    def _encrypt_session_fields(self, user_id: str, job_description: str, job_context: Optional[dict]) -> tuple:
+        """Encrypt sensitive session fields if encryption enabled."""
+        enc = get_encryption_service()
+        uid = str(user_id)
+        enc_jd = enc.encrypt(job_description or "", uid) if job_description or enc.is_enabled() else (job_description or "")
+        enc_ctx = enc.encrypt(job_context, uid) if job_context and enc.is_enabled() else job_context
+        return enc_jd, enc_ctx
+
+    def _decrypt_session(self, session: InterviewSession) -> InterviewSession:
+        """Decrypt sensitive fields on a session in place."""
+        enc = get_encryption_service()
+        if not enc.is_enabled():
+            return session
+        uid = str(session.user_id)
+        if session.job_description and isinstance(session.job_description, str):
+            dec = enc.decrypt(session.job_description, uid)
+            if dec is not None:
+                session.job_description = dec if isinstance(dec, str) else json.dumps(dec)
+        if session.job_context and isinstance(session.job_context, str):
+            dec = enc.decrypt(session.job_context, uid)
+            if dec is not None and isinstance(dec, dict):
+                session.job_context = dec
+        return session
+
     async def create_session(
         self,
         user_id: Union[int, str],
@@ -39,19 +64,21 @@ class SessionService:
     ) -> InterviewSession:
         """Create a new interview session (works for both sync and async)."""
         try:
+            job_ctx = {"title": title} if title else None
+            enc_jd, enc_ctx = self._encrypt_session_fields(user_id, job_description or "", job_ctx)
             session_data = {
                 "id": uuid.uuid4(),
                 "user_id": user_id,
                 "role": role,
-                "job_description": job_description or "",
+                "job_description": enc_jd,
                 "mode": mode,
                 "question_source": "generated",
                 "status": "active",
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             }
-            if title:
-                session_data["job_context"] = {"title": title}
+            if enc_ctx is not None:
+                session_data["job_context"] = enc_ctx
             
             session = InterviewSession(**session_data)
             self.db_session.add(session)
@@ -155,17 +182,18 @@ class SessionService:
                     .where(InterviewSession.id == session_id)
                     .where(InterviewSession.user_id == user_id)
                 )
-                return result.scalar_one_or_none()
+                sess = result.scalar_one_or_none()
             else:
-                return self.db_session.query(InterviewSession).filter(
+                sess = self.db_session.query(InterviewSession).filter(
                     InterviewSession.id == session_id,
                     InterviewSession.user_id == user_id
                 ).first()
+            return self._decrypt_session(sess) if sess else None
                 
         except Exception as e:
             logger.error(f"Error getting session {session_id}: {e}")
             return None
-    
+
     async def get_user_sessions(
         self,
         user_id: Union[int, str],
@@ -182,12 +210,12 @@ class SessionService:
                     .limit(limit)
                     .offset(offset)
                 )
-                return result.scalars().all()
+                sessions = result.scalars().all()
             else:
-                return self.db_session.query(InterviewSession).filter(
+                sessions = self.db_session.query(InterviewSession).filter(
                     InterviewSession.user_id == user_id
                 ).order_by(desc(InterviewSession.created_at)).limit(limit).offset(offset).all()
-                
+            return [self._decrypt_session(s) for s in sessions]
         except Exception as e:
             logger.error(f"Error getting sessions for user {user_id}: {e}")
             return []

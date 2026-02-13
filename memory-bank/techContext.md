@@ -19,7 +19,7 @@
 - **Default:** `postgresql://confida_dev:dev_password@localhost:5432/confida_dev`
 - **Docker option:** `docker-compose.dev.yml` with postgres:15
 - **Migrations:** `alembic revision --autogenerate -m "..."` then `alembic upgrade head`
-- **Seed:** `python seed_data.py` or `python run_seed.py`
+- **Seed:** `python scripts/seed/seed_data.py` or `python scripts/seed/run_seed.py`
 
 See [docs/DEVELOPMENT_SETUP.md](../docs/DEVELOPMENT_SETUP.md), [docs/DATABASE_SETUP.md](../docs/DATABASE_SETUP.md).
 
@@ -72,7 +72,7 @@ See [docs/README_DEPLOY.md](../docs/README_DEPLOY.md), [docs/PRODUCTION_DEPLOYME
 ## Question Bank
 
 - **Migration:** `python scripts/migrate_questions.py`
-- **Seeding:** `python scripts/seed_question_bank.py` (from `data/sample_questions.json`)
+- **Seeding:** `python scripts/seed/seed_question_bank.py` (from `data/sample_questions.json`)
 - **Validation:** `python scripts/validate_migration.py`
 
 See [docs/QUESTION_BANK_MIGRATION_GUIDE.md](../docs/QUESTION_BANK_MIGRATION_GUIDE.md).

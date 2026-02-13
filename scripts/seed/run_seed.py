@@ -12,12 +12,17 @@ def main():
     print("🌱 Running database seed data script...")
     
     try:
-        # Change to the project directory
+        # Change to the project root (parent of scripts/)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        os.chdir(script_dir)
+        project_root = os.path.dirname(os.path.dirname(script_dir))
+        os.chdir(project_root)
         
         # Run the seed data script
-        result = subprocess.run([sys.executable, "seed_data.py"], check=True)
+        result = subprocess.run(
+            [sys.executable, "scripts/seed/seed_data.py"],
+            check=True,
+            cwd=project_root,
+        )
         
         print("✅ Seed data script completed successfully!")
         print("\n📋 Next steps:")

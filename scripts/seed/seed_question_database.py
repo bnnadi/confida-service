@@ -14,14 +14,19 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 # Add the project root to the Python path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from sqlalchemy.orm import Session
-from app.database.connection import SessionLocal
+from sqlalchemy import create_engine
+from app.services.database_service import database_service
 from app.database.question_database_models import QuestionTemplate, Base
-from app.database.connection import engine
+from app.config import get_settings
 from app.utils.logger import get_logger
+
+# Get engine for table creation (question_templates uses separate schema)
+settings = get_settings()
+engine = create_engine(settings.DATABASE_URL)
 
 logger = get_logger(__name__)
 
@@ -404,7 +409,8 @@ def main():
     """Main function to run the seeder."""
     try:
         # Get database session
-        db_session = SessionLocal()
+        database_service.initialize()
+        db_session = database_service.get_sync_session()
         
         # Create seeder and run
         seeder = QuestionDatabaseSeeder(db_session)

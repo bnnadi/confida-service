@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Annotated, List, Optional
@@ -19,6 +19,7 @@ from app.models.schemas import (
     QuestionPreview
 )
 from app.middleware.auth_middleware import get_current_user_required
+from app.services.audit_service import log_data_access
 
 
 def validate_session_uuid(
@@ -102,6 +103,7 @@ async def create_session(
 
 @router.get("/", response_model=List[InterviewSessionResponse])
 async def get_user_sessions(
+    request: Request,
     current_user: dict = Depends(get_current_user_required),
     limit: int = Query(10, description="Number of sessions to return"),
     offset: int = Query(0, description="Number of sessions to skip"),
@@ -110,6 +112,8 @@ async def get_user_sessions(
     """Get all interview sessions for a user."""
     session_service = SessionService(db)
     sessions = await session_service.get_user_sessions(current_user["id"], limit, offset)
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "sessions", "list", ip_address=ip)
     return [_session_to_response(s) for s in sessions]
 
 
@@ -169,6 +173,7 @@ async def get_scenarios(
 
 @router.get("/{session_id}", response_model=CompleteSessionResponse)
 async def get_session(
+    request: Request,
     session_id: SessionId,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
@@ -180,6 +185,8 @@ async def get_session(
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
     
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "session", "get", resource_id=session_id, ip_address=ip)
     return session_data
 
 @router.post("/{session_id}/questions", response_model=List[dict])
@@ -246,25 +253,34 @@ async def add_answer_to_question(
 ):
     """Add an answer to a question."""
     from app.database.models import Answer, SessionQuestion
-    
-    # Verify question exists and belongs to user's session (via SessionQuestion -> InterviewSession)
-    question = db.query(Question).join(SessionQuestion).join(InterviewSession).filter(
-        Question.id == question_id,
+    from app.services.encryption_service import get_encryption_service
+    from app.services.audit_service import log_data_access
+
+    session_question = db.query(SessionQuestion).join(
+        InterviewSession, SessionQuestion.session_id == InterviewSession.id
+    ).filter(
+        SessionQuestion.question_id == question_id,
         InterviewSession.user_id == current_user["id"]
     ).first()
-    
-    if not question:
+    if not session_question:
         raise HTTPException(status_code=404, detail="Question not found")
-    
-    # Create answer
+
+    enc = get_encryption_service()
+    uid = str(current_user["id"])
+    enc_answer = enc.encrypt(request.answer_text, uid) or request.answer_text
+    enc_analysis = enc.encrypt(request.analysis_result, uid) if enc.is_enabled() and request.analysis_result else request.analysis_result
+    enc_score = enc.encrypt(request.score, uid) if enc.is_enabled() and request.score else request.score
+
     answer = Answer(
         question_id=question_id,
-        answer_text=request.answer_text,
-        analysis_result=request.analysis_result,
-        score=request.score,
+        session_id=session_question.session_id,
+        answer_text=enc_answer,
+        analysis_result=enc_analysis,
+        score=enc_score,
         audio_file_id=request.audio_file_id
     )
     db.add(answer)
+    log_data_access(db, uid, "answer", "write", question_id)
     
     # Update SessionQuestion.session_specific_context to store answer audio file ID
     if request.audio_file_id:

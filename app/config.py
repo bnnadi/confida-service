@@ -121,7 +121,15 @@ class Settings:
     ENABLE_DEBUG_ROUTES: bool = os.getenv("ENABLE_DEBUG_ROUTES", "false").lower() == "true"
     ENABLE_SECURITY_ROUTES: bool = os.getenv("ENABLE_SECURITY_ROUTES", "false").lower() == "true"
     ENABLE_ADMIN_ROUTES: bool = os.getenv("ENABLE_ADMIN_ROUTES", "true").lower() == "true"
-    
+
+    # Data Encryption Settings (INT-31)
+    ENCRYPTION_MASTER_KEY: str = os.getenv("ENCRYPTION_MASTER_KEY", "")
+    ENCRYPTION_ENABLED: bool = (
+        os.getenv("ENCRYPTION_ENABLED", "false").lower() == "true"
+        and bool(os.getenv("ENCRYPTION_MASTER_KEY"))
+    )  # Auto-disable when master key not set
+    ENCRYPTION_KEY_ROTATION_DAYS: int = int(os.getenv("ENCRYPTION_KEY_ROTATION_DAYS", "30"))
+
     # CORS Configuration for HTTPS
     CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3001,https://127.0.0.1:3001,https://confida.com").split(",")
     CORS_METHODS: List[str] = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")
@@ -216,6 +224,14 @@ class Settings:
             "/api/v1/admin": {
                 "requests": int(os.getenv("RATE_LIMIT_ADMIN_REQUESTS", "20")),
                 "window": int(os.getenv("RATE_LIMIT_ADMIN_WINDOW", "3600"))
+            },
+            "/api/v1/data-rights/export": {
+                "requests": int(os.getenv("RATE_LIMIT_EXPORT_REQUESTS", "5")),
+                "window": int(os.getenv("RATE_LIMIT_EXPORT_WINDOW", "3600"))
+            },
+            "/api/v1/data-rights/delete-account": {
+                "requests": int(os.getenv("RATE_LIMIT_DELETE_ACCOUNT_REQUESTS", "3")),
+                "window": int(os.getenv("RATE_LIMIT_DELETE_ACCOUNT_WINDOW", "3600"))
             }
         }
     
