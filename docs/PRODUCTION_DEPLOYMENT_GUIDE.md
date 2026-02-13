@@ -4,6 +4,13 @@
 
 This guide covers deploying the Confida Vector Database Integration in a production environment with proper security, monitoring, and scalability considerations.
 
+**Before deploying:** Complete the [Production Deployment Checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md) and run `python scripts/validate_production_readiness.py --url <target-url>`.
+
+**Related resources:**
+- [Production Deployment Checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md) — Pre-deploy verification checklist
+- `scripts/validate_production_readiness.py` — Automated validation script
+- `scripts/check_monitoring.sh` — Quick health and metrics verification
+
 ## 🏗️ **Production Architecture**
 
 ### **Recommended Production Setup**
@@ -544,7 +551,47 @@ curl -f http://localhost/health || {
 echo "✅ Deployment completed successfully!"
 ```
 
-### **3. Rollback Script**
+### **3. Rollback Procedures**
+
+See the [Production Deployment Checklist - Rollback Procedures](PRODUCTION_DEPLOYMENT_CHECKLIST.md#rollback-procedures) for the full checklist. Summary:
+
+#### Railway
+
+1. Open Railway dashboard → Project → confida-service
+2. Go to **Deployments** tab
+3. Find the last known good deployment
+4. Click **Redeploy** or **Rollback**
+5. Verify: `curl -s https://your-api/health | jq '.status'`
+
+#### Docker
+
+```bash
+# Stop current deployment
+docker-compose -f docker-compose.prod.yml down
+
+# Start previous version (use tagged image if available)
+docker-compose -f docker-compose.prod.yml up -d
+
+# Verify
+curl -f http://localhost:8000/health || exit 1
+```
+
+#### Database Migrations
+
+```bash
+# Roll back one revision
+alembic downgrade -1
+
+# Roll back to specific revision
+alembic downgrade <revision_id>
+
+# Check current revision
+alembic current
+```
+
+**Note:** Not all migrations are reversible. Review `alembic/versions/` for `downgrade()` implementations before rolling back.
+
+#### Rollback Script (Docker)
 
 ```bash
 #!/bin/bash
