@@ -9,8 +9,8 @@ import pytest
 import uuid as _uuid
 uuid = _uuid  # alias for use in tests
 from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash
 from app.services.analytics_service import AnalyticsService
+from app.services.auth_service import AuthService
 from app.database.models import (
     InterviewSession, User, Question, SessionQuestion, Answer, UserGoal
 )
@@ -23,10 +23,11 @@ from app.models.analytics_models import (
 @pytest.fixture
 def analytics_user(db_session):
     """Create a unique user for analytics tests (avoids UNIQUE constraint issues)."""
+    auth_service = AuthService(db_session)
     user = User(
         email=f"analytics-{_uuid.uuid4().hex[:8]}@test.com",
         name="Analytics Test User",
-        password_hash=generate_password_hash("testpass123"),
+        password_hash=auth_service.get_password_hash("testpass123"),
         is_active=True,
     )
     db_session.add(user)

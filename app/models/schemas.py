@@ -369,6 +369,75 @@ class AuthErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
 
+# Consent and Data Rights Models (GDPR/CCPA)
+class ConsentPreferenceItem(BaseModel):
+    """Single consent preference for update."""
+    consent_type: str = Field(..., description="Consent type: essential, analytics, marketing")
+    granted: bool = Field(..., description="Whether consent is granted")
+
+    @field_validator("consent_type")
+    @classmethod
+    def validate_consent_type(cls, v):
+        allowed = {"essential", "analytics", "marketing"}
+        if v not in allowed:
+            raise ValueError(f"consent_type must be one of: {allowed}")
+        return v
+
+
+class ConsentPreferencesRequest(BaseModel):
+    """Request to update consent preferences."""
+    consents: List[ConsentPreferenceItem] = Field(..., description="List of consent preferences to update")
+
+
+class ConsentItemResponse(BaseModel):
+    """Single consent preference in response."""
+    consent_type: str
+    granted: bool
+    updated_at: Optional[str] = None
+
+
+class ConsentPreferencesResponse(BaseModel):
+    """Response with current consent preferences."""
+    consents: List[ConsentItemResponse] = Field(..., description="Current consent preferences")
+
+
+class ConsentHistoryItem(BaseModel):
+    """Single consent history entry."""
+    consent_type: str
+    action: str  # granted, withdrawn
+    created_at: str
+
+
+class ConsentHistoryResponse(BaseModel):
+    """Response with consent change history."""
+    history: List[ConsentHistoryItem] = Field(..., description="Consent change history")
+
+
+class DeleteAccountRequest(BaseModel):
+    """Request to delete user account (GDPR Right to Erasure)."""
+    confirm: bool = Field(..., description="Must be true to confirm deletion")
+    password: str = Field(..., min_length=1, description="Current password for verification")
+
+    @field_validator("confirm")
+    @classmethod
+    def validate_confirm(cls, v):
+        if not v:
+            raise ValueError("confirm must be true to delete account")
+        return v
+
+
+# Data export structure (GDPR Right to Access)
+class DataExportResponse(BaseModel):
+    """User data export for GDPR Right to Access."""
+    exported_at: str = Field(..., description="Export timestamp")
+    user: Dict[str, Any] = Field(..., description="User profile (excluding password)")
+    sessions: List[Dict[str, Any]] = Field(default_factory=list, description="Interview sessions")
+    answers: List[Dict[str, Any]] = Field(default_factory=list, description="User answers")
+    performance: List[Dict[str, Any]] = Field(default_factory=list, description="Performance data")
+    analytics_events: List[Dict[str, Any]] = Field(default_factory=list, description="Analytics events")
+    goals: List[Dict[str, Any]] = Field(default_factory=list, description="User goals")
+    consents: List[Dict[str, Any]] = Field(default_factory=list, description="Consent preferences")
+
 # File Upload Models
 class FileType(str, Enum):
     AUDIO = "audio"

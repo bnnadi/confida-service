@@ -338,6 +338,10 @@ Coverage prioritizes **core business logic**. When adding new tests, prioritize 
 | Question Bank Router | `app/routers/question_bank.py` | Question bank API endpoints |
 | Analytics Service | `app/services/analytics_service.py` | Session analytics, metrics, trends |
 | Dashboard Router | `app/routers/dashboard.py` | Dashboard API endpoints |
+| Consent Service | `app/services/consent_service.py` | Consent preferences, history (GDPR/CCPA) |
+| Data Rights Service | `app/services/data_rights_service.py` | Data export, account deletion (GDPR/CCPA) |
+| Consent Router | `app/routers/consent.py` | Consent API endpoints |
+| Data Rights Router | `app/routers/data_rights.py` | Data rights API endpoints |
 
 ### Excluded from Coverage
 
@@ -1163,6 +1167,47 @@ All TTS and voice cache functionality is tested with:
 7. **Admin Tooling Endpoint**: Happy-path, rate-limit, and authorization coverage for `/api/v1/speech/synthesize`
 
 For additional support, contact the development team or refer to the project's issue tracker.
+
+## Consent and Data Rights Testing Guide
+
+### Overview
+
+The consent and data rights functionality (INT-30) includes testing for GDPR/CCPA compliance: consent preferences, consent history, data export (Right to Access), and account deletion (Right to Erasure).
+
+### Running Consent and Data Rights Tests
+
+```bash
+# Run all consent and data rights tests
+pytest tests/unit/test_consent_service.py tests/unit/test_data_rights_service.py tests/integration/test_consent_endpoints.py tests/integration/test_data_rights_endpoints.py -v
+```
+
+### Test Files
+
+1. **`tests/unit/test_consent_service.py`** - ConsentService unit tests
+   - Default consents for new users
+   - Single and bulk consent updates
+   - Consent history tracking
+   - Invalid consent type validation
+
+2. **`tests/unit/test_data_rights_service.py`** - DataRightsService unit tests
+   - Data export includes all entities
+   - Password hash excluded from export
+   - Account deletion cascades correctly
+   - Consent removal on delete
+
+3. **`tests/integration/test_consent_endpoints.py`** - Consent API integration tests
+   - Authentication required
+   - GET/PUT consent success
+   - Consent history retrieval
+   - Invalid type returns 422
+
+4. **`tests/integration/test_data_rights_endpoints.py`** - Data rights API integration tests
+   - Export requires auth
+   - Delete requires confirmation and password
+   - Wrong password returns 401
+   - Successful account deletion
+
+---
 
 ## Answer Audio File Persistence Testing Guide
 

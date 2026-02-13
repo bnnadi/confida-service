@@ -1,7 +1,7 @@
 """
 SQLAlchemy models for Confida database schema.
 """
-from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, ForeignKey, Index
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, Float, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -28,6 +28,7 @@ class User(Base):
     user_performance = relationship("UserPerformance", back_populates="user", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("UserGoal", back_populates="user", cascade="all, delete-orphan")
+    consents = relationship("UserConsent", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, name={self.name})>"
@@ -222,6 +223,42 @@ class UserGoal(Base):
     def __repr__(self):
         return f"<UserGoal(id={self.id}, user_id={self.user_id}, title={self.title}, status={self.status})>"
 
+
+class UserConsent(Base):
+    """User consent preferences for GDPR/CCPA compliance."""
+    __tablename__ = "user_consents"
+    __table_args__ = (UniqueConstraint("user_id", "consent_type", name="uq_user_consent_type"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    consent_type = Column(String(50), nullable=False, index=True)  # essential, analytics, marketing
+    granted = Column(Boolean, nullable=False)
+    policy_version = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="consents")
+
+    def __repr__(self):
+        return f"<UserConsent(id={self.id}, user_id={self.user_id}, consent_type={self.consent_type}, granted={self.granted})>"
+
+
+class ConsentHistory(Base):
+    """Consent change history for audit trail."""
+    __tablename__ = "consent_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    consent_type = Column(String(50), nullable=False, index=True)
+    action = Column(String(20), nullable=False, index=True)  # granted, withdrawn
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
+
+    def __repr__(self):
+        return f"<ConsentHistory(id={self.id}, user_id={self.user_id}, consent_type={self.consent_type}, action={self.action})>"
+
+
 # Create indexes for performance optimization
 Index('idx_users_email', User.email)
 Index('idx_sessions_user_id', InterviewSession.user_id)
@@ -245,6 +282,13 @@ Index('idx_session_questions_order', SessionQuestion.question_order)
 Index('idx_user_goals_user_id', UserGoal.user_id)
 Index('idx_user_goals_status', UserGoal.status)
 Index('idx_user_goals_goal_type', UserGoal.goal_type)
+
+# Consent indexes
+Index('idx_user_consents_user_id', UserConsent.user_id)
+Index('idx_user_consents_consent_type', UserConsent.consent_type)
+Index('idx_consent_history_user_id', ConsentHistory.user_id)
+Index('idx_consent_history_consent_type', ConsentHistory.consent_type)
+Index('idx_consent_history_created_at', ConsentHistory.created_at)
 
 # JSONB indexes for flexible queries (PostgreSQL only)
 # These will be created in migration scripts
