@@ -9,6 +9,67 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 import uuid
 
+
+class Organization(Base):
+    """Organization model for enterprise multi-tenant support (INT-49)."""
+    __tablename__ = "organizations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    domain = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    users = relationship("User", back_populates="organization")
+    departments = relationship("Department", back_populates="organization", cascade="all, delete-orphan")
+    settings = relationship("OrganizationSettings", back_populates="organization", uselist=False, cascade="all, delete-orphan")
+    interview_sessions = relationship("InterviewSession", back_populates="organization")
+
+    def __repr__(self):
+        return f"<Organization(id={self.id}, name={self.name})>"
+
+
+class OrganizationSettings(Base):
+    """Organization settings for enterprise features (INT-49)."""
+    __tablename__ = "organization_settings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    timezone = Column(String(50), nullable=False, default="UTC")
+    language = Column(String(10), nullable=False, default="en")
+    features = Column(JSONB, nullable=False, default=dict)  # sso, analytics, customBranding, etc.
+    notifications = Column(JSONB, nullable=False, default=dict)  # email, weekly, monthly, alerts
+    security = Column(JSONB, nullable=False, default=dict)  # passwordPolicy, sessionTimeout, twoFactor, ipRestrictions
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    organization = relationship("Organization", back_populates="settings")
+
+    def __repr__(self):
+        return f"<OrganizationSettings(id={self.id}, organization_id={self.organization_id})>"
+
+
+class Department(Base):
+    """Department model for organization structure (INT-49)."""
+    __tablename__ = "departments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    company_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # For future company simulation
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    organization = relationship("Organization", back_populates="departments")
+    interview_sessions = relationship("InterviewSession", back_populates="department")
+
+    def __repr__(self):
+        return f"<Department(id={self.id}, name={self.name})>"
+
+
 class User(Base):
     """User model for authentication and user management."""
     __tablename__ = "users"
@@ -18,12 +79,14 @@ class User(Base):
     name = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="user", index=True)  # user, admin, premium, enterprise
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Relationships
+    organization = relationship("Organization", back_populates="users")
     interview_sessions = relationship("InterviewSession", back_populates="user", cascade="all, delete-orphan")
     user_performance = relationship("UserPerformance", back_populates="user", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="user", cascade="all, delete-orphan")
@@ -50,11 +113,17 @@ class InterviewSession(Base):
     total_questions = Column(Integer, default=0, nullable=False)
     completed_questions = Column(Integer, default=0, nullable=False)
     overall_score = Column(JSONB, nullable=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
+    feedback = Column(Text, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     user = relationship("User", back_populates="interview_sessions")
+    organization = relationship("Organization", back_populates="interview_sessions")
+    department = relationship("Department", back_populates="interview_sessions")
     session_questions = relationship("SessionQuestion", back_populates="session", cascade="all, delete-orphan")  # Question bank relationship
     user_performance = relationship("UserPerformance", back_populates="session", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="session", cascade="all, delete-orphan")
@@ -322,6 +391,12 @@ Index('idx_user_consents_consent_type', UserConsent.consent_type)
 Index('idx_consent_history_user_id', ConsentHistory.user_id)
 Index('idx_consent_history_consent_type', ConsentHistory.consent_type)
 Index('idx_consent_history_created_at', ConsentHistory.created_at)
+
+# Enterprise (INT-49)
+Index('idx_users_organization_id', User.organization_id)
+Index('idx_sessions_organization_id', InterviewSession.organization_id)
+Index('idx_sessions_department_id', InterviewSession.department_id)
+Index('idx_departments_organization_id', Department.organization_id)
 
 # Encryption and audit (INT-31)
 Index('idx_encryption_keys_user_id', EncryptionKey.user_id)

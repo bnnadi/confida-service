@@ -8,6 +8,7 @@ from typing import Optional
 from app.services.database_service import get_db
 from app.services.auth_service import AuthService
 from app.models.schemas import TokenPayload, TokenType
+from app.database.models import Organization
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -60,7 +61,7 @@ class AuthMiddleware:
             # This ensures role changes in database are immediately reflected
             user_role = user.role if hasattr(user, 'role') and user.role else (token_payload.role if hasattr(token_payload, 'role') and token_payload.role else "user")
             
-            return {
+            result = {
                 "id": str(user.id),
                 "email": user.email,
                 "first_name": first_name,
@@ -70,8 +71,11 @@ class AuthMiddleware:
                 "is_verified": True,  # Default to True since field doesn't exist
                 "role": user_role,  # Use role from token payload or database
                 "created_at": user.created_at,
-                "last_login": user.last_login
+                "last_login": user.last_login,
             }
+            if getattr(user, "organization_id", None):
+                result["organization_id"] = str(user.organization_id)
+            return result
             
         except Exception as e:
             logger.warning(f"Authentication error: {e}")
@@ -123,6 +127,72 @@ class AuthMiddleware:
         
         return user
 
+    def require_enterprise_user(
+        self,
+        credentials: Optional[HTTPAuthorizationCredentials] = None,
+    ) -> dict:
+        """
+        Require authentication and organization context for enterprise endpoints.
+
+        Returns user with organization_id and organization (name).
+        Raises 403 if user has no organization.
+        """
+        if not credentials:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        token_payload = self.auth_service.verify_token(
+            credentials.credentials,
+            token_type=TokenType.ACCESS,
+        )
+        if not token_payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = self.auth_service.get_user_by_id(token_payload.sub)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        org_id = str(user.organization_id) if getattr(user, "organization_id", None) else None
+        org_name = getattr(token_payload, "organization", None)
+        if not org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Enterprise organization context required",
+            )
+        if not org_name:
+            org = self.db.query(Organization).filter(Organization.id == user.organization_id).first()
+            org_name = org.name if org else "Unknown"
+        name_parts = (user.name or "").split(" ", 1)
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        if hasattr(user, "role") and user.role:
+            user_role = user.role
+        elif hasattr(token_payload, "role"):
+            user_role = token_payload.role
+        else:
+            user_role = "user"
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": user.name,
+            "is_active": user.is_active,
+            "role": user_role,
+            "created_at": user.created_at,
+            "last_login": user.last_login,
+            "organization_id": org_id,
+            "organization": org_name,
+        }
+
 
 # Dependency functions for FastAPI
 def get_current_user(
@@ -153,15 +223,29 @@ def get_current_user_required(
 
 def get_current_admin(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> dict:
     """
     FastAPI dependency to require admin authentication.
-    
+
     Returns admin user information or raises 401/403 if not authenticated/authorized.
     """
     auth_middleware = AuthMiddleware(db)
     return auth_middleware.require_admin(credentials)
+
+
+def get_enterprise_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    FastAPI dependency for enterprise endpoints.
+
+    Requires authentication and organization context.
+    Returns 403 if user has no organization_id.
+    """
+    auth_middleware = AuthMiddleware(db)
+    return auth_middleware.require_enterprise_user(credentials)
 
 
 # Utility functions for role checking

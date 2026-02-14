@@ -79,20 +79,26 @@ async def create_session(
     """Create a new interview session (supports both practice and interview modes)."""
     try:
         session_service = SessionService(db)
+        org_id = current_user.get("organization_id")
+        dept_id = request.department_id
         if request.mode == "practice":
             if not request.scenario_id:
                 raise HTTPException(status_code=400, detail="scenario_id is required for practice mode")
             session = await session_service.create_practice_session(
                 user_id=current_user["id"],
                 role=request.role,
-                scenario_id=request.scenario_id
+                scenario_id=request.scenario_id,
+                organization_id=org_id,
+                department_id=dept_id,
             )
         elif request.mode == "interview":
             session = await session_service.create_interview_session(
                 user_id=current_user["id"],
                 role=request.role,
                 job_title=request.job_title,
-                job_description=request.job_description
+                job_description=request.job_description,
+                organization_id=org_id,
+                department_id=dept_id,
             )
         else:
             raise HTTPException(status_code=400, detail="Invalid mode. Must be 'practice' or 'interview'")

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete, desc
 from sqlalchemy.orm import selectinload, joinedload
-from app.database.models import InterviewSession, SessionQuestion, Question, Scenario
+from app.database.models import InterviewSession, SessionQuestion, Question, Scenario, Answer
 from app.exceptions import AIServiceError
 from app.services.encryption_service import get_encryption_service
 from app.utils.logger import get_logger
@@ -38,6 +38,24 @@ class SessionService:
         enc_ctx = enc.encrypt(job_context, uid) if job_context and enc.is_enabled() else job_context
         return enc_jd, enc_ctx
 
+    def _get_session_feedback_sync(self, session_id: str) -> Optional[str]:
+        """Extract feedback from session answers' analysis_result (last answer). Sync only."""
+        try:
+            answer = (
+                self.db_session.query(Answer)
+                .filter(Answer.session_id == session_id)
+                .order_by(Answer.created_at.desc())
+                .first()
+            )
+            if not answer or not answer.analysis_result:
+                return None
+            ar = answer.analysis_result
+            if isinstance(ar, dict):
+                return ar.get("overall_feedback") or ar.get("analysis") or ar.get("feedback")
+            return None
+        except Exception:
+            return None
+
     def _decrypt_session(self, session: InterviewSession) -> InterviewSession:
         """Decrypt sensitive fields on a session in place."""
         enc = get_encryption_service()
@@ -60,7 +78,9 @@ class SessionService:
         role: str,
         job_description: str,
         title: Optional[str] = None,
-        mode: str = "interview"
+        mode: str = "interview",
+        organization_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> InterviewSession:
         """Create a new interview session (works for both sync and async)."""
         try:
@@ -75,10 +95,14 @@ class SessionService:
                 "question_source": "generated",
                 "status": "active",
                 "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc)
+                "updated_at": datetime.now(timezone.utc),
             }
             if enc_ctx is not None:
                 session_data["job_context"] = enc_ctx
+            if organization_id:
+                session_data["organization_id"] = organization_id
+            if department_id:
+                session_data["department_id"] = department_id
             
             session = InterviewSession(**session_data)
             self.db_session.add(session)
@@ -104,7 +128,9 @@ class SessionService:
         self,
         user_id: Union[int, str],
         role: str,
-        scenario_id: str
+        scenario_id: str,
+        organization_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> InterviewSession:
         """Create a new practice session with scenario-based questions."""
         try:
@@ -128,9 +154,13 @@ class SessionService:
                 "question_ids": [q["id"] for q in questions_data] if questions_data else [],
                 "status": "active",
                 "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc)
+                "updated_at": datetime.now(timezone.utc),
             }
-            
+            if organization_id:
+                session_data["organization_id"] = organization_id
+            if department_id:
+                session_data["department_id"] = department_id
+
             session = InterviewSession(**session_data)
             self.db_session.add(session)
             if self.is_async:
@@ -156,7 +186,9 @@ class SessionService:
         user_id: Union[int, str],
         role: str,
         job_title: Optional[str] = None,
-        job_description: Optional[str] = None
+        job_description: Optional[str] = None,
+        organization_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> InterviewSession:
         """Create a new interview session (alias for create_session with interview params)."""
         title = job_title or role
@@ -165,7 +197,9 @@ class SessionService:
             role=role,
             job_description=job_description or "",
             title=title,
-            mode="interview"
+            mode="interview",
+            organization_id=organization_id,
+            department_id=department_id,
         )
     
     # Session Retrieval Methods
@@ -549,10 +583,20 @@ class SessionService:
         self,
         session_id: str,
         status: str,
-        user_id: Union[int, str]
+        user_id: Union[int, str],
     ) -> Optional[InterviewSession]:
-        """Update session status."""
-        return await self.update_session(session_id, user_id, status=status)
+        """Update session status. When completing, sets duration_minutes and feedback."""
+        updates = {"status": status}
+        if status == "completed":
+            session = await self.get_session(session_id, user_id)
+            if session:
+                if session.created_at and session.updated_at:
+                    delta = session.updated_at - session.created_at
+                    updates["duration_minutes"] = int(delta.total_seconds() / 60)
+                feedback = self._get_session_feedback_sync(session_id)
+                if feedback:
+                    updates["feedback"] = feedback
+        return await self.update_session(session_id, user_id, **updates)
 
     async def get_available_scenarios(self) -> List[dict]:
         """Get available practice scenarios."""
