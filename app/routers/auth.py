@@ -1,12 +1,13 @@
 """
 Authentication router for user registration, login, and management.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 from app.database.models import Organization
 from typing import Optional
 from app.services.database_service import get_db
 from app.services.auth_service import AuthService
+from app.services.audit_service import log_data_access
 from app.middleware.auth_middleware import get_current_user_required, get_current_user
 from app.models.schemas import (
     UserRegisterRequest,
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     request: UserRegisterRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -45,7 +47,8 @@ async def register_user(
         first_name=request.name.split(' ', 1)[0] if request.name else '',
         last_name=request.name.split(' ', 1)[1] if ' ' in request.name else ''
     )
-    
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(user.id), "user", "write", resource_id=str(user.id), ip_address=ip)
     logger.info(f"User registered successfully: {user.email}")
     
     # Convert User model to UserResponse
@@ -62,7 +65,8 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     request: UserLoginRequest,
-    db: Session = Depends(get_db),
+    http_request: Request,
+    db: Session = Depends(get_db)
 ):
     """
     Authenticate user and return access tokens.
@@ -78,7 +82,8 @@ async def login_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
-    
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(user.id), "auth", "read", resource_id=str(user.id), ip_address=ip)
     # Create tokens with user's role from database
     user_role = user.role if hasattr(user, 'role') else "user"
     org_id = str(user.organization_id) if getattr(user, 'organization_id', None) else None
@@ -180,6 +185,7 @@ async def get_me(
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
     request: UserProfileUpdateRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
@@ -195,7 +201,8 @@ async def update_user_profile(
         user_id=current_user["id"],
         **request.model_dump(exclude_unset=True)
     )
-    
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(current_user["id"]), "user", "write", resource_id=str(current_user["id"]), ip_address=ip)
     logger.info(f"Profile updated for user: {user.email}")
     return user
 
@@ -203,6 +210,7 @@ async def update_user_profile(
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 async def change_password(
     request: PasswordChangeRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
@@ -219,7 +227,8 @@ async def change_password(
         current_password=request.current_password,
         new_password=request.new_password
     )
-    
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(current_user["id"]), "user", "write", resource_id=str(current_user["id"]), ip_address=ip)
     logger.info(f"Password changed for user: {current_user['email']}")
     return {"message": "Password changed successfully"}
 
@@ -293,7 +302,9 @@ async def get_user_sessions(
 # Logout endpoint (token blacklisting would be implemented here)
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout_user(
-    current_user: dict = Depends(get_current_user_required)
+    request: Request,
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db)
 ):
     """
     Logout user.
@@ -301,5 +312,7 @@ async def logout_user(
     In a production system, this would blacklist the token.
     For now, it's a placeholder.
     """
+    ip = request.client.host if request.client else None
+    log_data_access(db, str(current_user["id"]), "auth", "read", resource_id=str(current_user["id"]), ip_address=ip)
     logger.info(f"User logged out: {current_user.get('email', 'unknown') if current_user else 'unknown'}")
     return {"message": "Logged out successfully"}

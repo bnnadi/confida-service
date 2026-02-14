@@ -72,6 +72,7 @@ def _session_to_response(session: InterviewSession) -> InterviewSessionResponse:
 @router.post("/", response_model=InterviewSessionResponse, status_code=201)
 async def create_session(
     request: CreateSessionRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
@@ -101,6 +102,8 @@ async def create_session(
             )
         else:
             raise HTTPException(status_code=400, detail="Invalid mode. Must be 'practice' or 'interview'")
+        ip = http_request.client.host if http_request.client else None
+        log_data_access(db, current_user["id"], "session", "write", resource_id=str(session.id), ip_address=ip)
         return _session_to_response(session)
     except HTTPException:
         raise
@@ -197,6 +200,7 @@ async def get_session(
 
 @router.post("/{session_id}/questions", response_model=List[dict])
 async def add_questions_to_session(
+    http_request: Request,
     session_id: SessionId,
     request: AddQuestionsRequest,
     current_user: dict = Depends(get_current_user_required),
@@ -213,6 +217,8 @@ async def add_questions_to_session(
     questions = await session_service.add_questions_to_session(
         session_id, request.questions, current_user["id"]
     )
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, current_user["id"], "session_question", "write", resource_id=session_id, ip_address=ip)
     return [
         {"id": str(q.id), "question_text": q.question.question_text if q.question else "", "question_order": q.question_order}
         for q in questions
@@ -235,6 +241,7 @@ async def get_session_questions(
 
 @router.delete("/{session_id}/questions/{question_id}", status_code=200)
 async def remove_question_from_session(
+    request: Request,
     session_id: SessionId,
     question_id: QuestionId,
     current_user: dict = Depends(get_current_user_required),
@@ -247,6 +254,8 @@ async def remove_question_from_session(
     )
     if not success:
         raise HTTPException(status_code=404, detail="Session question not found")
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "session_question", "delete", resource_id=question_id, ip_address=ip)
     return {"message": "Question removed from session"}
 
 
@@ -331,6 +340,7 @@ async def get_question_answers(
 
 @router.patch("/{session_id}/status")
 async def update_session_status(
+    request: Request,
     session_id: SessionId,
     status: str = Query(..., description="New status (active, completed, abandoned)"),
     current_user: dict = Depends(get_current_user_required),
@@ -342,11 +352,13 @@ async def update_session_status(
     
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "session", "write", resource_id=session_id, ip_address=ip)
     return {"message": "Session status updated successfully", "status": session.status}
 
 @router.delete("/{session_id}", status_code=204)
 async def delete_session(
+    request: Request,
     session_id: SessionId,
     current_user: dict = Depends(get_current_user_required),
     db: Session = Depends(get_db)
@@ -357,5 +369,6 @@ async def delete_session(
     
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+    ip = request.client.host if request.client else None
+    log_data_access(db, current_user["id"], "session", "delete", resource_id=session_id, ip_address=ip)
     return Response(status_code=204)

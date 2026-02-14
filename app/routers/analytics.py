@@ -5,7 +5,7 @@ This module provides REST API endpoints for analytics and reporting functionalit
 including performance metrics, trend analysis, report generation, dimension progress
 tracking, session comparison, and goal management.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -26,6 +26,7 @@ from app.database.question_database_models import (
 )
 from sqlalchemy import func, desc, and_
 from app.middleware.auth_middleware import get_current_user_required
+from app.services.audit_service import log_data_access
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -173,8 +174,10 @@ async def get_session_analytics(
 @router.post("/reports", response_model=ReportResponse)
 async def generate_report(
     request: ReportRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    db: Session = Depends(get_db)
 ):
     """
     Generate a comprehensive analytics report.
@@ -197,6 +200,8 @@ async def generate_report(
             )
         
         report = analytics_service.generate_report(request)
+        ip = http_request.client.host if http_request.client else None
+        log_data_access(db, str(current_user["id"]), "report", "read", resource_id=request.user_id, ip_address=ip)
         return report
         
     except HTTPException:
@@ -211,12 +216,14 @@ async def generate_report(
 
 @router.get("/reports/{user_id}/export")
 async def export_report(
+    request: Request,
     user_id: str,
     format: str = Query("json", description="Export format: json, pdf, csv"),
     start_date: Optional[datetime] = Query(None, description="Report start date"),
     end_date: Optional[datetime] = Query(None, description="Report end date"),
     current_user: dict = Depends(get_current_user_required),
-    analytics_service: AnalyticsService = Depends(get_analytics_service)
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    db: Session = Depends(get_db),
 ):
     """
     Export analytics report in specified format.
@@ -250,6 +257,8 @@ async def export_report(
             format=ReportFormat(format)
         )
         
+        ip = request.client.host if request and request.client else None
+        log_data_access(db, str(current_user["id"]), "report", "export", resource_id=user_id, ip_address=ip)
         if format == "csv":
             csv_content = analytics_service.generate_csv_report(report_request)
             return PlainTextResponse(

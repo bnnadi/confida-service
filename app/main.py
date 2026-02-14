@@ -175,8 +175,9 @@ def load_routers():
     
     # Conditional routers based on environment variables
     if settings.ENABLE_ADMIN_ROUTES:
-        from app.routers import admin
+        from app.routers import admin, audit
         routers.append(("admin", admin.router))
+        routers.append(("admin-audit", audit.router))
         logger.info("✅ Admin routes enabled")
     else:
         logger.info("⚠️ Admin routes disabled (ENABLE_ADMIN_ROUTES=false)")
