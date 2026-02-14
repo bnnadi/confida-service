@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -12,6 +12,8 @@ from app.models.schemas import (
     FileListResponse, FileDeleteResponse, FileValidationError, FileValidationErrorResponse
 )
 from app.middleware.auth_middleware import get_current_user_required
+from app.services.audit_service import log_data_access
+from app.services.database_service import get_db
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,11 +22,13 @@ router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
+    request: Request,
     file: UploadFile = File(..., description="File to upload"),
     file_type: FileType = Query(..., description="Type of file being uploaded"),
     description: Optional[str] = Query(None, description="Optional description of the file"),
     current_user: dict = Depends(get_current_user_required),
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    db: Session = Depends(get_db)
 ):
     """
     Upload a file to the server.
@@ -56,7 +60,8 @@ async def upload_file(
                 "file_hash": file_info["file_hash"]
             }
         )
-        
+        ip = request.client.host if request.client else None
+        log_data_access(db, str(current_user["id"]), "file", "write", resource_id=file_id, ip_address=ip)
         logger.info(f"File uploaded successfully: {file_id} by user {current_user['id']}")
         return response
         
@@ -71,9 +76,11 @@ async def upload_file(
 
 @router.get("/{file_id}", response_model=FileInfoResponse)
 async def get_file_info(
+    request: Request,
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    db: Session = Depends(get_db)
 ):
     """Get information about a specific file."""
     file_info = file_service.get_file_info(file_id)
@@ -83,7 +90,8 @@ async def get_file_info(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found"
         )
-    
+    ip = request.client.host if request.client else None
+    log_data_access(db, str(current_user["id"]), "file", "read", resource_id=file_id, ip_address=ip)
     # Format created_at as string if it's a datetime
     created_at = file_info.get("created_at")
     if isinstance(created_at, datetime):
@@ -107,9 +115,11 @@ async def get_file_info(
 
 @router.get("/{file_id}/download")
 async def download_file(
+    request: Request,
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    db: Session = Depends(get_db)
 ):
     """Download a file."""
     file_info = file_service.get_file_info(file_id)
@@ -119,7 +129,8 @@ async def download_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found"
         )
-    
+    ip = request.client.host if request.client else None
+    log_data_access(db, str(current_user["id"]), "file", "read", resource_id=file_id, ip_address=ip)
     file_path = file_info["file_path"]
     filename = file_info["filename"]
     
@@ -142,9 +153,11 @@ async def list_files(
 
 @router.delete("/{file_id}", response_model=FileDeleteResponse)
 async def delete_file(
+    request: Request,
     file_id: str,
     current_user: dict = Depends(get_current_user_required),
-    file_service: FileService = Depends(get_file_service)
+    file_service: FileService = Depends(get_file_service),
+    db: Session = Depends(get_db)
 ):
     """Delete a file."""
     # Check if file exists
@@ -163,7 +176,8 @@ async def delete_file(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete file"
         )
-    
+    ip = request.client.host if request.client else None
+    log_data_access(db, str(current_user["id"]), "file", "delete", resource_id=file_id, ip_address=ip)
     logger.info(f"File deleted successfully: {file_id} by user {current_user['id']}")
     
     return FileDeleteResponse(

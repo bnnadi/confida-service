@@ -1,5 +1,6 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, Request
 from typing import List
+from sqlalchemy.orm import Session
 import base64
 from app.models.schemas import (
     TranscribeResponse,
@@ -21,6 +22,7 @@ from app.dependencies import get_ai_client_dependency, get_file_service, get_val
 from app.services.tts.service import TTSService
 from app.services.tts.base import TTSProviderError, TTSProviderRateLimitError
 from app.services.speech_analyzer import SpeechAnalyzer
+from app.services.audit_service import log_data_access
 
 logger = get_logger(__name__)
 speech_analyzer = SpeechAnalyzer()
@@ -220,7 +222,9 @@ async def transcribe_saved_audio(
 @router.post("/analyze", response_model=SpeechAnalysisResponse)
 async def analyze_speech(
     request: SpeechAnalysisRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     Analyze transcript for speech patterns: filler words, pacing, clarity, confidence.
@@ -231,6 +235,8 @@ async def analyze_speech(
         duration_seconds=request.duration_seconds,
     )
     suggestions = speech_analyzer.get_realtime_suggestions(analysis)
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(current_user["id"]), "speech", "read", ip_address=ip)
     return SpeechAnalysisResponse(
         filler_words=analysis.filler_words,
         pace=analysis.pace,
@@ -245,7 +251,9 @@ async def analyze_speech(
 @router.post("/analyze/batch", response_model=BatchSpeechAnalysisResponse)
 async def analyze_speech_batch(
     request: BatchSpeechAnalysisRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     Batch analyze multiple transcripts for speech patterns.
@@ -269,6 +277,8 @@ async def analyze_speech_batch(
                 suggestions=suggestions,
             )
         )
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(current_user["id"]), "speech", "read", ip_address=ip)
     return BatchSpeechAnalysisResponse(results=results)
 
 
