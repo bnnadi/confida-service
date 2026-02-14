@@ -46,7 +46,14 @@ class AuthService:
         hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
         return hashed.decode('utf-8')
     
-    def create_access_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:
+    def create_access_token(
+        self,
+        user_id: str,
+        email: str,
+        role: str = UserRole.USER,
+        organization_id: Optional[str] = None,
+        organization_name: Optional[str] = None,
+    ) -> str:
         """Create a JWT access token."""
         now = datetime.utcnow()
         expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -56,8 +63,12 @@ class AuthService:
             "role": role,
             "exp": int(expire.timestamp()),
             "iat": int(now.timestamp()),
-            "token_type": TokenType.ACCESS
+            "token_type": TokenType.ACCESS,
         }
+        if organization_id:
+            payload["organization_id"] = organization_id
+        if organization_name:
+            payload["organization"] = organization_name
         return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
     def create_refresh_token(self, user_id: str, email: str, role: str = UserRole.USER) -> str:

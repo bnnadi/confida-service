@@ -3,6 +3,7 @@ Authentication router for user registration, login, and management.
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from app.database.models import Organization
 from typing import Optional
 from app.services.database_service import get_db
 from app.services.auth_service import AuthService
@@ -61,7 +62,7 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     request: UserLoginRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Authenticate user and return access tokens.
@@ -80,15 +81,22 @@ async def login_user(
     
     # Create tokens with user's role from database
     user_role = user.role if hasattr(user, 'role') else "user"
+    org_id = str(user.organization_id) if getattr(user, 'organization_id', None) else None
+    org_name = None
+    if org_id:
+        org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+        org_name = org.name if org else None
     access_token = auth_service.create_access_token(
-        user_id=str(user.id),  # Convert UUID to string
+        user_id=str(user.id),
         email=user.email,
-        role=user_role  # Use role from database
+        role=user_role,
+        organization_id=org_id,
+        organization_name=org_name,
     )
     refresh_token = auth_service.create_refresh_token(
-        user_id=str(user.id),  # Convert UUID to string
+        user_id=str(user.id),
         email=user.email,
-        role=user_role  # Use role from database
+        role=user_role,
     )
     
     logger.info(f"User logged in successfully: {user.email}")
@@ -102,7 +110,7 @@ async def login_user(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     request: TokenRefreshRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Refresh access token using refresh token.
@@ -129,10 +137,17 @@ async def refresh_token(
     
     # Create new access token with role from database (source of truth)
     user_role = user.role if hasattr(user, 'role') else (token_payload.role if hasattr(token_payload, 'role') else "user")
+    org_id = str(user.organization_id) if getattr(user, 'organization_id', None) else None
+    org_name = None
+    if org_id:
+        org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+        org_name = org.name if org else None
     access_token = auth_service.create_access_token(
-        user_id=str(user.id),  # Convert UUID to string
+        user_id=str(user.id),
         email=user.email,
-        role=user_role  # Use role from database (source of truth)
+        role=user_role,
+        organization_id=org_id,
+        organization_name=org_name,
     )
     
     logger.info(f"Token refreshed for user: {user.email}")

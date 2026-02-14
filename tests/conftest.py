@@ -20,7 +20,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database.models import Base
-from app.middleware.auth_middleware import get_current_user_required, get_current_admin
+from app.middleware.auth_middleware import get_current_user_required, get_current_admin, get_enterprise_user
 from app.dependencies import get_ai_client_dependency
 from app.services.database_service import get_db
 
@@ -170,6 +170,74 @@ def override_admin_auth(client):
         client.app.dependency_overrides[get_current_admin] = lambda: user_dict
     yield _override
     client.app.dependency_overrides.pop(get_current_admin, None)
+
+
+@pytest.fixture
+def sample_organization(db_session):
+    """Create a sample organization for enterprise tests."""
+    from app.database.models import Organization
+    org = Organization(
+        name="Acme Corp",
+        domain="acme.com",
+    )
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    return org
+
+
+@pytest.fixture
+def sample_department(db_session, sample_organization):
+    """Create a sample department for enterprise tests."""
+    from app.database.models import Department
+    dept = Department(
+        organization_id=sample_organization.id,
+        name="Engineering",
+    )
+    db_session.add(dept)
+    db_session.commit()
+    db_session.refresh(dept)
+    return dept
+
+
+@pytest.fixture
+def enterprise_user(db_session, sample_organization):
+    """Create a user with organization for enterprise tests."""
+    from app.database.models import User
+    from app.services.auth_service import AuthService
+    auth_service = AuthService(db_session)
+    user = User(
+        email=f"enterprise-{uuid.uuid4().hex[:8]}@example.com",
+        name="Enterprise User",
+        password_hash=auth_service.get_password_hash("testpass123"),
+        is_active=True,
+        organization_id=sample_organization.id,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def mock_enterprise_user(enterprise_user, sample_organization):
+    """Build auth dict for enterprise endpoints."""
+    return {
+        "id": str(enterprise_user.id),
+        "email": enterprise_user.email,
+        "role": "enterprise",
+        "organization_id": str(sample_organization.id),
+        "organization": sample_organization.name,
+    }
+
+
+@pytest.fixture
+def override_enterprise_auth(client):
+    """Override get_enterprise_user for enterprise endpoint tests."""
+    def _override(user_dict):
+        client.app.dependency_overrides[get_enterprise_user] = lambda: user_dict
+    yield _override
+    client.app.dependency_overrides.pop(get_enterprise_user, None)
 
 
 @pytest.fixture

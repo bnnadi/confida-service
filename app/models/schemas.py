@@ -161,6 +161,9 @@ class CreateSessionRequest(BaseModel):
     # For interview mode
     job_title: Optional[str] = Field(None, description="Job title for interview mode")
     job_description: Optional[str] = Field(None, description="Job description for interview mode")
+
+    # Enterprise: optional department for org-scoped sessions
+    department_id: Optional[str] = Field(None, description="Department ID for enterprise org")
     
     @field_validator('user_id')
     @classmethod
@@ -312,6 +315,8 @@ class TokenPayload(BaseModel):
     token_type: TokenType
     exp: int
     iat: int
+    organization_id: Optional[str] = None  # Enterprise org context (INT-49)
+    organization: Optional[str] = None  # Org name for display
 
 class TokenResponse(BaseModel):
     """Response model for authentication tokens."""
