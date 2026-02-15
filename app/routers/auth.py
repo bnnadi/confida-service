@@ -18,12 +18,70 @@ from app.models.schemas import (
     TokenRefreshRequest,
     UserProfileUpdateRequest,
     AuthStatusResponse,
-    AuthErrorResponse
+    AuthErrorResponse,
+    InviteValidateResponse,
+    AcceptInviteRequest,
 )
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+
+
+@router.get("/invite", response_model=InviteValidateResponse)
+async def validate_invite(
+    token: str = Query(..., description="Invite token"),
+    db: Session = Depends(get_db),
+):
+    """
+    Validate an invite token and return invite details for the signup form.
+    Returns org name, inviter name, email, role.
+    """
+    auth_service = AuthService(db)
+    details = auth_service.validate_invite(token)
+    return InviteValidateResponse(**details)
+
+
+@router.post("/accept-invite", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def accept_invite(
+    request: AcceptInviteRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Accept an invite: create user with org/department/role, mark invite accepted, return tokens.
+    """
+    auth_service = AuthService(db)
+    user = auth_service.accept_invite(
+        token=request.token,
+        password=request.password,
+        name=request.name,
+    )
+    ip = http_request.client.host if http_request.client else None
+    log_data_access(db, str(user.id), "user", "write", resource_id=str(user.id), ip_address=ip)
+    org_id = str(user.organization_id) if getattr(user, "organization_id", None) else None
+    org_name = None
+    if org_id:
+        org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+        org_name = org.name if org else None
+    access_token = auth_service.create_access_token(
+        user_id=str(user.id),
+        email=user.email,
+        role=user.role if hasattr(user, "role") else "user",
+        organization_id=org_id,
+        organization_name=org_name,
+    )
+    refresh_token = auth_service.create_refresh_token(
+        user_id=str(user.id),
+        email=user.email,
+        role=user.role if hasattr(user, "role") else "user",
+    )
+    logger.info(f"Invite accepted and user logged in: {user.email}")
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=30 * 60,
+    )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

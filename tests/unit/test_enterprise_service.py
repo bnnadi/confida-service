@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app.services.enterprise_service import EnterpriseService
 from app.database.models import (
     User,
+    UserInvite,
     InterviewSession,
     Organization,
     OrganizationSettings,
@@ -217,3 +218,81 @@ def test_get_departments(db_session, sample_organization, sample_department):
     assert len(resp.items) >= 1
     assert resp.items[0].name == "Engineering"
     assert resp.items[0].id == str(sample_department.id)
+
+
+@pytest.mark.unit
+def test_get_users(db_session, sample_organization, enterprise_user):
+    """Test users list in organization."""
+    service = EnterpriseService(db_session)
+    resp = service.get_users(str(sample_organization.id), limit=50, offset=0)
+    assert resp.total >= 1
+    assert len(resp.items) >= 1
+    assert resp.items[0].email == enterprise_user.email
+    assert resp.items[0].role == (enterprise_user.role or "user")
+
+
+@pytest.mark.unit
+def test_get_users_filter_by_role(db_session, sample_organization, enterprise_user):
+    """Test users list filtered by role."""
+    enterprise_user.role = "admin"
+    db_session.commit()
+    service = EnterpriseService(db_session)
+    resp = service.get_users(str(sample_organization.id), role="admin")
+    assert resp.total >= 1
+    assert all(item.role == "admin" for item in resp.items)
+
+
+@pytest.mark.unit
+def test_create_invite(db_session, sample_organization, enterprise_user):
+    """Test create invite returns invite link."""
+    service = EnterpriseService(db_session)
+    resp = service.create_invite(
+        org_id=str(sample_organization.id),
+        inviter_id=str(enterprise_user.id),
+        email="newuser@example.com",
+        role="user",
+    )
+    assert resp.invite_id
+    assert "invite" in resp.invite_link.lower() or "token=" in resp.invite_link
+    assert resp.expires_at
+    invite = db_session.query(UserInvite).filter(UserInvite.email == "newuser@example.com").first()
+    assert invite is not None
+    assert invite.status == "pending"
+
+
+@pytest.mark.unit
+def test_create_invite_email_already_in_org(db_session, sample_organization, enterprise_user):
+    """Test create invite fails when email already in org."""
+    service = EnterpriseService(db_session)
+    with pytest.raises(ValueError, match="already in organization"):
+        service.create_invite(
+            org_id=str(sample_organization.id),
+            inviter_id=str(enterprise_user.id),
+            email=enterprise_user.email,
+            role="user",
+        )
+
+
+@pytest.mark.unit
+def test_create_invite_pending_exists(db_session, sample_organization, enterprise_user):
+    """Test create invite fails when pending invite exists for email."""
+    from datetime import datetime, timedelta, timezone
+    existing = UserInvite(
+        organization_id=sample_organization.id,
+        email="pending@example.com",
+        role="user",
+        invite_token="abc123",
+        status="pending",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        created_by=enterprise_user.id,
+    )
+    db_session.add(existing)
+    db_session.commit()
+    service = EnterpriseService(db_session)
+    with pytest.raises(ValueError, match="already exists"):
+        service.create_invite(
+            org_id=str(sample_organization.id),
+            inviter_id=str(enterprise_user.id),
+            email="pending@example.com",
+            role="user",
+        )

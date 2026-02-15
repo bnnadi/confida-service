@@ -64,10 +64,36 @@ class Department(Base):
 
     # Relationships
     organization = relationship("Organization", back_populates="departments")
+    users = relationship("User", back_populates="department")
     interview_sessions = relationship("InterviewSession", back_populates="department")
 
     def __repr__(self):
         return f"<Department(id={self.id}, name={self.name})>"
+
+
+class UserInvite(Base):
+    """User invite model for enterprise user invitations (INT-38)."""
+    __tablename__ = "user_invites"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(50), nullable=False, default="user")
+    invite_token = Column(String(64), nullable=False, unique=True, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, accepted, expired
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    organization = relationship("Organization")
+    department = relationship("Department")
+    creator = relationship("User", foreign_keys=[created_by])
+
+    def __repr__(self):
+        return f"<UserInvite(id={self.id}, email={self.email}, status={self.status})>"
 
 
 class User(Base):
@@ -80,6 +106,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="user", index=True)  # user, admin, premium, enterprise
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -87,6 +114,7 @@ class User(Base):
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
+    department = relationship("Department", back_populates="users")
     interview_sessions = relationship("InterviewSession", back_populates="user", cascade="all, delete-orphan")
     user_performance = relationship("UserPerformance", back_populates="user", cascade="all, delete-orphan")
     analytics_events = relationship("AnalyticsEvent", back_populates="user", cascade="all, delete-orphan")
@@ -392,8 +420,13 @@ Index('idx_consent_history_user_id', ConsentHistory.user_id)
 Index('idx_consent_history_consent_type', ConsentHistory.consent_type)
 Index('idx_consent_history_created_at', ConsentHistory.created_at)
 
-# Enterprise (INT-49)
+# Enterprise (INT-49, INT-38)
 Index('idx_users_organization_id', User.organization_id)
+Index('idx_users_department_id', User.department_id)
+Index('idx_user_invites_token', UserInvite.invite_token)
+Index('idx_user_invites_organization_id', UserInvite.organization_id)
+Index('idx_user_invites_email', UserInvite.email)
+Index('idx_user_invites_status', UserInvite.status)
 Index('idx_sessions_organization_id', InterviewSession.organization_id)
 Index('idx_sessions_department_id', InterviewSession.department_id)
 Index('idx_departments_organization_id', Department.organization_id)

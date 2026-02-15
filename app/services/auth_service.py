@@ -2,13 +2,13 @@
 Authentication service for user management and JWT token handling.
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 import bcrypt
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from app.database.models import User
+from app.database.models import User, UserInvite
 from app.models.schemas import TokenPayload, TokenType, UserRole
 from app.config import get_settings
 from app.utils.logger import get_logger
@@ -122,9 +122,17 @@ class AuthService:
         except (ValueError, TypeError):
             return None
     
-    def create_user(self, email: str, password: str, first_name: Optional[str] = None, 
-                   last_name: Optional[str] = None, role: str = UserRole.USER) -> User:
-        """Create a new user."""
+    def create_user(
+        self,
+        email: str,
+        password: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        role: str = UserRole.USER,
+        organization_id: Optional[str] = None,
+        department_id: Optional[str] = None,
+    ) -> User:
+        """Create a new user. Optionally assign organization and department (for invited users)."""
         # Check if user already exists
         existing_user = self.get_user_by_email(email)
         if existing_user:
@@ -143,15 +151,102 @@ class AuthService:
             email=email,
             password_hash=hashed_password,
             name=full_name,
-            role=role,  # Set role from parameter, defaults to UserRole.USER
-            is_active=True
+            role=role,
+            is_active=True,
         )
+        if organization_id:
+            from uuid import UUID
+            try:
+                user.organization_id = UUID(organization_id)
+            except (ValueError, TypeError):
+                pass
+        if department_id:
+            from uuid import UUID
+            try:
+                user.department_id = UUID(department_id)
+            except (ValueError, TypeError):
+                pass
         
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         
         logger.info(f"User created: {email}")
+        return user
+
+    def validate_invite(self, token: str) -> Dict[str, Any]:
+        """
+        Validate an invite token and return invite details for the signup form.
+        Returns org name, inviter name, email. Raises HTTPException if invalid.
+        """
+        from uuid import UUID
+        invite = self.db.query(UserInvite).filter(
+            UserInvite.invite_token == token,
+            UserInvite.status == "pending",
+        ).first()
+        if not invite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invite token invalid or expired"
+            )
+        if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+            invite.status = "expired"
+            self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invite has expired"
+            )
+        org = invite.organization
+        inviter = invite.creator
+        return {
+            "email": invite.email,
+            "organization_name": org.name if org else "",
+            "inviter_name": inviter.name if inviter else "",
+            "role": invite.role,
+        }
+
+    def accept_invite(self, token: str, password: str, name: str) -> User:
+        """
+        Accept an invite: create user with org/department/role, mark invite accepted, return user.
+        """
+        from uuid import UUID
+        invite = self.db.query(UserInvite).filter(
+            UserInvite.invite_token == token,
+            UserInvite.status == "pending",
+        ).first()
+        if not invite:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invite token invalid or expired"
+            )
+        if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+            invite.status = "expired"
+            self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invite has expired"
+            )
+        existing_user = self.get_user_by_email(invite.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        name_parts = (name or "").strip().split(" ", 1)
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        user = self.create_user(
+            email=invite.email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            role=invite.role,
+            organization_id=str(invite.organization_id),
+            department_id=str(invite.department_id) if invite.department_id else None,
+        )
+        invite.status = "accepted"
+        self.db.commit()
+        logger.info(f"Invite accepted: {invite.email} -> user {user.id}")
         return user
     
     def authenticate_user(self, email: str, password: str) -> Optional[User]:

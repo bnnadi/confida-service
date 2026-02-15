@@ -210,6 +210,43 @@ def test_admin_error_response_format(client: TestClient):
         client.app.dependency_overrides.clear()
 
 
+def test_admin_create_organization(
+    client: TestClient, override_admin_auth, mock_admin_user
+):
+    """Test POST /admin/organizations creates org (INT-38)."""
+    override_admin_auth(mock_admin_user)
+    response = client.post(
+        "/api/v1/admin/organizations",
+        json={"name": "Admin Created Org", "domain": "adminorg.com"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Admin Created Org"
+    assert data["domain"] == "adminorg.com"
+    assert "id" in data
+
+
+def test_admin_assign_user_to_org(
+    client: TestClient,
+    override_admin_auth,
+    mock_admin_user,
+    sample_user,
+    sample_organization,
+    sample_department,
+):
+    """Test PATCH /admin/users/:id/assign-org (INT-38)."""
+    override_admin_auth(mock_admin_user)
+    response = client.patch(
+        f"/api/v1/admin/users/{sample_user.id}/assign-org",
+        json={
+            "organization_id": str(sample_organization.id),
+            "department_id": str(sample_department.id),
+        },
+    )
+    assert response.status_code == 200
+    assert "message" in response.json()
+
+
 def test_admin_endpoints_use_http_exceptions(client: TestClient):
     """Test that all admin endpoints use HTTPException instead of returning error objects."""
     # Test all admin endpoints to ensure they use proper HTTP status codes

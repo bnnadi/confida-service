@@ -183,3 +183,62 @@ class DepartmentsResponse(BaseModel):
     """Departments list response."""
 
     items: List[DepartmentItem] = Field(default_factory=list)
+
+
+# User management (INT-38)
+class UserListItem(BaseModel):
+    """User list item for enterprise users list."""
+
+    id: str = Field(..., description="User ID")
+    name: str = Field(..., description="User name")
+    email: str = Field(..., description="User email")
+    role: str = Field(..., description="User role")
+    department: Optional[str] = Field(None, description="Department name")
+    department_id: Optional[str] = Field(None, description="Department ID")
+    is_active: bool = Field(..., description="Whether user is active")
+
+
+class UsersListResponse(BaseModel):
+    """Users list response."""
+
+    items: List[UserListItem] = Field(default_factory=list)
+    total: int = Field(..., description="Total count")
+
+
+class InviteUserRequest(BaseModel):
+    """Request to invite a user to the organization."""
+
+    email: str = Field(..., description="Invitee email")
+    role: str = Field(default="user", description="Role: user, admin, etc.")
+    department_id: Optional[str] = Field(None, description="Department ID (optional)")
+
+
+class InviteUserResponse(BaseModel):
+    """Response after creating an invite."""
+
+    invite_id: str = Field(..., description="Invite record ID")
+    invite_link: str = Field(..., description="Invite link to share")
+    expires_at: str = Field(..., description="Expiration datetime (ISO)")
+
+
+# Organization provisioning (INT-38)
+class CreateOrganizationRequest(BaseModel):
+    """Request to create an organization."""
+
+    name: str = Field(..., min_length=1, max_length=255, description="Organization name")
+    domain: Optional[str] = Field(None, max_length=255, description="Organization domain")
+
+
+class CreateOrganizationResponse(BaseModel):
+    """Response after creating an organization."""
+
+    id: str = Field(..., description="Organization ID")
+    name: str = Field(..., description="Organization name")
+    domain: Optional[str] = Field(None, description="Organization domain")
+
+
+class AssignUserToOrgRequest(BaseModel):
+    """Request to assign a user to an organization (admin)."""
+
+    organization_id: str = Field(..., description="Organization ID")
+    department_id: Optional[str] = Field(None, description="Department ID (optional)")
