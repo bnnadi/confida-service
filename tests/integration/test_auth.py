@@ -3,9 +3,11 @@ Tests for authentication functionality.
 """
 import pytest
 import uuid
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.services.auth_service import AuthService
+from app.database.models import UserInvite
 
 
 def test_user_registration(client: TestClient, db_session: Session):
@@ -305,3 +307,42 @@ def test_auth_service_user_creation(db_session: Session):
     assert user.name == "Test User"
     assert user.password_hash != password  # Should be hashed
     assert user.is_active is True
+
+
+def test_auth_invite_validate_and_accept(
+    client: TestClient, db_session: Session, sample_organization, enterprise_user
+):
+    """Test GET /auth/invite and POST /auth/accept-invite flow."""
+    invite = UserInvite(
+        organization_id=sample_organization.id,
+        email="invite-accept-test@example.com",
+        role="user",
+        invite_token="test-invite-token-xyz",
+        status="pending",
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        created_by=enterprise_user.id,
+    )
+    db_session.add(invite)
+    db_session.commit()
+
+    # Validate invite
+    validate_resp = client.get("/api/v1/auth/invite", params={"token": "test-invite-token-xyz"})
+    assert validate_resp.status_code == 200
+    data = validate_resp.json()
+    assert data["email"] == "invite-accept-test@example.com"
+    assert data["organization_name"] == "Acme Corp"
+    assert data["role"] == "user"
+
+    # Accept invite
+    accept_resp = client.post(
+        "/api/v1/auth/accept-invite",
+        json={
+            "token": "test-invite-token-xyz",
+            "password": "SecurePass123!",
+            "name": "Accepted User",
+        },
+    )
+    assert accept_resp.status_code == 201
+    tokens = accept_resp.json()
+    assert "access_token" in tokens
+    assert "refresh_token" in tokens

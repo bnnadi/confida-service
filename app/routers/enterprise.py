@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.services.database_service import get_db
 from app.services.enterprise_service import EnterpriseService
-from app.middleware.auth_middleware import get_enterprise_user
+from app.middleware.auth_middleware import get_enterprise_user, get_current_user_required
 from app.models.enterprise_schemas import (
     EnterpriseStatsResponse,
     ActivityResponse,
@@ -19,6 +19,11 @@ from app.models.enterprise_schemas import (
     OrganizationSettingsResponse,
     OrganizationSettingsPatch,
     DepartmentsResponse,
+    UsersListResponse,
+    InviteUserRequest,
+    InviteUserResponse,
+    CreateOrganizationRequest,
+    CreateOrganizationResponse,
 )
 from app.utils.logger import get_logger
 
@@ -30,6 +35,60 @@ router = APIRouter(prefix="/api/v1/enterprise", tags=["enterprise"])
 def get_enterprise_service(db: Session = Depends(get_db)) -> EnterpriseService:
     """Dependency for EnterpriseService."""
     return EnterpriseService(db)
+
+
+@router.get("/users", response_model=UsersListResponse)
+async def get_users(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    role: str = Query(None, description="Filter by role"),
+    department_id: str = Query(None, description="Filter by department ID"),
+    current_user: dict = Depends(get_enterprise_user),
+    service: EnterpriseService = Depends(get_enterprise_service),
+):
+    """List users in the organization. Filter by role and department."""
+    try:
+        return service.get_users(
+            current_user["organization_id"],
+            limit=limit,
+            offset=offset,
+            role=role,
+            department_id=department_id,
+        )
+    except Exception as e:
+        logger.error(f"Error getting enterprise users: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get users",
+        ) from e
+
+
+@router.post("/users/invite", response_model=InviteUserResponse, status_code=status.HTTP_201_CREATED)
+async def invite_user(
+    request: InviteUserRequest,
+    current_user: dict = Depends(get_enterprise_user),
+    service: EnterpriseService = Depends(get_enterprise_service),
+):
+    """Invite a user to the organization. Returns invite link to share manually."""
+    try:
+        return service.create_invite(
+            org_id=current_user["organization_id"],
+            inviter_id=current_user["id"],
+            email=request.email,
+            role=request.role,
+            department_id=request.department_id,
+        )
+    except ValueError as e:
+        msg = str(e)
+        if "already in organization" in msg or "already exists" in msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from e
+    except Exception as e:
+        logger.error(f"Error creating invite: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create invite",
+        ) from e
 
 
 @router.get("/stats", response_model=EnterpriseStatsResponse)
@@ -208,6 +267,53 @@ async def update_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update settings",
         ) from e
+
+
+@router.post("/organizations", response_model=CreateOrganizationResponse, status_code=status.HTTP_201_CREATED)
+async def create_organization_self_serve(
+    request: CreateOrganizationRequest,
+    current_user: dict = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a new organization (self-serve).
+    Authenticated user without an org can create one; they become the first member.
+    Returns 400 if user already has an organization.
+    """
+    from app.database.models import Organization, OrganizationSettings, Department, User
+    from uuid import UUID
+
+    user = db.query(User).filter(User.id == UUID(current_user["id"])).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has an organization",
+        )
+    org = Organization(name=request.name, domain=request.domain)
+    db.add(org)
+    db.flush()
+    settings_obj = OrganizationSettings(
+        organization_id=org.id,
+        timezone="UTC",
+        language="en",
+        features={"sso": False, "analytics": True, "customBranding": False, "advancedReporting": True, "userManagement": True},
+        notifications={"email": True, "weekly": True, "monthly": True, "alerts": True},
+        security={"passwordPolicy": "strong", "sessionTimeout": 30, "twoFactor": False, "ipRestrictions": False},
+    )
+    db.add(settings_obj)
+    default_dept = Department(organization_id=org.id, name="Default")
+    db.add(default_dept)
+    user.organization_id = org.id
+    db.commit()
+    db.refresh(org)
+    logger.info(f"User {current_user['id']} created organization: {org.name}")
+    return CreateOrganizationResponse(
+        id=str(org.id),
+        name=org.name,
+        domain=org.domain,
+    )
 
 
 @router.get("/departments", response_model=DepartmentsResponse)

@@ -130,6 +130,9 @@ class Settings:
     )  # Auto-disable when master key not set
     ENCRYPTION_KEY_ROTATION_DAYS: int = int(os.getenv("ENCRYPTION_KEY_ROTATION_DAYS", "30"))
 
+    # Invite link base URL (INT-38) - used for user invite links
+    INVITE_LINK_BASE_URL: str = os.getenv("INVITE_LINK_BASE_URL", os.getenv("FRONTEND_URL", "https://localhost:3001"))
+
     # CORS Configuration for HTTPS
     CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "https://localhost:3001,https://127.0.0.1:3001,https://confida.com").split(",")
     CORS_METHODS: List[str] = os.getenv("CORS_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")

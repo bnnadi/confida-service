@@ -169,3 +169,50 @@ def test_enterprise_departments_success(
     assert response.status_code == 200
     data = response.json()
     assert "items" in data
+
+
+@pytest.mark.integration
+def test_enterprise_users_list_success(
+    client, override_enterprise_auth, mock_enterprise_user
+):
+    """Test GET /enterprise/users returns 200."""
+    override_enterprise_auth(mock_enterprise_user)
+    response = client.get("/api/v1/enterprise/users", params={"limit": 50, "offset": 0})
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+
+
+@pytest.mark.integration
+def test_enterprise_users_invite_success(
+    client, override_enterprise_auth, mock_enterprise_user
+):
+    """Test POST /enterprise/users/invite returns 201 with invite link."""
+    override_enterprise_auth(mock_enterprise_user)
+    response = client.post(
+        "/api/v1/enterprise/users/invite",
+        json={"email": "invited-new@example.com", "role": "user"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert "invite_id" in data
+    assert "invite_link" in data
+    assert "expires_at" in data
+
+
+@pytest.mark.integration
+def test_enterprise_create_organization_self_serve(
+    client, override_auth, mock_current_user, sample_user, db_session
+):
+    """Test POST /enterprise/organizations (self-serve) when user has no org."""
+    override_auth(mock_current_user)
+    response = client.post(
+        "/api/v1/enterprise/organizations",
+        json={"name": "My New Org", "domain": "myorg.com"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "My New Org"
+    assert data["domain"] == "myorg.com"
+    assert "id" in data

@@ -1,6 +1,7 @@
 """
-Enterprise Service for organization-scoped analytics and management (INT-49).
+Enterprise Service for organization-scoped analytics and management (INT-49, INT-38).
 """
+import secrets
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -11,11 +12,13 @@ from sqlalchemy import func, and_, or_, desc
 
 from app.database.models import (
     User,
+    UserInvite,
     InterviewSession,
     Organization,
     OrganizationSettings,
     Department,
 )
+from app.config import get_settings
 from app.models.enterprise_schemas import (
     EnterpriseStatsResponse,
     ActivityItem,
@@ -36,6 +39,9 @@ from app.models.enterprise_schemas import (
     SecurityConfig,
     DepartmentItem,
     DepartmentsResponse,
+    UserListItem,
+    UsersListResponse,
+    InviteUserResponse,
 )
 from app.utils.logger import get_logger
 
@@ -514,4 +520,94 @@ class EnterpriseService:
                 )
                 for d in depts
             ]
+        )
+
+    def get_users(
+        self,
+        org_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        role: Optional[str] = None,
+        department_id: Optional[str] = None,
+    ) -> UsersListResponse:
+        """List users in organization; filter by role and department."""
+        query = (
+            self.db.query(User, Department)
+            .outerjoin(Department, User.department_id == Department.id)
+            .filter(User.organization_id == org_id)
+        )
+        if role:
+            query = query.filter(User.role == role)
+        if department_id:
+            try:
+                dept_uuid = UUID(department_id)
+                query = query.filter(User.department_id == dept_uuid)
+            except (ValueError, TypeError):
+                pass
+        total = query.count()
+        rows = query.order_by(User.name).offset(offset).limit(limit).all()
+        items = [
+            UserListItem(
+                id=str(user.id),
+                name=user.name or user.email,
+                email=user.email,
+                role=user.role or "user",
+                department=dept.name if dept else None,
+                department_id=str(user.department_id) if user.department_id else None,
+                is_active=user.is_active,
+            )
+            for user, dept in rows
+        ]
+        return UsersListResponse(items=items, total=total)
+
+    def create_invite(
+        self,
+        org_id: str,
+        inviter_id: str,
+        email: str,
+        role: str = "user",
+        department_id: Optional[str] = None,
+    ) -> InviteUserResponse:
+        """Create UserInvite, generate token, return invite link."""
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise ValueError("Organization not found")
+        existing_user = self.db.query(User).filter(
+            User.email == email,
+            User.organization_id == org_id,
+        ).first()
+        if existing_user:
+            raise ValueError("Email already in organization")
+        pending = (
+            self.db.query(UserInvite)
+            .filter(
+                UserInvite.organization_id == org_id,
+                UserInvite.email == email,
+                UserInvite.status == "pending",
+            )
+            .first()
+        )
+        if pending:
+            raise ValueError("Pending invite already exists for this email")
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        invite = UserInvite(
+            organization_id=UUID(org_id),
+            department_id=UUID(department_id) if department_id else None,
+            email=email,
+            role=role,
+            invite_token=token,
+            status="pending",
+            expires_at=expires_at,
+            created_by=UUID(inviter_id),
+        )
+        self.db.add(invite)
+        self.db.commit()
+        self.db.refresh(invite)
+        base_url = get_settings().INVITE_LINK_BASE_URL.rstrip("/")
+        invite_link = f"{base_url}/invite?token={token}"
+        return InviteUserResponse(
+            invite_id=str(invite.id),
+            invite_link=invite_link,
+            expires_at=invite.expires_at.isoformat() if invite.expires_at else "",
         )

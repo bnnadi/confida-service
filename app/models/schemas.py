@@ -374,6 +374,23 @@ class AuthErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
 
+
+# Invite flow (INT-38)
+class InviteValidateResponse(BaseModel):
+    """Response for GET /auth/invite - invite details for signup form."""
+    email: str
+    organization_name: str
+    inviter_name: str
+    role: str
+
+
+class AcceptInviteRequest(BaseModel):
+    """Request for POST /auth/accept-invite."""
+    token: str = Field(..., description="Invite token")
+    password: str = Field(..., min_length=8, description="User password")
+    name: str = Field(..., min_length=1, max_length=255, description="User full name")
+
+
 # Consent and Data Rights Models (GDPR/CCPA)
 class ConsentPreferenceItem(BaseModel):
     """Single consent preference for update."""

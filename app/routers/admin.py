@@ -1,8 +1,19 @@
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+
 from app.config import settings
+from app.services.database_service import get_db
+from app.middleware.auth_middleware import get_current_admin
+from app.database.models import Organization, OrganizationSettings, Department, User
 from app.utils.service_tester import ServiceTester
+from app.models.enterprise_schemas import (
+    CreateOrganizationRequest,
+    CreateOrganizationResponse,
+    AssignUserToOrgRequest,
+)
 from app.dependencies import get_ai_client_dependency
 from app.middleware.enhanced_rate_limiter import EnhancedRateLimiter
 from app.utils.logger import get_logger
@@ -19,6 +30,84 @@ def _get_rate_limiter() -> EnhancedRateLimiter:
     if _rate_limiter is None:
         _rate_limiter = EnhancedRateLimiter()
     return _rate_limiter
+
+@router.post("/organizations", response_model=CreateOrganizationResponse, status_code=status.HTTP_201_CREATED)
+async def create_organization(
+    request: CreateOrganizationRequest,
+    current_user: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a new organization (admin only).
+    Creates Organization, default OrganizationSettings, and optionally default Department.
+    """
+    org = Organization(
+        name=request.name,
+        domain=request.domain,
+    )
+    db.add(org)
+    db.flush()
+    settings_obj = OrganizationSettings(
+        organization_id=org.id,
+        timezone="UTC",
+        language="en",
+        features={"sso": False, "analytics": True, "customBranding": False, "advancedReporting": True, "userManagement": True},
+        notifications={"email": True, "weekly": True, "monthly": True, "alerts": True},
+        security={"passwordPolicy": "strong", "sessionTimeout": 30, "twoFactor": False, "ipRestrictions": False},
+    )
+    db.add(settings_obj)
+    default_dept = Department(
+        organization_id=org.id,
+        name="Default",
+    )
+    db.add(default_dept)
+    db.commit()
+    db.refresh(org)
+    logger.info(f"Admin created organization: {org.name} (id={org.id})")
+    return CreateOrganizationResponse(
+        id=str(org.id),
+        name=org.name,
+        domain=org.domain,
+    )
+
+
+@router.patch("/users/{user_id}/assign-org", status_code=status.HTTP_200_OK)
+async def assign_user_to_org(
+    user_id: str,
+    request: AssignUserToOrgRequest,
+    current_user: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Assign a user to an organization and optionally a department (admin only).
+    """
+    try:
+        user_uuid = UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user ID")
+    user = db.query(User).filter(User.id == user_uuid).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    org = db.query(Organization).filter(Organization.id == request.organization_id).first()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    user.organization_id = UUID(request.organization_id)
+    if request.department_id:
+        dept = db.query(Department).filter(
+            Department.id == UUID(request.department_id),
+            Department.organization_id == UUID(request.organization_id),
+        ).first()
+        if dept:
+            user.department_id = UUID(request.department_id)
+        else:
+            user.department_id = None
+    else:
+        user.department_id = None
+    db.commit()
+    db.refresh(user)
+    logger.info(f"Admin assigned user {user_id} to org {request.organization_id}")
+    return {"message": "User assigned to organization successfully"}
+
 
 @router.get("/services/status")
 async def get_services_status(ai_client=Depends(get_ai_client_dependency)):
