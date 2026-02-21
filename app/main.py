@@ -31,8 +31,7 @@ async def lifespan(app: FastAPI):
             await init_async_db()
             logger.info("✅ Async database initialized successfully")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize async database: {e}")
-            raise
+            logger.warning(f"⚠️ Async database init failed: {e}. App will run with sync DB only.")
     if settings.MONITORING_ENABLED:
         try:
             from app.utils.metrics import start_metrics_server
@@ -227,18 +226,16 @@ from app.utils.env_config import log_environment_status
 from app.services.database_service import init_database, init_async_database, init_async_db, get_db_health, database_service
 from app.database.async_connection import async_db_manager
 
-# Initialize database
-init_database()
-
-# Check database connection
+# Initialize database (non-fatal: allows app to start for health checks even if DB is unreachable)
 try:
+    init_database()
     health_check = database_service.health_check_sync()
     if health_check["status"] != "healthy":
-        logger.error("❌ Database connection failed")
-        raise RuntimeError("Database connection failed")
+        logger.warning("⚠️ Database connection unhealthy at startup; app will start but DB-dependent endpoints may fail")
+    else:
+        logger.info("✅ Database connection healthy")
 except Exception as e:
-    logger.error(f"❌ Database connection failed: {e}")
-    raise RuntimeError("Database connection failed")
+    logger.warning(f"⚠️ Database connection failed at startup: {e}. App will start; /health will respond; DB-dependent endpoints will fail until DATABASE_URL is correct.")
 
 # Async database will be initialized in startup event handler
 
