@@ -256,41 +256,53 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    """Lightweight health check for Railway/deployment probes. Returns 200 quickly."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "Confida API",
+        "version": "1.0.0",
+    }
+
+
+@app.get("/health/detailed")
+async def health_check_detailed():
     """Comprehensive health check that verifies all dependencies with actual connectivity tests."""
     from app.services.health_service import HealthService
-    # Use unified database service for health checks
-    
+
     health_service = HealthService()
     health_data = await health_service.get_comprehensive_health()
-    
+
     # Add async database health if enabled
     if settings.ASYNC_DATABASE_ENABLED:
         try:
             async_db_health = await get_db_health()
             health_data["async_database"] = async_db_health
-            
+
             # Add detailed monitoring data
             from app.services.async_database_monitor import async_db_monitor
             monitoring_data = await async_db_monitor.get_health_summary()
             health_data["async_database"]["monitoring"] = monitoring_data
-            
+
         except Exception as e:
             health_data["async_database"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
-    
-    # Add vector database health
+
+    # Add vector database health (unified_vector_service if available)
     try:
-        from app.services.semantic_search_service import semantic_search_service
-        vector_health = await semantic_search_service.health_check()
+        from app.services.unified_vector_service import unified_vector_service
+        vector_health = await unified_vector_service.health_check()
         health_data["vector_database"] = vector_health
+    except ImportError:
+        health_data["vector_database"] = {"status": "not_configured", "message": "Vector service not available"}
     except Exception as e:
         health_data["vector_database"] = {
             "status": "unhealthy",
             "error": str(e)
         }
-    
+
     return health_data
 
 @app.get("/ready")
