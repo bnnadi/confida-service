@@ -29,7 +29,8 @@ class AIServiceClient:
     """
     
     def __init__(self, base_url: str = None):
-        self.base_url = base_url or settings.AI_SERVICE_URL
+        raw_base_url = (base_url or settings.AI_SERVICE_URL).rstrip("/")
+        self.base_url = f"{raw_base_url}/api/v1"
         self.timeout = settings.AI_SERVICE_TIMEOUT
         self.retry_attempts = settings.AI_SERVICE_RETRY_ATTEMPTS
         
@@ -87,7 +88,7 @@ class AIServiceClient:
             }
             
             response = await self.client.post(
-                f"{self.base_url}/questions/generate",
+                f"{self.base_url}/generate",
                 json=payload
             )
             
@@ -197,7 +198,7 @@ class AIServiceClient:
             }
             
             response = await self.client.post(
-                f"{self.base_url}/analyze/answer",
+                f"{self.base_url}/score/",
                 json=payload
             )
             
@@ -244,7 +245,7 @@ class AIServiceClient:
                 }
                 
                 response = await self.client.post(
-                    f"{self.base_url}/transcribe",
+                    f"{self.base_url}/transcribe/",
                     files=files,
                     data=data
                 )

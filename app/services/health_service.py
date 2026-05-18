@@ -1,11 +1,8 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.services.database_service import database_service
 from app.config import settings
 import redis
-import httpx
 from typing import Dict, Any
-import asyncio
 
 
 class HealthService:
@@ -92,88 +89,24 @@ class HealthService:
             }
     
     async def check_ai_service_health(self, service_name: str) -> Dict[str, Any]:
-        """Check AI service connectivity with actual API calls."""
+        """Check AI service microservice connectivity."""
         try:
-            if service_name == "ollama":
-                from app.services.ollama_service import OllamaService
-                service = OllamaService()
-                
-                # Test with a simple API call
-                models = service.list_available_models()
-                if models is not None:
-                    return {
-                        "status": "healthy",
-                        "message": "Ollama service responding",
-                        "details": {
-                            "base_url": settings.OLLAMA_BASE_URL,
-                            "models_available": len(models) if isinstance(models, list) else "unknown"
-                        }
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": "Ollama service not responding",
-                        "details": {"base_url": settings.OLLAMA_BASE_URL}
-                    }
-            
-            elif service_name == "openai":
-                from app.dependencies import get_ai_service
-                ai_service = get_ai_service()
-                
-                if ai_service and ai_service.openai_client:
-                    # Test with a simple API call
-                    try:
-                        # This is a lightweight test call
-                        response = await asyncio.to_thread(
-                            ai_service.openai_client.models.list
-                        )
-                        return {
-                            "status": "healthy",
-                            "message": "OpenAI service responding",
-                            "details": {
-                                "model": settings.OPENAI_MODEL,
-                                "api_connected": True
-                            }
-                        }
-                    except Exception as api_error:
-                        return {
-                            "status": "error",
-                            "message": f"OpenAI API call failed: {str(api_error)}",
-                            "details": {"error": str(api_error)}
-                        }
-                else:
-                    return {
-                        "status": "error",
-                        "message": "OpenAI client not initialized",
-                        "details": {"api_key_configured": bool(settings.OPENAI_API_KEY)}
-                    }
-            
-            elif service_name == "anthropic":
-                from app.dependencies import get_ai_service
-                ai_service = get_ai_service()
-                
-                if ai_service and ai_service.anthropic_client:
-                    return {
-                        "status": "healthy",
-                        "message": "Anthropic service configured",
-                        "details": {
-                            "model": settings.ANTHROPIC_MODEL,
-                            "api_connected": True
-                        }
-                    }
-                else:
-                    return {
-                        "status": "error",
-                        "message": "Anthropic client not initialized",
-                        "details": {"api_key_configured": bool(settings.ANTHROPIC_API_KEY)}
-                    }
-            
+            if service_name == "ai_service_microservice":
+                from app.services.service_factory import get_ai_client
+                ai_client = get_ai_client()
+                is_healthy = await ai_client.health_check()
+                return {
+                    "status": "healthy" if is_healthy else "error",
+                    "message": "AI service responding" if is_healthy else "AI service not responding",
+                    "details": {"url": ai_client.base_url}
+                }
+
             return {
                 "status": "not_configured",
                 "message": f"Unknown service: {service_name}",
                 "details": {}
             }
-            
+
         except Exception as e:
             return {
                 "status": "error",
