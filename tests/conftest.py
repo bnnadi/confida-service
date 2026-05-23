@@ -6,7 +6,19 @@ This module provides test fixtures and configuration for the testing infrastruct
 import pytest
 import os
 import uuid
+import inspect
 from pathlib import Path
+import httpx
+
+# Compat shim for httpx>=0.28 where Client(app=...) was removed.
+# Starlette/FastAPI TestClient in older stacks still passes this argument.
+if "app" not in inspect.signature(httpx.Client.__init__).parameters:
+    _httpx_client_init = httpx.Client.__init__
+
+    def _compat_httpx_client_init(self, *args, app=None, **kwargs):
+        return _httpx_client_init(self, *args, **kwargs)
+
+    httpx.Client.__init__ = _compat_httpx_client_init
 
 # Disable rate limiting, monitoring, and async DB before importing the app
 # (settings are cached on first access)
