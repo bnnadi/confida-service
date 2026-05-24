@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -22,4 +22,4 @@ ENV PORT=8000
 # Expose port
 EXPOSE 8000
 
-CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT 
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
